@@ -1,0 +1,23 @@
+# Dependencias y compilación
+node_modules/
+dist/
+build/
+coverage/
+
+# Configuración privada (los ejemplos sí se versionan)
+.env
+.env.*
+!.env.example
+
+# Archivos temporales
+*.log
+.DS_Store
+Thumbs.db
+
+# Respaldos y archivos locales de SQL Server
+*.bak
+*.mdf
+*.ldf
+
+# Documentos cargados por usuarios
+server/uploads/
