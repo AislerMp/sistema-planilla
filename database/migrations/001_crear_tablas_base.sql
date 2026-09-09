@@ -73,6 +73,7 @@ CREATE TABLE dbo.Roles (
 CREATE TABLE dbo.Colaboradores (
     ColaboradorId INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_Colaboradores PRIMARY KEY,
     Identificacion NVARCHAR(30) NOT NULL CONSTRAINT UQ_Colaboradores_Identificacion UNIQUE,
+    Correo NVARCHAR(100) NOT NULL CONSTRAINT UQ_Colaboradores_Correo UNIQUE,
     Nombres NVARCHAR(100) NOT NULL,
     Apellidos NVARCHAR(100) NOT NULL,
     FechaIngreso DATE NOT NULL,
@@ -93,12 +94,8 @@ CREATE TABLE dbo.Colaboradores (
     CONSTRAINT CK_Colaboradores_Identificacion CHECK (LEN(LTRIM(RTRIM(Identificacion))) > 0),
     CONSTRAINT CK_Colaboradores_Nombres CHECK (LEN(LTRIM(RTRIM(Nombres))) > 0),
     CONSTRAINT CK_Colaboradores_Apellidos CHECK (LEN(LTRIM(RTRIM(Apellidos))) > 0),
-    CONSTRAINT CK_Colaboradores_Fechas CHECK (FechaSalida IS NULL OR FechaSalida >= FechaIngreso),
-    CONSTRAINT CK_Colaboradores_Direccion CHECK (
-        (DistritoId IS NULL AND DetalleDireccion IS NULL) OR
-        (DistritoId IS NOT NULL AND DetalleDireccion IS NOT NULL
-            AND LEN(LTRIM(RTRIM(DetalleDireccion))) > 0)
-    )
+    CONSTRAINT CK_Colaboradores_Fechas CHECK (FechaSalida IS NULL OR FechaSalida >= FechaIngreso)
+
 );
 CREATE TABLE dbo.Usuarios (
     UsuarioId INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_Usuarios PRIMARY KEY,
@@ -115,6 +112,7 @@ CREATE TABLE dbo.Usuarios (
     CONSTRAINT CK_Usuarios_NombreUsuario CHECK (LEN(LTRIM(RTRIM(NombreUsuario))) > 0),
     CONSTRAINT CK_Usuarios_PasswordHash CHECK (LEN(LTRIM(RTRIM(PasswordHash))) > 0)
 );
+
 CREATE UNIQUE INDEX UX_Usuarios_ColaboradorId ON dbo.Usuarios(ColaboradorId)
     WHERE ColaboradorId IS NOT NULL;
 CREATE INDEX IX_Colaboradores_RestauranteId ON dbo.Colaboradores(RestauranteId);
