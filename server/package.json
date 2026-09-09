@@ -1,0 +1,20 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch --env-file=.env src/server.js",
+    "start": "node --env-file=.env src/server.js",
+    "db:check": "node --env-file=.env scripts/check-database.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "mssql": "^12.7.0"
+  }
+}
