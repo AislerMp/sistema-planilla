@@ -23,8 +23,8 @@ export async function getUserByUsername(username, includeInactive = false) {
   return result.recordset[0] || null;
 }
 
-export async function createUser(user) {
-  const request = await createRequest();
+export async function createUser(user, transaction = null) {
+  const request = await createRequest(transaction);
   const result = await request
     .input("NombreUsuario", sql.NVarChar(60), user.nombreUsuario)
     .input("PasswordHash", sql.VarChar(255), user.passwordHash)
@@ -37,8 +37,8 @@ export async function createUser(user) {
   return result.recordset[0].UsuarioId;
 }
 
-export async function updatePassword(id, passwordHash) {
-  const request = await createRequest();
+export async function updatePassword(id, passwordHash, transaction = null) {
+  const request = await createRequest(transaction);
   const result = await request
     .input("id", sql.Int, id)
     .input("PasswordHash", sql.VarChar(255), passwordHash)
@@ -49,8 +49,8 @@ export async function updatePassword(id, passwordHash) {
   return result.rowsAffected[0] > 0;
 }
 
-export async function getUserByColaboradorId(colaboradorId) {
-  const request = await createRequest();
+export async function getUserByColaboradorId(colaboradorId, transaction = null) {
+  const request = await createRequest(transaction);
   const result = await request.input("colaboradorId", sql.Int, colaboradorId)
     .query("SELECT * FROM Usuarios WHERE ColaboradorId = @colaboradorId");
   return result.recordset[0] || null;

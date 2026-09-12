@@ -29,12 +29,18 @@ mock.method(pool, "request", () => {
       const next = expected.shift();
       assert.ok(next, `Consulta inesperada: ${query}`);
       assert.match(query, next.pattern);
-      calls.push({ query, parameters });
+      // Las aserciones de datos usan las consultas de negocio; la bitácora también
+      // debe estar en la cola esperada. Su atomicidad se prueba por separado.
+      if (!query.includes("INSERT INTO dbo.Bitacora")) calls.push({ query, parameters });
       if (next.error) throw next.error;
       return { recordset: next.records, rowsAffected: [next.affected] };
     },
   };
 });
+mock.method(sql.Transaction.prototype, "begin", async () => {});
+mock.method(sql.Transaction.prototype, "commit", async () => {});
+mock.method(sql.Transaction.prototype, "rollback", async () => {});
+mock.method(sql.Transaction.prototype, "request", () => pool.request());
 beforeEach(() => { expected = []; calls = []; });
 afterEach(() => assert.equal(expected.length, 0, "Faltaron consultas esperadas"));
 
@@ -75,7 +81,8 @@ test("registro vincula un colaborador y almacena un hash comprobable", async () 
   respond(/FROM Colaboradores/, [{ ColaboradorId: 5, Activo: true }]);
   respond(/FROM Usuarios WHERE ColaboradorId/, []);
   respond(/INSERT INTO Usuarios/, [{ UsuarioId: 8 }]);
-  assert.equal(await auth.registerUser({ nombreUsuario: " admin ", password, rolId: "1", colaboradorId: "5" }), 8);
+  respond(/INSERT INTO dbo.Bitacora/);
+  assert.equal(await auth.registerUser({ nombreUsuario: " admin ", password, rolId: "1", colaboradorId: "5" }, 3), 8);
   assert.equal(calls[0].parameters.includeInactive.value, true);
   const values = calls.at(-1).parameters;
   assert.equal(values.ColaboradorId.value, 5);
@@ -86,7 +93,7 @@ test("registro vincula un colaborador y almacena un hash comprobable", async () 
 
 test("registro detecta nombres reservados por cuentas inactivas", async () => {
   respond(/FROM Usuarios/, [{ ...user, Activo: false }]);
-  await assert.rejects(auth.registerUser({ nombreUsuario: "ana", password, rolId: 1, colaboradorId: 5 }), { status: 409 });
+  await assert.rejects(auth.registerUser({ nombreUsuario: "ana", password, rolId: 1, colaboradorId: 5 }, 3), { status: 409 });
   assert.equal(calls[0].parameters.includeInactive.value, true);
 });
 
@@ -95,19 +102,19 @@ test("registro rechaza un colaborador que ya tiene cuenta", async () => {
   respond(/FROM Roles/, [{ RolId: 1 }]);
   respond(/FROM Colaboradores/, [{ ColaboradorId: 5, Activo: true }]);
   respond(/FROM Usuarios WHERE ColaboradorId/, [{ UsuarioId: 9, Activo: false }]);
-  await assert.rejects(auth.registerUser({ nombreUsuario: "ana", password, rolId: 1, colaboradorId: 5 }), { status: 409 });
+  await assert.rejects(auth.registerUser({ nombreUsuario: "ana", password, rolId: 1, colaboradorId: 5 }, 3), { status: 409 });
 });
 
 test("registro valida la contraseña obligatoria y la existencia del rol", async () => {
-  await assert.rejects(auth.registerUser({ nombreUsuario: "ana", password: "", rolId: 1, colaboradorId: 5 }), { status: 400 });
+  await assert.rejects(auth.registerUser({ nombreUsuario: "ana", password: "", rolId: 1, colaboradorId: 5 }, 3), { status: 400 });
   respond(/FROM Usuarios/, []);
   respond(/FROM Roles/, []);
-  await assert.rejects(auth.registerUser({ nombreUsuario: "ana", password, rolId: 999, colaboradorId: 5 }), { status: 404 });
+  await assert.rejects(auth.registerUser({ nombreUsuario: "ana", password, rolId: 999, colaboradorId: 5 }, 3), { status: 404 });
 });
 
 test("registro exige un colaborador válido antes de consultar", async () => {
   for (const colaboradorId of [undefined, null, "", 0, "abc"]) {
-    await assert.rejects(auth.registerUser({ nombreUsuario: "ana", password, rolId: 1, colaboradorId }), { status: 400 });
+    await assert.rejects(auth.registerUser({ nombreUsuario: "ana", password, rolId: 1, colaboradorId }, 3), { status: 400 });
   }
   assert.equal(calls.length, 0);
 });
@@ -117,7 +124,7 @@ test("registro rechaza colaboradores inexistentes o inactivos", async () => {
     respond(/FROM Usuarios WHERE NombreUsuario/, []);
     respond(/FROM Roles/, [{ RolId: 1 }]);
     respond(/FROM Colaboradores/, records);
-    await assert.rejects(auth.registerUser({ nombreUsuario: "ana", password, rolId: 1, colaboradorId: 5 }), { status });
+    await assert.rejects(auth.registerUser({ nombreUsuario: "ana", password, rolId: 1, colaboradorId: 5 }, 3), { status });
   }
 });
 
@@ -141,6 +148,7 @@ test("cambiar contraseña exige la actual y guarda la nueva cifrada", async () =
   await assert.rejects(auth.changePassword(1, "incorrecta", "nueva"), { status: 401 });
   respond(/FROM Usuarios/, [user]);
   respond(/UPDATE Usuarios SET PasswordHash.*AND Activo = 1/);
+  respond(/INSERT INTO dbo.Bitacora/);
   assert.equal(await auth.changePassword(1, password, " nueva "), true);
   assert.equal(await compare(" nueva ", calls.at(-1).parameters.PasswordHash.value), true);
 });
@@ -157,7 +165,7 @@ test("IDs inválidos se rechazan antes de consultar la base", async () => {
 test("los cambios de estado exigen booleanos reales", async () => {
   for (const toggle of [colaboradores.toggleColaborador, puestos.togglePuesto, restaurantes.toggleRestaurante]) {
     for (const value of ["false", "true", 0, 1, null, undefined]) {
-      await assert.rejects(toggle(1, value), { status: 400 });
+      await assert.rejects(toggle(1, value, 3), { status: 400 });
     }
   }
   assert.equal(calls.length, 0);
@@ -166,7 +174,8 @@ test("los cambios de estado exigen booleanos reales", async () => {
 test("crear colaborador incluye correo, tipos correctos y opcionales nulos", async () => {
   activeReferences();
   respond(/INSERT INTO Colaboradores \(Identificacion, Correo,/, [{ ColaboradorId: 12 }]);
-  assert.equal(await colaboradores.createNewColaborador(colaborador), 12);
+  respond(/INSERT INTO dbo.Bitacora/);
+  assert.equal(await colaboradores.createNewColaborador(colaborador, 3), 12);
   const parameters = calls.at(-1).parameters;
   assert.equal(parameters.Correo.value, colaborador.correo);
   assert.equal(parameters.Correo.type.length, 100);
@@ -182,8 +191,10 @@ test("crear colaborador incluye correo, tipos correctos y opcionales nulos", asy
 
 test("editar colaborador también actualiza el correo", async () => {
   activeReferences();
+  respond(/FROM Colaboradores/, [{ ColaboradorId: 12, Activo: true }]);
   respond(/UPDATE Colaboradores[\s\S]*Correo = @Correo/);
-  assert.equal(await colaboradores.updateExistingColaborador("12", colaborador), true);
+  respond(/INSERT INTO dbo.Bitacora/);
+  assert.equal(await colaboradores.updateExistingColaborador("12", colaborador, 3), true);
   assert.equal(calls.at(-1).parameters.id.value, 12);
 });
 
@@ -193,33 +204,35 @@ test("colaboradores rechazan correo inválido, fechas imposibles e intervalos in
     { fechaIngreso: "2026-13-01" }, { fechaIngreso: "0000-01-01" },
     { fechaSalida: "2026-01-09" }, { distritoId: "abc" }, { nombre: "a".repeat(101) },
   ]) {
-    await assert.rejects(colaboradores.createNewColaborador({ ...colaborador, ...changes }), { status: 400 });
+    await assert.rejects(colaboradores.createNewColaborador({ ...colaborador, ...changes }, 3), { status: 400 });
   }
   assert.equal(calls.length, 0);
 });
 
 test("no se asignan colaboradores a restaurantes o puestos inactivos", async () => {
   respond(/FROM Restaurantes/, [{ Activo: false }]);
-  await assert.rejects(colaboradores.createNewColaborador(colaborador), { status: 409 });
+  await assert.rejects(colaboradores.createNewColaborador(colaborador, 3), { status: 409 });
   respond(/FROM Restaurantes/, [{ Activo: true }]);
   respond(/FROM Puestos/, [{ Activo: false }]);
-  await assert.rejects(colaboradores.createNewColaborador(colaborador), { status: 409 });
+  await assert.rejects(colaboradores.createNewColaborador(colaborador, 3), { status: 409 });
 });
 
 test("crear puesto respeta NVARCHAR(80), DECIMAL(12,2) y la tarifa opcional", async () => {
-  respond(/INSERT INTO Puestos/);
-  assert.equal(await puestos.createNewPuesto({ nombre: "a".repeat(80), tarifaHora: "9999999999.99" }), true);
+  respond(/INSERT INTO Puestos/, [{ PuestoId: 7 }]);
+  respond(/INSERT INTO dbo.Bitacora/);
+  assert.equal(await puestos.createNewPuesto({ nombre: "a".repeat(80), tarifaHora: "9999999999.99" }, 3), true);
   assert.equal(calls[0].parameters.Nombre.type.length, 80);
   assert.equal(calls[0].parameters.TarifaHora.type.precision, 12);
   assert.equal(calls[0].parameters.TarifaHora.type.scale, 2);
-  respond(/INSERT INTO Puestos/);
-  await puestos.createNewPuesto({ Nombre: "Cajero" });
+  respond(/INSERT INTO Puestos/, [{ PuestoId: 8 }]);
+  respond(/INSERT INTO dbo.Bitacora/);
+  await puestos.createNewPuesto({ nombre: "Cajero" }, 3);
   assert.equal(calls[1].parameters.TarifaHora.value, null);
 });
 
 test("puestos rechazan tarifas negativas, excesivas o con más de dos decimales", async () => {
   for (const tarifaHora of [0, -1, 1.234, "10000000000", "abc", true, Infinity]) {
-    await assert.rejects(puestos.createNewPuesto({ nombre: "Cajero", tarifaHora }), { status: 400 });
+    await assert.rejects(puestos.createNewPuesto({ nombre: "Cajero", tarifaHora }, 3), { status: 400 });
   }
 });
 
@@ -227,35 +240,41 @@ test("la tarifa de un puesto activo puede actualizarse o dejarse pendiente", asy
   for (const tarifa of [1500.25, null]) {
     respond(/FROM Puestos/, [{ PuestoId: 1, Activo: true }]);
     respond(/UPDATE Puestos SET TarifaHora.*AND Activo = 1/);
-    assert.equal(await puestos.updateTarifaPuesto(1, tarifa), true);
+    respond(/INSERT INTO dbo.Bitacora/);
+    assert.equal(await puestos.updateTarifaPuesto(1, tarifa, 3), true);
     assert.equal(calls.at(-1).parameters.TarifaHora.value, tarifa);
   }
 });
 
 test("restaurantes admiten dirección ausente o completa de hasta 300 caracteres", async () => {
-  respond(/INSERT INTO Restaurantes/);
-  assert.equal(await restaurantes.createNewRestaurante({ nombre: "Centro" }), true);
+  respond(/INSERT INTO Restaurantes/, [{ RestauranteId: 7 }]);
+  respond(/INSERT INTO dbo.Bitacora/);
+  assert.equal(await restaurantes.createNewRestaurante({ nombre: "Centro" }, 3), true);
   assert.equal(calls[0].parameters.distritoId.value, null);
-  respond(/FROM Distritos/, [{ DistritoId: 10101 }]);
-  respond(/INSERT INTO Restaurantes/);
-  await restaurantes.createNewRestaurante({ nombre: "Norte", distritoId: 10101, detalleDireccion: "a".repeat(300) });
+  respond(/INSERT INTO Restaurantes/, [{ RestauranteId: 8 }]);
+  respond(/INSERT INTO dbo.Bitacora/);
+  await restaurantes.createNewRestaurante({ nombre: "Norte", distritoId: 10101, detalleDireccion: "a".repeat(300) }, 3);
   assert.equal(calls.at(-1).parameters.detalleDireccion.type.length, 300);
 });
 
-test("restaurantes rechazan direcciones incompletas y distritos inexistentes", async () => {
+test("restaurantes rechazan direcciones incompletas y propagan errores de integridad", async () => {
   for (const direccion of [{ distritoId: 10101 }, { detalleDireccion: "Centro" }]) {
-    await assert.rejects(restaurantes.createNewRestaurante({ nombre: "Centro", ...direccion }), { status: 400 });
+    await assert.rejects(restaurantes.createNewRestaurante({ nombre: "Centro", ...direccion }, 3), { status: 400 });
   }
-  respond(/FROM Distritos/, []);
-  await assert.rejects(restaurantes.createNewRestaurante({ nombre: "Centro", distritoId: 99999, detalleDireccion: "Calle 1" }), { status: 404 });
+  const error = Object.assign(new Error("Distrito inexistente"), { number: 547 });
+  expected.push({ pattern: /INSERT INTO Restaurantes/, error });
+  await assert.rejects(restaurantes.createNewRestaurante({ nombre: "Centro", distritoId: 99999, detalleDireccion: "Calle 1" }, 3), received => received === error);
 });
 
 test("se puede editar un restaurante activo y reactivar uno inactivo", async () => {
   respond(/FROM Restaurantes/, [{ RestauranteId: 1, Activo: true }]);
   respond(/UPDATE Restaurantes SET Nombre/);
-  assert.equal(await restaurantes.updateExistingRestaurante(1, { nombre: "Centro" }), true);
+  respond(/INSERT INTO dbo.Bitacora/);
+  assert.equal(await restaurantes.updateExistingRestaurante(1, { nombre: "Centro" }, 3), true);
+  respond(/FROM Restaurantes/, [{ RestauranteId: 1, Activo: false }]);
   respond(/UPDATE Restaurantes SET Activo = @activo WHERE RestauranteId = @id/);
-  assert.equal(await restaurantes.toggleRestaurante(1, true), true);
+  respond(/INSERT INTO dbo.Bitacora/);
+  assert.equal(await restaurantes.toggleRestaurante(1, true, 3), true);
   assert.equal(calls.at(-1).parameters.activo.value, true);
 });
 
@@ -302,8 +321,8 @@ test("modificar un registro inexistente produce 404", async () => {
     [puestos.togglePuesto, "Puestos"], [restaurantes.toggleRestaurante, "Restaurantes"],
     [colaboradores.toggleColaborador, "Colaboradores"],
   ]) {
-    respond(new RegExp(`UPDATE ${table} SET Activo`), [], 0);
-    await assert.rejects(toggle(999, false), { status: 404 });
+    respond(new RegExp(`FROM ${table}`), []);
+    await assert.rejects(toggle(999, false, 3), { status: 404 });
   }
 });
 
@@ -311,7 +330,7 @@ test("errores SQL de escritura se propagan sin capturarlos ni transformarlos", a
   for (const number of [2601, 2627, 547]) {
     const error = Object.assign(new Error("SQL"), { number });
     expected.push({ pattern: /INSERT INTO Puestos/, error });
-    await assert.rejects(puestos.createNewPuesto({ nombre: "Cajero" }), (received) => received === error);
+    await assert.rejects(puestos.createNewPuesto({ nombre: "Cajero" }, 3), (received) => received === error);
   }
 });
 
@@ -323,7 +342,7 @@ test("registerUser propaga el error original si falla la creación", async () =>
   const error = Object.assign(new Error("Nombre duplicado por una escritura concurrente"), { number: 2627 });
   expected.push({ pattern: /INSERT INTO Usuarios/, error });
   await assert.rejects(
-    auth.registerUser({ nombreUsuario: "ana", password, rolId: 1, colaboradorId: 5 }),
+    auth.registerUser({ nombreUsuario: "ana", password, rolId: 1, colaboradorId: 5 }, 3),
     (received) => received === error,
   );
 });

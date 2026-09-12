@@ -2,13 +2,30 @@
 import { hash, compare } from "bcrypt";
 import { getRolById } from "../repositories/rolesRepository.js";
 import { getColaboradorById } from "../repositories/colaboradorRepositorie.js";
-import { validateId, validateText, serviceError } from "./serviceUtils.js";
+import {
+  validateId,
+  validateText,
+  serviceError,
+} from "../utils/serviceUtils.js";
+import { registrarBitacora } from "./bitacoraService.js";
+import { beginTransaction } from "../config/database.js";
 
 function validatePassword(password) {
   if (typeof password !== "string" || !password) {
     throw serviceError("La contraseña es obligatoria");
   }
   return password;
+}
+
+function safeUser(user) {
+  return {
+    UsuarioId: user.UsuarioId,
+    NombreUsuario: user.NombreUsuario,
+    RolId: user.RolId,
+    ColaboradorId: user.ColaboradorId,
+    FechaCreacion: user.FechaCreacion,
+    Activo: user.Activo,
+  };
 }
 
 export async function loginUser(username, password) {
@@ -21,11 +38,17 @@ export async function loginUser(username, password) {
     throw serviceError("Credenciales incorrectas", 401);
   }
 
-  return publicUser(user);
+  return safeUser(user);
 }
 
-export async function registerUser(user) {
-  const nombreUsuario = validateText(user?.nombreUsuario, "Nombre de usuario", 60);
+export async function registerUser(user, usuarioActorId) {
+  const actorId = validateId(usuarioActorId, "Usuario actorId");
+
+  const nombreUsuario = validateText(
+    user?.nombreUsuario,
+    "Nombre de usuario",
+    60,
+  );
   const password = validatePassword(user?.password);
   const rolId = validateId(user?.rolId, "rolId");
   const colaboradorId = validateId(user?.colaboradorId, "colaboradorId");
@@ -51,11 +74,49 @@ export async function registerUser(user) {
   }
 
   const passwordHash = await hash(password, 10);
-  return authRepository.createUser({ nombreUsuario, passwordHash, rolId, colaboradorId });
+  const transaction = await beginTransaction();
+  try {
+    const newUserId = await authRepository.createUser(
+      {
+        nombreUsuario,
+        passwordHash,
+        rolId,
+        colaboradorId,
+      },
+      transaction,
+    );
+
+    await registrarBitacora(
+      {
+        usuarioId: actorId,
+        entidad: "Usuarios",
+        registroId: newUserId,
+        accion: "CREAR",
+        datosAnteriores: null,
+        datosNuevos: {
+          nombreUsuario,
+          rolId,
+          colaboradorId,
+        },
+      },
+      transaction,
+    );
+
+    await transaction.commit();
+    return newUserId;
+  } catch (error) {
+    try {
+      await transaction.rollback();
+    } catch {
+      console.error("No se pudo completar el rollback.");
+    }
+    throw error;
+  }
 }
 
 export async function getUsers() {
-  return await authRepository.getUsers();
+  const users = await authRepository.getUsers();
+  return users.map(safeUser);
 }
 
 export async function getUser(id) {
@@ -67,14 +128,19 @@ export async function getUser(id) {
   if (!user.Activo) {
     throw serviceError("Usuario está inactivo", 409);
   }
-  return user;
+  return safeUser(user);
 }
 
 // El controlador debe tomar el ID de la identidad autenticada.
-export async function changePassword(id, currentPassword, newPassword) {
+export async function changePassword(
+  id,
+  currentPassword,
+  newPassword,
+) {
   const usuarioId = validateId(id);
   validatePassword(currentPassword);
   validatePassword(newPassword);
+
   const user = await authRepository.getUserById(usuarioId);
   if (!user) {
     throw serviceError("Usuario no encontrado", 404);
@@ -86,9 +152,36 @@ export async function changePassword(id, currentPassword, newPassword) {
     throw serviceError("Credenciales incorrectas", 401);
   }
   const passwordHash = await hash(newPassword, 10);
-  const actualizado = await authRepository.updatePassword(usuarioId, passwordHash);
-  if (!actualizado) {
-    throw serviceError("Usuario no encontrado o inactivo", 404);
+  const transaction = await beginTransaction();
+
+  try {
+    const actualizado = await authRepository.updatePassword(
+      usuarioId,
+      passwordHash,
+      transaction
+    );
+
+    if (!actualizado) {
+      throw serviceError("Usuario no encontrado o inactivo", 404);
+    }
+
+    await registrarBitacora({
+      usuarioId: usuarioId,
+      entidad: "Usuarios",
+      registroId: usuarioId,
+      accion: "CAMBIAR_CONTRASENA",
+      datosAnteriores: { nombreUsuario: user.NombreUsuario },
+      datosNuevos: { nombreUsuario: user.NombreUsuario, passwordActualizada: true },
+    }, transaction);
+
+    await transaction.commit();
+    return actualizado;
+  } catch (error) {
+    try {
+      await transaction.rollback();
+    } catch (error) {
+      console.error("No se pudo completar el rollback.");
+    }
+    throw error;
   }
-  return actualizado;
 }

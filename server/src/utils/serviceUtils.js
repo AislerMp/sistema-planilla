@@ -1,5 +1,7 @@
-﻿export function serviceError(message, status = 400) {
-  return Object.assign(new Error(message), { status });
+﻿import { AppError } from "./AppError.js";
+
+export function serviceError(message, status = 400) {
+  return new AppError(message, status);
 }
 
 export function validateId(value, field = "id", optional = false) {

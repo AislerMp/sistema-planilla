@@ -6,16 +6,16 @@ export async function getAllColaboradores() {
   return result.recordset || [];
 }
 
-export async function getColaboradorById(id) {
-  const request = await createRequest();
+export async function getColaboradorById(id, transaction=null) {
+  const request = await createRequest(transaction);
   const result = await request
     .input("id", sql.Int, id)
     .query("SELECT * FROM Colaboradores WHERE ColaboradorId = @id");
   return result.recordset[0] || null;
 }
 
-export async function createColaborador(colaborador) {
-  const request = await createRequest();
+export async function createColaborador(colaborador, transaction=null) {
+  const request = await createRequest(transaction);
   const result = await request
     .input("Identificacion", sql.NVarChar(30), colaborador.identificacion)
     .input("Correo", sql.NVarChar(100), colaborador.correo)
@@ -36,8 +36,8 @@ export async function createColaborador(colaborador) {
   return result.recordset[0].ColaboradorId;
 }
 
-export async function updateColaborador(id, colaborador) {
-  const request = await createRequest();
+export async function updateColaborador(id, colaborador, transaction=null) {
+  const request = await createRequest(transaction);
   const result = await request
     .input("id", sql.Int, id)
     .input("Identificacion", sql.NVarChar(30), colaborador.identificacion)
@@ -68,8 +68,8 @@ export async function updateColaborador(id, colaborador) {
   return result.rowsAffected[0] > 0;
 }
 
-export async function toggleColaboradorActivo(id, activo) {
-  const request = await createRequest();
+export async function toggleColaboradorActivo(id, activo, transaction=null) {
+  const request = await createRequest(transaction);
   const result = await request
     .input("id", sql.Int, id)
     .input("activo", sql.Bit, activo)

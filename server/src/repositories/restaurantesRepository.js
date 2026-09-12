@@ -8,30 +8,31 @@ export async function getRestaurantes() {
   return result.recordset || [];
 }
 
-export async function getRestauranteById(id) {
-  const request = await createRequest();
+export async function getRestauranteById(id, transaction = null) {
+  const request = await createRequest(transaction);
   const result = await request
     .input("id", sql.Int, id)
     .query(
-      "SELECT * FROM Restaurantes WHERE RestauranteId = @id",
+      `SELECT * FROM Restaurantes${transaction ? " WITH (UPDLOCK, HOLDLOCK)" : ""} WHERE RestauranteId = @id`,
     );
   return result.recordset[0] || null;
 }
 
-export async function createRestaurante(restaurante) {
-  const request = await createRequest();
+export async function createRestaurante(restaurante, transaction = null) {
+  const request = await createRequest(transaction);
   const result = await request
     .input("nombre", sql.NVarChar(100), restaurante.nombre)
     .input("distritoId", sql.Int, restaurante.distritoId)
     .input("detalleDireccion", sql.NVarChar(300), restaurante.detalleDireccion)
     .query(
-      "INSERT INTO Restaurantes (Nombre, DistritoId, DetalleDireccion) VALUES (@nombre, @distritoId, @detalleDireccion);",
+      `INSERT INTO Restaurantes (Nombre, DistritoId, DetalleDireccion) VALUES (@nombre, @distritoId, @detalleDireccion);
+       SELECT CAST(SCOPE_IDENTITY() AS INT) AS RestauranteId;`,
     );
-  return result.rowsAffected[0] > 0;
+  return result.recordset?.[0]?.RestauranteId ?? null;
 }
 
-export async function updateRestaurante(id, restaurante) {
-  const request = await createRequest();
+export async function updateRestaurante(id, restaurante, transaction = null) {
+  const request = await createRequest(transaction);
   const result = await request
     .input("id", sql.Int, id)
     .input("nombre", sql.NVarChar(100), restaurante.nombre)
@@ -43,8 +44,8 @@ export async function updateRestaurante(id, restaurante) {
   return result.rowsAffected[0] > 0;
 }
 
-export async function deactivateRestaurante(id) {
-  const request = await createRequest();
+export async function deactivateRestaurante(id, transaction = null) {
+  const request = await createRequest(transaction);
   const result = await request
     .input("id", sql.Int, id)
     .query(
@@ -53,8 +54,8 @@ export async function deactivateRestaurante(id) {
   return result.rowsAffected[0] > 0;
 }
 
-export async function toggleRestauranteActivo(id, activo) {
-  const request = await createRequest();
+export async function toggleRestauranteActivo(id, activo, transaction = null) {
+  const request = await createRequest(transaction);
   const result = await request.input("id", sql.Int, id)
     .input("activo", sql.Bit, activo)
     .query("UPDATE Restaurantes SET Activo = @activo WHERE RestauranteId = @id");
