@@ -14,18 +14,11 @@ export async function loginUserController(req, res) {
   const { nombreUsuario, password } = req.body ?? {};
   const user = await loginUser(nombreUsuario, password);
 
-  // El servicio devuelve el registro completo: solo enviamos datos públicos.
+  req.session.user = user;
   return res.status(200).json({
-    message: "Credenciales verificadas correctamente.",
-    user: {
-      UsuarioId: user.UsuarioId,
-      NombreUsuario: user.NombreUsuario,
-      RolId: user.RolId,
-      ColaboradorId: user.ColaboradorId,
-      FechaCreacion: user.FechaCreacion,
-      Activo: user.Activo,
-    },
-  });
+    message: "Credenciales verificadas correctamente",
+    user: req.session.user,
+  })
 }
 
 export async function registerUserController(req, res) {

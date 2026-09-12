@@ -1,4 +1,5 @@
 import express from "express";
+import session from "express-session";
 import cors from "cors";
 
 import routes from "./routes/index.js";
@@ -16,11 +17,28 @@ const app = express();
 app.use(
   cors({
     origin: process.env.CLIENT_ORIGIN ?? "http://localhost:5173",
+    credentials: true,
   }),
 );
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use(
+  session({
+    name: "sid",
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false, // true solo en HTTPS
+      maxAge: 1000 * 60 * 60 * 8,
+    },
+  }),
+);
+
 app.use(isAuthenticate);
 
 app.use("/api", routes);

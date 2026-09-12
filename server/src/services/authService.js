@@ -1,12 +1,12 @@
 ﻿import * as authRepository from "../repositories/authRepository.js";
 import { hash, compare } from "bcrypt";
-import { getRolById } from "../repositories/rolesRepository.js";
 import { getColaboradorById } from "../repositories/colaboradorRepositorie.js";
 import {
   validateId,
   validateText,
   serviceError,
 } from "../utils/serviceUtils.js";
+import { getRol } from "../services/rolesService.js";
 import { registrarBitacora } from "./bitacoraService.js";
 import { beginTransaction } from "../config/database.js";
 
@@ -22,6 +22,7 @@ function safeUser(user) {
     UsuarioId: user.UsuarioId,
     NombreUsuario: user.NombreUsuario,
     RolId: user.RolId,
+    Rol: user.Rol,
     ColaboradorId: user.ColaboradorId,
     FechaCreacion: user.FechaCreacion,
     Activo: user.Activo,
@@ -38,6 +39,8 @@ export async function loginUser(username, password) {
     throw serviceError("Credenciales incorrectas", 401);
   }
 
+  const rol = await getRol(user.RolId);
+  user.Rol = rol.Codigo;
   return safeUser(user);
 }
 
@@ -57,7 +60,7 @@ export async function registerUser(user, usuarioActorId) {
     throw serviceError("El nombre de usuario ya está en uso", 409);
   }
 
-  const rol = await getRolById(rolId);
+  const rol = await getRol(rolId);
   if (!rol) {
     throw serviceError("Rol no encontrado", 404);
   }
