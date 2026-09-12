@@ -3,7 +3,8 @@ import {
   getColaborador,
   createNewColaborador,
   updateExistingColaborador,
-  toggleColaborador,
+  activarColaborador,
+  desactivarColaborador,
 } from "../services/colaboradorService.js";
 
 export async function getColaboradoresController(req, res) {
@@ -40,18 +41,18 @@ export async function updateColaboradorController(req, res) {
 
 export async function desactivarColaboradorController(req, res) {
   const usuarioActorId = req.user?.UsuarioId;
-  await toggleColaborador(req.params.id, false, usuarioActorId);
+  await desactivarColaborador(req.params.id, usuarioActorId);
   return res.status(200).json({
     message: "Colaborador desactivado correctamente.",
     activo: false,
   });
 }
 
-export async function ActivarColaboradorController(req, res) {
+export async function activarColaboradorController(req, res) {
   const usuarioActorId = req.user?.UsuarioId;
-  await toggleColaborador(req.params.id, true, usuarioActorId);
+  await activarColaborador(req.params.id, usuarioActorId);
   return res.status(200).json({
-    message: "Estado del colaborador actualizado correctamente.",
+    message: "Colaborador activado correctamente.",
     activo: true,
   });
 }

@@ -44,7 +44,7 @@ export async function updateRestaurante(id, restaurante, transaction = null) {
   return result.rowsAffected[0] > 0;
 }
 
-export async function deactivateRestaurante(id, transaction = null) {
+export async function desactivarRestaurante(id, transaction = null) {
   const request = await createRequest(transaction);
   const result = await request
     .input("id", sql.Int, id)
@@ -54,7 +54,7 @@ export async function deactivateRestaurante(id, transaction = null) {
   return result.rowsAffected[0] > 0;
 }
 
-export async function toggleRestauranteActivo(id, activo, transaction = null) {
+export async function actualizarEstadoRestaurante(id, activo, transaction = null) {
   const request = await createRequest(transaction);
   const result = await request.input("id", sql.Int, id)
     .input("activo", sql.Bit, activo)

@@ -165,7 +165,7 @@ export async function updateExistingColaborador(
   }
 }
 
-export async function toggleColaborador(id, activo, usuarioActorId) {
+async function actualizarEstadoColaborador(id, activo, usuarioActorId) {
   const colaboradorId = validateId(id);
   const status = validateStatus(activo);
   const actorId = validateId(usuarioActorId, "usuarioActorId");
@@ -181,7 +181,7 @@ export async function toggleColaborador(id, activo, usuarioActorId) {
       throw serviceError("Colaborador no encontrado", 404);
     }
 
-    const actualizado = await colaboradorRepository.toggleColaboradorActivo(
+    const actualizado = await colaboradorRepository.actualizarEstadoColaborador(
       colaboradorId,
       status,
       transaction,
@@ -213,4 +213,12 @@ export async function toggleColaborador(id, activo, usuarioActorId) {
     }
     throw error;
   }
+}
+
+export async function activarColaborador(id, usuarioActorId) {
+  return actualizarEstadoColaborador(id, true, usuarioActorId);
+}
+
+export async function desactivarColaborador(id, usuarioActorId) {
+  return actualizarEstadoColaborador(id, false, usuarioActorId);
 }

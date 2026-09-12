@@ -92,7 +92,7 @@ export async function updateTarifaPuesto(id, tarifaHora, usuarioActorId) {
   }
 }
 
-export async function togglePuesto(id, activo, usuarioActorId) {
+async function actualizarEstadoPuesto(id, activo, usuarioActorId) {
   const actorId = validateId(usuarioActorId, "usuarioActorId");
   const puestoId = validateId(id);
   const status = validateStatus(activo);
@@ -101,7 +101,7 @@ export async function togglePuesto(id, activo, usuarioActorId) {
     const puesto = await puestosRepository.getPuestoById(puestoId, transaction);
     if (!puesto) throw serviceError("Puesto no encontrado", 404);
 
-    const actualizado = await puestosRepository.togglePuestoActivo(puestoId, status, transaction);
+    const actualizado = await puestosRepository.actualizarEstadoPuesto(puestoId, status, transaction);
     if (!actualizado) throw serviceError("Puesto no encontrado", 404);
 
     await registrarBitacora({
@@ -123,4 +123,12 @@ export async function togglePuesto(id, activo, usuarioActorId) {
     }
     throw error;
   }
+}
+
+export async function activarPuesto(id, usuarioActorId) {
+  return actualizarEstadoPuesto(id, true, usuarioActorId);
+}
+
+export async function desactivarPuesto(id, usuarioActorId) {
+  return actualizarEstadoPuesto(id, false, usuarioActorId);
 }

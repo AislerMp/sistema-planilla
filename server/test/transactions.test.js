@@ -9,6 +9,7 @@ Object.assign(process.env, {
 const { pool, sql } = await import("../src/config/database.js");
 const puestos = await import("../src/services/puestosService.js");
 const restaurantes = await import("../src/services/restaurantesService.js");
+const colaboradores = await import("../src/services/colaboradorService.js");
 const auth = await import("../src/services/authService.js");
 
 let expected;
@@ -81,7 +82,7 @@ const operations = [
   ...[false, true].map(activo => ({
     name: activo ? "activar puesto" : "desactivar puesto", entity: "Puestos",
     action: activo ? "ACTIVAR" : "DESACTIVAR", previous: { ...puesto, Activo: !activo },
-    run: actor => puestos.togglePuesto(7, activo, actor), write: /UPDATE Puestos SET Activo/,
+    run: actor => (activo ? puestos.activarPuesto : puestos.desactivarPuesto)(7, actor), write: /UPDATE Puestos SET Activo/,
     before: { activo: !activo }, after: { activo },
   })),
   {
@@ -100,20 +101,23 @@ const operations = [
   ...[false, true].map(activo => ({
     name: activo ? "activar restaurante" : "desactivar restaurante", entity: "Restaurantes",
     action: activo ? "ACTIVAR" : "DESACTIVAR", previous: { ...restaurante, Activo: !activo },
-    run: actor => restaurantes.toggleRestaurante(7, activo, actor), write: /UPDATE Restaurantes SET Activo/,
+    run: actor => (activo ? restaurantes.activarRestaurante : restaurantes.desactivarRestaurante)(7, actor), write: /UPDATE Restaurantes SET Activo/,
     before: { activo: !activo }, after: { activo },
   })),
-  {
-    name: "baja de restaurante", entity: "Restaurantes", action: "DESACTIVAR", previous: restaurante,
-    run: actor => restaurantes.deactivateRestaurante(7, actor), write: /UPDATE Restaurantes SET Activo/,
-    before: { activo: true }, after: { activo: false },
-  },
+  ...[false, true].map(activo => ({
+    name: activo ? "activar colaborador" : "desactivar colaborador", entity: "Colaboradores",
+    action: activo ? "ACTIVAR" : "DESACTIVAR", previous: { ColaboradorId: 7, Activo: !activo },
+    run: actor => (activo ? colaboradores.activarColaborador : colaboradores.desactivarColaborador)(7, actor),
+    write: /UPDATE Colaboradores SET Activo/,
+    before: { activo: !activo }, after: { activo },
+  })),
 ];
 
 function expectRead(operation, records = [operation.previous]) {
   if (operation.previous) {
     expected.push({
-      pattern: new RegExp(`FROM ${operation.entity} WITH \\(UPDLOCK, HOLDLOCK\\)`), records,
+      pattern: operation.entity === "Colaboradores" ? /FROM Colaboradores/
+        : new RegExp(`FROM ${operation.entity} WITH \\(UPDLOCK, HOLDLOCK\\)`), records,
     });
   }
 }

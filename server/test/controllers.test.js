@@ -97,9 +97,13 @@ const details = [
   [ubicaciones.getCantonController, "Cantones"],
   [ubicaciones.getDistritoController, "Distritos"],
 ];
-const toggles = [
-  [puestos.togglePuestoController, "Puestos"],
-  [restaurantes.toggleRestauranteController, "Restaurantes"],
+const accionesEstado = [
+  [colaboradores.activarColaboradorController, "Colaboradores", true],
+  [colaboradores.desactivarColaboradorController, "Colaboradores", false],
+  [puestos.activarPuestoController, "Puestos", true],
+  [puestos.desactivarPuestoController, "Puestos", false],
+  [restaurantes.activarRestauranteController, "Restaurantes", true],
+  [restaurantes.desactivarRestauranteController, "Restaurantes", false],
 ];
 
 test("las listas responden 200, incluso cuando están vacías", async () => {
@@ -144,30 +148,30 @@ test("los errores internos de cada controlador se entregan al middleware", async
   assert.equal(logger.mock.callCount(), lists.length);
 });
 
-test("los cambios de estado conservan false y true y rechazan cadenas o cuerpos ausentes", async () => {
-  for (const [controller, table] of toggles) {
-    for (const activo of [false, true]) {
+test("activar y desactivar fijan su estado sin necesitar ni leer el body", async () => {
+  for (const [controller, table, activo] of accionesEstado) {
+    for (const body of [undefined, {}, { activo: !activo }, { activo: "false" }, { activo: null }]) {
       respond(new RegExp(`FROM ${table}`), [{ Activo: !activo }]);
       respond(new RegExp(`UPDATE ${table} SET Activo`));
       respond(/INSERT INTO dbo.Bitacora/);
-      const result = await invoke(controller, { params: { id: "7" }, body: { activo } });
+      const result = await invoke(controller, { params: { id: "7" }, body });
       assert.equal(result.status, 200);
       assert.equal(result.body.activo, activo);
       assert.equal(calls.at(-2).parameters.activo, activo);
       assert.equal(calls.at(-1).parameters.UsuarioId, 3);
-    }
-    for (const body of [undefined, {}, { activo: "false" }]) {
-      assert.equal((await invoke(controller, { params: { id: "7" }, body })).status, 400);
+      assert.equal(calls.at(-1).parameters.Accion, activo ? "ACTIVAR" : "DESACTIVAR");
+      assert.deepEqual(JSON.parse(calls.at(-1).parameters.DatosNuevos), { activo });
     }
     respond(new RegExp(`FROM ${table}`), []);
-    assert.equal((await invoke(controller, { params: { id: "99" }, body: { activo: false } })).status, 404);
+    assert.equal((await invoke(controller, { params: { id: "99" } })).status, 404);
   }
 });
 
 test("las bajas desactivan registros sin eliminarlos ni aceptar otro estado del body", async () => {
   for (const [controller, table] of [
     [colaboradores.desactivarColaboradorController, "Colaboradores"],
-    [restaurantes.deactivateRestauranteController, "Restaurantes"],
+    [puestos.desactivarPuestoController, "Puestos"],
+    [restaurantes.desactivarRestauranteController, "Restaurantes"],
   ]) {
     respond(new RegExp(`FROM ${table}`), [{ Activo: true }]);
     respond(new RegExp(`UPDATE ${table} SET Activo`));
@@ -332,7 +336,7 @@ test("activar colaborador usa el actor autenticado e ignora el estado del body",
   respond(/FROM Colaboradores/, [{ ColaboradorId: 7, Activo: false }]);
   respond(/UPDATE Colaboradores SET Activo/);
   respond(/INSERT INTO dbo.Bitacora/);
-  const result = await invoke(colaboradores.ActivarColaboradorController, {
+  const result = await invoke(colaboradores.activarColaboradorController, {
     params: { id: "7" }, user: { UsuarioId: 3 },
     body: { activo: false, usuarioActorId: 99 },
   });
@@ -344,9 +348,9 @@ test("activar colaborador usa el actor autenticado e ignora el estado del body",
 
 test("las escrituras de catálogos exigen el actor autenticado e ignoran el enviado en el body", async () => {
   for (const controller of [
-    puestos.createPuestoController, puestos.updateTarifaPuestoController, puestos.togglePuestoController,
+    puestos.createPuestoController, puestos.updateTarifaPuestoController, puestos.activarPuestoController, puestos.desactivarPuestoController,
     restaurantes.createRestauranteController, restaurantes.updateRestauranteController,
-    restaurantes.toggleRestauranteController, restaurantes.deactivateRestauranteController,
+    restaurantes.activarRestauranteController, restaurantes.desactivarRestauranteController,
   ]) {
     const result = await invoke(controller, {
       params: { id: "7" }, user: undefined,

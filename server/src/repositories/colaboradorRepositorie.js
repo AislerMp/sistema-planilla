@@ -68,7 +68,7 @@ export async function updateColaborador(id, colaborador, transaction=null) {
   return result.rowsAffected[0] > 0;
 }
 
-export async function toggleColaboradorActivo(id, activo, transaction=null) {
+export async function actualizarEstadoColaborador(id, activo, transaction=null) {
   const request = await createRequest(transaction);
   const result = await request
     .input("id", sql.Int, id)

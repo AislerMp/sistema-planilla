@@ -95,7 +95,7 @@ export async function updateExistingRestaurante(id, restaurante, usuarioActorId)
   }
 }
 
-export async function toggleRestaurante(id, activo, usuarioActorId) {
+async function actualizarEstadoRestaurante(id, activo, usuarioActorId) {
   const actorId = validateId(usuarioActorId, "usuarioActorId");
   const restauranteId = validateId(id);
   const status = validateStatus(activo);
@@ -104,7 +104,7 @@ export async function toggleRestaurante(id, activo, usuarioActorId) {
     const existente = await restaurantesRepository.getRestauranteById(restauranteId, transaction);
     if (!existente) throw serviceError("Restaurante no encontrado", 404);
 
-    const actualizado = await restaurantesRepository.toggleRestauranteActivo(restauranteId, status, transaction);
+    const actualizado = await restaurantesRepository.actualizarEstadoRestaurante(restauranteId, status, transaction);
     if (!actualizado) throw serviceError("Restaurante no encontrado", 404);
 
     await registrarBitacora({
@@ -128,6 +128,10 @@ export async function toggleRestaurante(id, activo, usuarioActorId) {
   }
 }
 
-export async function deactivateRestaurante(id, usuarioActorId) {
-  return toggleRestaurante(id, false, usuarioActorId);
+export async function activarRestaurante(id, usuarioActorId) {
+  return actualizarEstadoRestaurante(id, true, usuarioActorId);
+}
+
+export async function desactivarRestaurante(id, usuarioActorId) {
+  return actualizarEstadoRestaurante(id, false, usuarioActorId);
 }

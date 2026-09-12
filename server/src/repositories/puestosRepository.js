@@ -36,7 +36,7 @@ export async function getPuestoById(id, transaction = null) {
   return result.recordset[0] || null;
 }
 
-export async function togglePuestoActivo(id, activo, transaction = null) {
+export async function actualizarEstadoPuesto(id, activo, transaction = null) {
   const request = await createRequest(transaction);
   const result = await request.input("id", sql.Int, id)
     .input("activo", sql.Bit, activo)

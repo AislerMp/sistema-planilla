@@ -162,10 +162,15 @@ test("IDs inválidos se rechazan antes de consultar la base", async () => {
   assert.equal(calls.length, 0);
 });
 
-test("los cambios de estado exigen booleanos reales", async () => {
-  for (const toggle of [colaboradores.toggleColaborador, puestos.togglePuesto, restaurantes.toggleRestaurante]) {
-    for (const value of ["false", "true", 0, 1, null, undefined]) {
-      await assert.rejects(toggle(1, value, 3), { status: 400 });
+test("activar y desactivar exigen IDs y actores válidos antes de consultar", async () => {
+  for (const action of [
+    colaboradores.activarColaborador, colaboradores.desactivarColaborador,
+    puestos.activarPuesto, puestos.desactivarPuesto,
+    restaurantes.activarRestaurante, restaurantes.desactivarRestaurante,
+  ]) {
+    await assert.rejects(action("abc", 3), { status: 400 });
+    for (const actor of ["false", "true", 0, -1, null, undefined]) {
+      await assert.rejects(action(1, actor), { status: 400 });
     }
   }
   assert.equal(calls.length, 0);
@@ -274,7 +279,7 @@ test("se puede editar un restaurante activo y reactivar uno inactivo", async () 
   respond(/FROM Restaurantes/, [{ RestauranteId: 1, Activo: false }]);
   respond(/UPDATE Restaurantes SET Activo = @activo WHERE RestauranteId = @id/);
   respond(/INSERT INTO dbo.Bitacora/);
-  assert.equal(await restaurantes.toggleRestaurante(1, true, 3), true);
+  assert.equal(await restaurantes.activarRestaurante(1, 3), true);
   assert.equal(calls.at(-1).parameters.activo.value, true);
 });
 
@@ -316,13 +321,14 @@ test("listas vacías de los catálogos y colaboradores devuelven arreglos", asyn
   }
 });
 
-test("modificar un registro inexistente produce 404", async () => {
-  for (const [toggle, table] of [
-    [puestos.togglePuesto, "Puestos"], [restaurantes.toggleRestaurante, "Restaurantes"],
-    [colaboradores.toggleColaborador, "Colaboradores"],
+test("activar o desactivar un registro inexistente produce 404", async () => {
+  for (const [action, table] of [
+    [puestos.activarPuesto, "Puestos"], [puestos.desactivarPuesto, "Puestos"],
+    [restaurantes.activarRestaurante, "Restaurantes"], [restaurantes.desactivarRestaurante, "Restaurantes"],
+    [colaboradores.activarColaborador, "Colaboradores"], [colaboradores.desactivarColaborador, "Colaboradores"],
   ]) {
     respond(new RegExp(`FROM ${table}`), []);
-    await assert.rejects(toggle(999, false, 3), { status: 404 });
+    await assert.rejects(action(999, 3), { status: 404 });
   }
 });
 

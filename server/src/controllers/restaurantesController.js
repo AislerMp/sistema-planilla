@@ -3,8 +3,8 @@ import {
   getRestaurante,
   createNewRestaurante,
   updateExistingRestaurante,
-  toggleRestaurante,
-  deactivateRestaurante,
+  activarRestaurante,
+  desactivarRestaurante,
 } from "../services/restaurantesService.js";
 
 export async function getRestaurantesController(req, res) {
@@ -27,17 +27,16 @@ export async function updateRestauranteController(req, res) {
   return res.status(200).json({ message: "Restaurante actualizado correctamente." });
 }
 
-export async function toggleRestauranteController(req, res) {
-  const { activo } = req.body ?? {};
-  await toggleRestaurante(req.params.id, activo, req.user?.UsuarioId);
+export async function activarRestauranteController(req, res) {
+  await activarRestaurante(req.params.id, req.user?.UsuarioId);
   return res.status(200).json({
-    message: "Estado del restaurante actualizado correctamente.",
-    activo,
+    message: "Restaurante activado correctamente.",
+    activo: true,
   });
 }
 
-export async function deactivateRestauranteController(req, res) {
-  await deactivateRestaurante(req.params.id, req.user?.UsuarioId);
+export async function desactivarRestauranteController(req, res) {
+  await desactivarRestaurante(req.params.id, req.user?.UsuarioId);
   return res.status(200).json({
     message: "Restaurante desactivado correctamente.",
     activo: false,

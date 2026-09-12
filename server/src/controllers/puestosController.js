@@ -3,7 +3,8 @@ import {
   getPuesto,
   createNewPuesto,
   updateTarifaPuesto,
-  togglePuesto,
+  activarPuesto,
+  desactivarPuesto,
 } from "../services/puestosService.js";
 import { AppError } from "../utils/AppError.js";
 
@@ -33,11 +34,18 @@ export async function updateTarifaPuestoController(req, res) {
   return res.status(200).json({ message: "Tarifa del puesto actualizada correctamente." });
 }
 
-export async function togglePuestoController(req, res) {
-  const { activo } = req.body ?? {};
-  await togglePuesto(req.params.id, activo, req.user?.UsuarioId);
+export async function activarPuestoController(req, res) {
+  await activarPuesto(req.params.id, req.user?.UsuarioId);
   return res.status(200).json({
-    message: "Estado del puesto actualizado correctamente.",
-    activo,
+    message: "Puesto activado correctamente.",
+    activo: true,
+  });
+}
+
+export async function desactivarPuestoController(req, res) {
+  await desactivarPuesto(req.params.id, req.user?.UsuarioId);
+  return res.status(200).json({
+    message: "Puesto desactivado correctamente.",
+    activo: false,
   });
 }
