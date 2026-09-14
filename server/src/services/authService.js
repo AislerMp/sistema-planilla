@@ -17,12 +17,14 @@ function validatePassword(password) {
   return password;
 }
 
-function safeUser(user) {
+async function safeUser(user) {
+  const rol = await getRol(user.RolId);
+
   return {
     UsuarioId: user.UsuarioId,
     NombreUsuario: user.NombreUsuario,
     RolId: user.RolId,
-    Rol: user.Rol,
+    Rol: rol.Codigo,
     ColaboradorId: user.ColaboradorId,
     FechaCreacion: user.FechaCreacion,
     Activo: user.Activo,
@@ -39,9 +41,7 @@ export async function loginUser(username, password) {
     throw serviceError("Credenciales incorrectas", 401);
   }
 
-  const rol = await getRol(user.RolId);
-  user.Rol = rol.Codigo;
-  return safeUser(user);
+  return await safeUser(user);
 }
 
 export async function registerUser(user, usuarioActorId) {
@@ -119,7 +119,7 @@ export async function registerUser(user, usuarioActorId) {
 
 export async function getUsers() {
   const users = await authRepository.getUsers();
-  return users.map(safeUser);
+  return await Promise.all(users.map(safeUser));
 }
 
 export async function getUser(id) {
@@ -131,7 +131,7 @@ export async function getUser(id) {
   if (!user.Activo) {
     throw serviceError("Usuario está inactivo", 409);
   }
-  return safeUser(user);
+  return await safeUser(user);
 }
 
 // El controlador debe tomar el ID de la identidad autenticada.

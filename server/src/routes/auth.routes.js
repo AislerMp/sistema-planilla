@@ -9,5 +9,6 @@ router.patch("/change-password", authController.changePasswordController);
 router.post("/register", soloAdministrador, authController.registerUserController);
 router.get("/users", authController.getUsersController);
 router.get("/users/:id", authController.getUserController);
-
+router.get("/me", authController.getCurrentUserController);
+router.post("/logout", authController.logoutController);
 export default router;

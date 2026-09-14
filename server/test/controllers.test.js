@@ -54,6 +54,7 @@ async function invoke(controller, req = {}) {
   const app = express();
   app.use(express.json());
   app.post("/", (request, response, next) => {
+    request.session = {};
     request.params = req.params ?? {};
     request.user = Object.hasOwn(req, "user") ? req.user : { UsuarioId: 3 };
     return controller(request, response, next);
@@ -108,8 +109,9 @@ const accionesEstado = [
 
 test("las listas responden 200, incluso cuando están vacías", async () => {
   for (const [controller, table] of lists) {
-    for (const records of [[], [table === "Usuarios" ? { NombreUsuario: "ana" } : { Nombre: "Ejemplo" }]]) {
+    for (const records of [[], [table === "Usuarios" ? { NombreUsuario: "ana", RolId: 1, Rol: "ADMINISTRADOR" } : { Nombre: "Ejemplo" }]]) {
       respond(new RegExp(`FROM ${table}`), records);
+      if (table === "Usuarios" && records.length) respond(/FROM Roles/, [{ Codigo: "ADMINISTRADOR" }]);
       const result = await invoke(controller);
       assert.equal(result.status, 200);
       assert.deepEqual(result.body, records);
@@ -317,16 +319,18 @@ test("auth conserva mensajes de validación, credenciales, ausencia y conflictos
 
 test("login y consulta de usuario conservan las respuestas públicas sin el hash", async () => {
   const user = {
-    UsuarioId: 7, NombreUsuario: "ana", RolId: 1, ColaboradorId: 12, Activo: true,
+    UsuarioId: 7, NombreUsuario: "ana", RolId: 1, Rol: "ADMINISTRADOR", ColaboradorId: 12, Activo: true,
   };
   const stored = { ...user, PasswordHash: await hash("clave", 4) };
   respond(/FROM Usuarios/, [stored]);
+  respond(/FROM Roles/, [{ Codigo: "ADMINISTRADOR" }]);
   const login = await invoke(auth.loginUserController, {
     body: { nombreUsuario: "ana", password: "clave" },
   });
   assert.equal(login.status, 200);
   assert.deepEqual(login.body.user, user);
   respond(/FROM Usuarios/, [stored]);
+  respond(/FROM Roles/, [{ Codigo: "ADMINISTRADOR" }]);
   const detail = await invoke(auth.getUserController, { params: { id: "7" } });
   assert.equal(detail.status, 200);
   assert.deepEqual(detail.body, user);

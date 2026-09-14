@@ -57,11 +57,13 @@ const colaborador = {
 };
 const password = " clave con espacios ";
 const passwordHash = await hash(password, 4);
-const user = { UsuarioId: 1, NombreUsuario: "ana", PasswordHash: passwordHash, Activo: true };
+const user = { UsuarioId: 1, NombreUsuario: "ana", RolId: 1, PasswordHash: passwordHash, Activo: true };
 
 test("login usa PasswordHash, conserva los espacios y no expone el hash", async () => {
   respond(/FROM Usuarios WHERE NombreUsuario = @username/, [user]);
+  respond(/FROM Roles WHERE RolId/, [{ Codigo: "ADMINISTRADOR" }]);
   const result = await auth.loginUser(" ana ", password);
+  assert.equal(result.Rol, "ADMINISTRADOR");
   assert.equal(result.UsuarioId, 1);
   assert.equal("PasswordHash" in result, false);
   assert.equal(calls[0].parameters.username.value, "ana");
@@ -136,9 +138,14 @@ test("consultar un rol solo exige su existencia, sin columna Activo", async () =
 
 test("consultas de usuarios nunca devuelven hashes", async () => {
   respond(/FROM Usuarios WHERE Activo = 1/, [user]);
+  respond(/FROM Roles/, [{ Codigo: "ADMINISTRADOR" }]);
   respond(/FROM Usuarios WHERE UsuarioId = @id/, [user]);
+  respond(/FROM Roles/, [{ Codigo: "ADMINISTRADOR" }]);
   const list = await auth.getUsers();
   const result = await auth.getUser(1);
+  assert.equal(list[0].UsuarioId, 1);
+  assert.equal(list[0].Rol, "ADMINISTRADOR");
+  assert.equal(result.Rol, "ADMINISTRADOR");
   assert.equal("PasswordHash" in list[0], false);
   assert.equal("PasswordHash" in result, false);
 });

@@ -1,0 +1,58 @@
+:root {
+  color-scheme: light;
+
+  --color-primary: #c8102e;
+  --color-primary-hover: #a90d27;
+  --color-on-primary: #ffffff;
+
+  --color-background: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-text: #17191d;
+  --color-text-muted: #626975;
+  --color-border: #dde0e5;
+
+  --color-sidebar: #181a1e;
+  --color-sidebar-text: #c9cdd5;
+  --color-sidebar-hover: #282b31;
+  --color-sidebar-active: #342026;
+  --color-sidebar-indicator: #f25770;
+
+  --color-success: #166534;
+  --color-success-background: #eaf6ee;
+  --color-focus: #b00d28;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-background: #121416;
+  --color-surface: #1c1f23;
+  --color-text: #f3f4f6;
+  --color-text-muted: #a8afba;
+  --color-border: #343940;
+
+  --color-success: #9be7b4;
+  --color-success-background: #193327;
+  --color-focus: #ff8296;
+}
+
+/* Suaviza los colores del tema y respeta la preferencia de movimiento reducido. */
+@media (prefers-reduced-motion: no-preference) {
+  body,
+  .app-header,
+  .sidebar,
+  .sidebar-link,
+  .panel,
+  .button,
+  .icon-button,
+  .page-header p,
+  .empty-state p,
+  input,
+  select,
+  textarea {
+    transition:
+      background-color 250ms ease-in-out,
+      color 250ms ease-in-out,
+      border-color 250ms ease-in-out;
+  }
+}

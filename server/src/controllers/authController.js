@@ -1,4 +1,10 @@
-import { getUser, getUsers, loginUser, registerUser, changePassword } from "../services/authService.js";
+import {
+  getUser,
+  getUsers,
+  loginUser,
+  registerUser,
+  changePassword,
+} from "../services/authService.js";
 
 export async function getUserController(req, res) {
   const user = await getUser(req.params.id);
@@ -18,19 +24,22 @@ export async function loginUserController(req, res) {
   return res.status(200).json({
     message: "Credenciales verificadas correctamente",
     user: req.session.user,
-  })
+  });
 }
 
 export async function registerUserController(req, res) {
   const { nombreUsuario, password, rolId, colaboradorId } = req.body ?? {};
   const usuarioActorId = req.user?.UsuarioId;
 
-  const usuarioId = await registerUser({
-    nombreUsuario,
-    password,
-    rolId,
-    colaboradorId,
-  }, usuarioActorId);
+  const usuarioId = await registerUser(
+    {
+      nombreUsuario,
+      password,
+      rolId,
+      colaboradorId,
+    },
+    usuarioActorId,
+  );
 
   return res.status(201).json({
     message: "Usuario registrado correctamente.",
@@ -46,5 +55,27 @@ export async function changePasswordController(req, res) {
 
   return res.status(200).json({
     message: "Contraseña actualizada correctamente.",
+  });
+}
+
+export async function getCurrentUserController(req, res) {
+  return res.status(200).json({
+    user: req.user,
+  });
+}
+
+export async function logoutController(req, res, next) {
+  req.session.destroy((error) => {
+    if (error) return next(error);
+
+    res.clearCookie("sid", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false,
+    });
+
+    return res.status(200).json({
+      message: "Sesión cerrada correctamente.",
+    });
   });
 }

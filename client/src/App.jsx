@@ -1,5 +1,5 @@
-import HomePage from "./pages/homePage.jsx";
+import AppRoutes from "./routes/AppRoutes.jsx";
 
 export default function App() {
-  return <HomePage />;
+  return <AppRoutes />;
 }

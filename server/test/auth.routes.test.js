@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { test, before, after, beforeEach, afterEach, mock } from "node:test";
 import { once } from "node:events";
 import express from "express";
+import session from "express-session";
 import { hash } from "bcrypt";
 
 Object.assign(process.env, {
   DB_SERVER: "test.invalid", DB_PORT: "1433", DB_NAME: "test",
   DB_USER: "test", DB_PASSWORD: "test",
+  SESSION_SECRET: "secreto-ficticio-exclusivo-de-tests",
 });
 const { pool, sql } = await import("../src/config/database.js");
 const { default: app } = await import("../src/app.js");
@@ -35,7 +37,14 @@ mock.method(pool, "request", () => {
 before(async () => {
   const harness = express();
   // Identidad controlada por la prueba, nunca por headers o el body del cliente.
-  harness.use((req, res, next) => { req.user = identity; next(); });
+  harness.use(session({
+    name: "sid", secret: process.env.SESSION_SECRET,
+    resave: false, saveUninitialized: false,
+  }));
+  harness.use((req, res, next) => {
+    if (identity) req.session.user = identity;
+    next();
+  });
   harness.use(app);
   server = harness.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -58,11 +67,12 @@ async function request(method, path, body) {
 
 test("POST /api/auth/login es público y conserva validación y respuesta sin hash", async () => {
   assert.equal((await request("POST", "/api/auth/login", {})).status, 400);
-  const user = { UsuarioId: 7, NombreUsuario: "ana", RolId: 1, ColaboradorId: 12, Activo: true };
+  const user = { UsuarioId: 7, NombreUsuario: "ana", RolId: 1, Rol: "ADMINISTRADOR", ColaboradorId: 12, Activo: true };
   expected.push({
     pattern: /FROM Usuarios WHERE NombreUsuario/,
     records: [{ ...user, PasswordHash: await hash("clave", 4) }],
   });
+  expected.push({ pattern: /FROM Roles WHERE RolId/, records: [{ RolId: 1, Codigo: "ADMINISTRADOR" }], parameters: { id: 1 } });
   const result = await request("POST", "/api/auth/login", { nombreUsuario: "ana", password: "clave" });
   assert.equal(result.status, 200);
   assert.deepEqual(result.body.user, user);
@@ -82,25 +92,29 @@ test("las rutas privadas rechazan solicitudes anónimas aunque el body declare u
 
 test("usuarios sin rol administrador pueden consultar cuentas pero no registrarlas", async () => {
   for (const rol of ["COLABORADOR", "GERENTE", "RECURSOS_HUMANOS", "colaborador", "gerente", "recursosHumanos"]) {
-    identity = { UsuarioId: 7, rol };
+    identity = { UsuarioId: 7, Rol: rol };
     const result = await request("POST", "/api/auth/register");
     assert.equal(result.status, 403);
     assert.equal(result.body.message, "No tenés permiso para esta acción.");
-    const user = { UsuarioId: 7, NombreUsuario: "ana", Activo: true };
+    const user = { UsuarioId: 7, NombreUsuario: "ana", RolId: 1, Rol: "ADMINISTRADOR", Activo: true };
     expected.push({ pattern: /FROM Usuarios WHERE Activo/, records: [user] });
+    expected.push({ pattern: /FROM Roles WHERE RolId/, records: [{ Codigo: "ADMINISTRADOR" }], parameters: { id: 1 } });
     assert.deepEqual(await request("GET", "/api/auth/users"), { status: 200, body: [user] });
     expected.push({ pattern: /FROM Usuarios WHERE UsuarioId/, records: [user], parameters: { id: 7 } });
+    expected.push({ pattern: /FROM Roles WHERE RolId/, records: [{ Codigo: "ADMINISTRADOR" }], parameters: { id: 1 } });
     assert.deepEqual(await request("GET", "/api/auth/users/7"), { status: 200, body: user });
   }
 });
 
 test("un administrador puede listar y consultar usuarios y acceder al registro", async () => {
-  identity = { UsuarioId: 3, rol: "ADMINISTRADOR" };
-  const user = { UsuarioId: 7, NombreUsuario: "ana", Activo: true };
+  identity = { UsuarioId: 3, Rol: "ADMINISTRADOR" };
+  const user = { UsuarioId: 7, NombreUsuario: "ana", RolId: 1, Rol: "ADMINISTRADOR", Activo: true };
   expected.push({ pattern: /FROM Usuarios WHERE Activo/, records: [user] });
-  assert.deepEqual(await request("GET", "/api/auth/users"), { status: 200, body: [user] });
+  expected.push({ pattern: /FROM Roles WHERE RolId/, records: [{ Codigo: "ADMINISTRADOR" }], parameters: { id: 1 } });
+    assert.deepEqual(await request("GET", "/api/auth/users"), { status: 200, body: [user] });
   expected.push({ pattern: /FROM Usuarios WHERE UsuarioId/, records: [user], parameters: { id: 7 } });
-  assert.deepEqual(await request("GET", "/api/auth/users/7"), { status: 200, body: user });
+  expected.push({ pattern: /FROM Roles WHERE RolId/, records: [{ Codigo: "ADMINISTRADOR" }], parameters: { id: 1 } });
+    assert.deepEqual(await request("GET", "/api/auth/users/7"), { status: 200, body: user });
   const invalid = await request("GET", "/api/auth/users/abc");
   assert.equal(invalid.status, 400);
   const registration = await request("POST", "/api/auth/register", {});
@@ -109,7 +123,7 @@ test("un administrador puede listar y consultar usuarios y acceder al registro",
 });
 
 test("cambiar contraseña utiliza la identidad autenticada aunque se envíe otro ID", async () => {
-  identity = { UsuarioId: 7, rol: "COLABORADOR" };
+  identity = { UsuarioId: 7, Rol: "COLABORADOR" };
   expected.push({ pattern: /FROM Usuarios WHERE UsuarioId/, records: [], parameters: { id: 7 } });
   const result = await request("PATCH", "/api/auth/change-password", {
     currentPassword: "actual", newPassword: "nueva", UsuarioId: 99, id: 99,
@@ -131,7 +145,7 @@ test("crear colaboradores exige autenticación y rechaza todos los roles no admi
   const body = { usuarioActorId: 3, rol: "ADMINISTRADOR" };
   assert.equal((await request("POST", "/api/colaboradores", body)).status, 401);
   for (const rol of ["COLABORADOR", "GERENTE", "RECURSOS_HUMANOS", "colaborador", "gerente", "recursosHumanos", undefined]) {
-    identity = { UsuarioId: 7, rol };
+    identity = { UsuarioId: 7, Rol: rol };
     const result = await request("POST", "/api/colaboradores", body);
     assert.equal(result.status, 403);
     assert.equal(result.body.message, "No tenés permiso para esta acción.");
@@ -139,7 +153,7 @@ test("crear colaboradores exige autenticación y rechaza todos los roles no admi
 });
 
 test("un administrador puede crear colaboradores y la bitácora usa su identidad", async (t) => {
-  identity = { UsuarioId: 3, rol: "ADMINISTRADOR" };
+  identity = { UsuarioId: 3, Rol: "ADMINISTRADOR" };
   t.mock.method(sql.Transaction.prototype, "begin", async () => {});
   t.mock.method(sql.Transaction.prototype, "request", () => pool.request());
   const commit = t.mock.method(sql.Transaction.prototype, "commit", async () => {});
@@ -166,4 +180,47 @@ test("un administrador puede crear colaboradores y la bitácora usa su identidad
   assert.equal(result.body.id, 12);
   assert.equal(commit.mock.callCount(), 1);
   assert.equal(rollback.mock.callCount(), 0);
+});
+
+
+test("la cookie del login permite acceder y una cookie alterada se rechaza", async () => {
+  // Este servidor usa directamente app.js, sin inyectar ninguna identidad.
+  const cookieServer = app.listen(0, "127.0.0.1");
+  try {
+    await once(cookieServer, "listening");
+    const url = `http://127.0.0.1:${cookieServer.address().port}`;
+    expected.push(
+      { pattern: /FROM Usuarios WHERE NombreUsuario/, records: [{
+        UsuarioId: 7, NombreUsuario: "ana", RolId: 1, Activo: true,
+        PasswordHash: await hash("clave", 4),
+      }] },
+      { pattern: /FROM Roles WHERE RolId/, records: [{ Codigo: "ADMINISTRADOR" }], parameters: { id: 1 } },
+    );
+    const login = await fetch(`${url}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" },
+      body: JSON.stringify({ nombreUsuario: "ana", password: "clave" }),
+    });
+    assert.equal(login.status, 200);
+    assert.equal(login.headers.get("access-control-allow-credentials"), "true");
+    const cookieHeader = login.headers.get("set-cookie");
+    assert.match(cookieHeader, /^sid=/);
+    assert.match(cookieHeader, /HttpOnly/i);
+    assert.match(cookieHeader, /SameSite=Lax/i);
+    const payload = await login.json();
+    assert.equal(payload.user.Rol, "ADMINISTRADOR");
+    assert.equal("PasswordHash" in payload.user, false);
+    const cookie = cookieHeader.split(";")[0];
+    expected.push({ pattern: /FROM Roles$/, records: [{ RolId: 1, Codigo: "ADMINISTRADOR" }] });
+    const allowed = await fetch(`${url}/api/roles`, { headers: { Cookie: cookie } });
+    assert.equal(allowed.status, 200);
+    assert.deepEqual(await allowed.json(), [{ RolId: 1, Codigo: "ADMINISTRADOR" }]);
+    for (const headers of [{}, { Cookie: cookie + "alterada" }]) {
+      const denied = await fetch(`${url}/api/roles`, { headers });
+      assert.equal(denied.status, 401);
+      await denied.json();
+    }
+  } finally {
+    await new Promise((resolve, reject) => cookieServer.close(error => error ? reject(error) : resolve()));
+  }
 });

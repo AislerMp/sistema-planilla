@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { test, before, after, beforeEach, afterEach, mock } from "node:test";
 import { once } from "node:events";
 import express from "express";
+import session from "express-session";
 
 Object.assign(process.env, {
   DB_SERVER: "test.invalid", DB_PORT: "1433", DB_NAME: "test",
   DB_USER: "test", DB_PASSWORD: "test",
+  SESSION_SECRET: "secreto-ficticio-exclusivo-de-tests",
 });
 const { pool, sql } = await import("../src/config/database.js");
 const { default: app } = await import("../src/app.js");
@@ -37,7 +39,14 @@ mock.method(sql.Transaction.prototype, "rollback", async () => {});
 
 before(async () => {
   const harness = express();
-  harness.use((req, res, next) => { req.user = identity; next(); });
+  harness.use(session({
+    name: "sid", secret: process.env.SESSION_SECRET,
+    resave: false, saveUninitialized: false,
+  }));
+  harness.use((req, res, next) => {
+    if (identity) req.session.user = identity;
+    next();
+  });
   harness.use(app);
   server = harness.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -87,7 +96,7 @@ test("todas las rutas de los módulos requieren autenticación", async () => {
 
 for (const rol of ["COLABORADOR", "GERENTE", "RECURSOS_HUMANOS", "ADMINISTRADOR"]) {
   test(`${rol} puede consultar todos los módulos y los parámetros llegan al servicio`, async () => {
-    identity = { UsuarioId: 3, rol };
+    identity = { UsuarioId: 3, Rol: rol };
     for (const [path, table, parameter, parent] of reads) {
       if (parent) expected.push({ pattern: new RegExp(`FROM ${parent}`), records: [{ Nombre: "Padre" }], parameters: { id: 7 } });
       const row = { Nombre: "Ejemplo" };
@@ -101,7 +110,7 @@ for (const rol of ["COLABORADOR", "GERENTE", "RECURSOS_HUMANOS", "ADMINISTRADOR"
 
 test("colaborador, gerente y recursos humanos no pueden crear, modificar ni desactivar", async () => {
   for (const rol of ["COLABORADOR", "GERENTE", "RECURSOS_HUMANOS", "colaborador", "gerente", "recursosHumanos"]) {
-    identity = { UsuarioId: 3, rol };
+    identity = { UsuarioId: 3, Rol: rol };
     for (const [method, path] of writes) {
       const result = await request(method, path, { rol: "ADMINISTRADOR", usuarioActorId: 99 });
       assert.equal(result.status, 403, `${rol}: ${method} ${path}`);
@@ -111,7 +120,7 @@ test("colaborador, gerente y recursos humanos no pueden crear, modificar ni desa
 });
 
 test("el administrador alcanza las validaciones de todas las rutas de escritura", async () => {
-  identity = { UsuarioId: 3, rol: "ADMINISTRADOR" };
+  identity = { UsuarioId: 3, Rol: "ADMINISTRADOR" };
   for (const [method, path] of writes) {
     const invalidPath = path.replace("/7", "/abc");
     assert.equal((await request(method, invalidPath, {})).status, 400, `${method} ${path}`);
@@ -120,7 +129,7 @@ test("el administrador alcanza las validaciones de todas las rutas de escritura"
 });
 
 test("altas de puestos y restaurantes registran al administrador autenticado", async () => {
-  identity = { UsuarioId: 3, rol: "ADMINISTRADOR" };
+  identity = { UsuarioId: 3, Rol: "ADMINISTRADOR" };
   for (const [path, table, idField] of [["/puestos", "Puestos", "PuestoId"], ["/restaurantes", "Restaurantes", "RestauranteId"]]) {
     expected.push(
       { pattern: new RegExp(`INSERT INTO ${table}`), records: [{ [idField]: 7 }] },
@@ -134,7 +143,7 @@ test("altas de puestos y restaurantes registran al administrador autenticado", a
 });
 
 test("DELETE desactiva los registros e ignora un activo true enviado en el body", async () => {
-  identity = { UsuarioId: 3, rol: "ADMINISTRADOR" };
+  identity = { UsuarioId: 3, Rol: "ADMINISTRADOR" };
   for (const [path, table] of [["/colaboradores/7", "Colaboradores"], ["/puestos/7", "Puestos"], ["/restaurantes/7", "Restaurantes"]]) {
     expected.push(
       { pattern: new RegExp(`FROM ${table}`), records: [{ Activo: true }] },
@@ -150,7 +159,7 @@ test("DELETE desactiva los registros e ignora un activo true enviado en el body"
 });
 
 test("las rutas de activación fijan true aunque el body indique false", async () => {
-  identity = { UsuarioId: 3, rol: "ADMINISTRADOR" };
+  identity = { UsuarioId: 3, Rol: "ADMINISTRADOR" };
   for (const [method, path, table, body] of [
     ["POST", "/colaboradores/activate/7", "Colaboradores", { activo: false }],
     ["POST", "/puestos/activate/7", "Puestos", { activo: false }],
@@ -169,7 +178,7 @@ test("las rutas de activación fijan true aunque el body indique false", async (
 });
 
 test("las antiguas rutas de estado ya no aceptan cambios desde el body", async () => {
-  identity = { UsuarioId: 3, rol: "ADMINISTRADOR" };
+  identity = { UsuarioId: 3, Rol: "ADMINISTRADOR" };
   for (const entity of ["puestos", "restaurantes"]) {
     const response = await fetch(`${baseUrl}/api/${entity}/7/estado`, {
       method: "PATCH",
@@ -183,7 +192,7 @@ test("las antiguas rutas de estado ya no aceptan cambios desde el body", async (
 });
 
 test("actualizar tarifa y restaurante usa los campos e IDs de sus rutas", async () => {
-  identity = { UsuarioId: 3, rol: "ADMINISTRADOR" };
+  identity = { UsuarioId: 3, Rol: "ADMINISTRADOR" };
   expected.push(
     { pattern: /FROM Puestos/, records: [{ Activo: true, TarifaHora: 1000 }] },
     { pattern: /UPDATE Puestos SET TarifaHora/, parameters: { id: 7, TarifaHora: 1500 } },
