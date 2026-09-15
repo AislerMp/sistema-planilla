@@ -8,8 +8,8 @@ import {
   changePassword,
 } from "../services/auth.Service";
 
-export function useUsers() {
-  const { data: users, isLoading, error } = useAsyncRequest(getUsers, []);
+export function useUsers(deps = []) {
+  const { data: users, isLoading, error } = useAsyncRequest(getUsers, deps);
   return { users: users ?? [], isLoading, error };
 }
 

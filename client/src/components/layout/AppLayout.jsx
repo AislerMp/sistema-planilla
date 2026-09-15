@@ -1,38 +1,54 @@
-import { useState } from "react";
-import { Outlet } from "react-router";
-
+import { useEffect, useRef, useState } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar.jsx";
 import Header from "./Header.jsx";
-import useTheme from "../../hooks/useTheme.js";
 
-export default function AppLayout() {
+export default function AppLayout({ theme, onToggleTheme }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { theme, toggleTheme } = useTheme();
+  const { pathname } = useLocation();
+  const contentRef = useRef(null);
+  const previousPath = useRef(pathname);
 
-  function toggleMenu() {
-    setIsMenuOpen((currentValue) => !currentValue);
-  }
-
-  function closeMenu() {
-    setIsMenuOpen(false);
-  }
+  useEffect(() => {
+    if (previousPath.current !== pathname) {
+      contentRef.current?.focus();
+      window.scrollTo(0, 0);
+      previousPath.current = pathname;
+    }
+  }, [pathname]);
 
   return (
-    <div className="app-layout">
-      <Sidebar
-        isOpen={isMenuOpen}
-        onNavigate={closeMenu}
-      />
-
+    <div
+      className="app-layout"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setIsMenuOpen(false);
+      }}
+    >
+      <a href="#main-content" className="skip-link">
+        Saltar al contenido
+      </a>
+      <Sidebar isOpen={isMenuOpen} onNavigate={() => setIsMenuOpen(false)} />
       <Header
         theme={theme}
-        onToggleTheme={toggleTheme}
+        onToggleTheme={onToggleTheme}
         isMenuOpen={isMenuOpen}
-        onToggleMenu={toggleMenu}
+        onToggleMenu={() => setIsMenuOpen(!isMenuOpen)}
       />
-
-      <main className="app-main">
-        <Outlet />
+      <main
+        className="app-main"
+        id="main-content"
+        ref={contentRef}
+        tabIndex={-1}
+      >
+        <div key={pathname} className="page-enter">
+          <Outlet />
+        </div>
+        <footer className="app-footer">
+          <span>Hecho para quienes hacen la diferencia.</span>
+          <span>
+            Sesión activa
+          </span>
+        </footer>
       </main>
     </div>
   );

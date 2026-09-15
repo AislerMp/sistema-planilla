@@ -137,7 +137,7 @@ test("consultar un rol solo exige su existencia, sin columna Activo", async () =
 });
 
 test("consultas de usuarios nunca devuelven hashes", async () => {
-  respond(/FROM Usuarios WHERE Activo = 1/, [user]);
+  respond(/FROM Usuarios$/, [user]);
   respond(/FROM Roles/, [{ Codigo: "ADMINISTRADOR" }]);
   respond(/FROM Usuarios WHERE UsuarioId = @id/, [user]);
   respond(/FROM Roles/, [{ Codigo: "ADMINISTRADOR" }]);

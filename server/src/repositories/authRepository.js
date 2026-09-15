@@ -2,7 +2,7 @@ import { sql, getConnection, createRequest } from "../config/database.js";
 
 export async function getUsers() {
   const request = await createRequest();
-  const result = await request.query("SELECT * FROM Usuarios WHERE Activo = 1");
+  const result = await request.query("SELECT * FROM Usuarios");
   return result.recordset || [];
 }
 
@@ -14,8 +14,8 @@ export async function getUserById(id) {
   return result.recordset[0] || null;
 }
 
-export async function getUserByUsername(username, includeInactive = false) {
-  const request = await createRequest();
+export async function getUserByUsername(username, includeInactive = false, transaction = null) {
+  const request = await createRequest(transaction);
   const result = await request
     .input("username", sql.NVarChar(60), username)
     .input("includeInactive", sql.Bit, includeInactive)
@@ -54,4 +54,36 @@ export async function getUserByColaboradorId(colaboradorId, transaction = null) 
   const result = await request.input("colaboradorId", sql.Int, colaboradorId)
     .query("SELECT * FROM Usuarios WHERE ColaboradorId = @colaboradorId");
   return result.recordset[0] || null;
+}
+
+export async function getUserByIdForUpdate(id, transaction) {
+  const request = await createRequest(transaction);
+  const result = await request
+    .input("id", sql.Int, id)
+    .query(
+      "SELECT * FROM Usuarios WITH (UPDLOCK, HOLDLOCK) WHERE UsuarioId = @id",
+    );
+
+  return result.recordset[0] || null;
+}
+
+export async function actualizarEstadoUsuario(id, activo, transaction) {
+  const request = await createRequest(transaction);
+  const result = await request
+    .input("id", sql.Int, id)
+    .input("activo", sql.Bit, activo)
+    .query("UPDATE Usuarios SET Activo = @activo WHERE UsuarioId = @id");
+
+  return result.rowsAffected[0] > 0;
+}
+
+export async function updateUser(id, user, transaction) {
+  const request = await createRequest(transaction);
+  const result = await request
+    .input("id", sql.Int, id)
+    .input("NombreUsuario", sql.NVarChar(60), user.nombreUsuario)
+    .input("RolId", sql.Int, user.rolId)
+    .input("ColaboradorId", sql.Int, user.colaboradorId)
+    .query("UPDATE Usuarios SET NombreUsuario = @NombreUsuario, RolId = @RolId, ColaboradorId = @ColaboradorId WHERE UsuarioId = @id AND Activo = 1");
+  return result.rowsAffected[0] > 0;
 }

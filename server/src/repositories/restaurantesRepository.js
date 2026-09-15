@@ -1,9 +1,9 @@
 import { sql, createRequest } from "../config/database.js";
 
-export async function getRestaurantes() {
+export async function getRestaurantes(incluirInactivos = false) {
   const request = await createRequest();
   const result = await request.query(
-    "SELECT * FROM Restaurantes WHERE Activo = 1",
+    incluirInactivos ? "SELECT * FROM Restaurantes" : "SELECT * FROM Restaurantes WHERE Activo = 1",
   );
   return result.recordset || [];
 }

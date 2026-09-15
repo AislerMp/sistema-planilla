@@ -9,7 +9,7 @@ import {
 import { AppError } from "../utils/AppError.js";
 
 export async function getPuestosController(req, res) {
-  const puestos = await getPuestos();
+  const puestos = await getPuestos(req.query?.estado === "todos");
   return res.status(200).json(puestos);
 }
 

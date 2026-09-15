@@ -96,8 +96,17 @@ test("usuarios sin rol administrador pueden consultar cuentas pero no registrarl
     const result = await request("POST", "/api/auth/register");
     assert.equal(result.status, 403);
     assert.equal(result.body.message, "No tenés permiso para esta acción.");
+    for (const [method, path] of [
+      ["POST", "/api/auth/users/activate/8"],
+      ["PUT", "/api/auth/users/8"],
+      ["DELETE", "/api/auth/users/8"],
+    ]) {
+      const denied = await request(method, path);
+      assert.equal(denied.status, 403);
+      assert.equal(denied.body.message, "No tenés permiso para esta acción.");
+    }
     const user = { UsuarioId: 7, NombreUsuario: "ana", RolId: 1, Rol: "ADMINISTRADOR", Activo: true };
-    expected.push({ pattern: /FROM Usuarios WHERE Activo/, records: [user] });
+    expected.push({ pattern: /FROM Usuarios$/, records: [user] });
     expected.push({ pattern: /FROM Roles WHERE RolId/, records: [{ Codigo: "ADMINISTRADOR" }], parameters: { id: 1 } });
     assert.deepEqual(await request("GET", "/api/auth/users"), { status: 200, body: [user] });
     expected.push({ pattern: /FROM Usuarios WHERE UsuarioId/, records: [user], parameters: { id: 7 } });
@@ -109,7 +118,7 @@ test("usuarios sin rol administrador pueden consultar cuentas pero no registrarl
 test("un administrador puede listar y consultar usuarios y acceder al registro", async () => {
   identity = { UsuarioId: 3, Rol: "ADMINISTRADOR" };
   const user = { UsuarioId: 7, NombreUsuario: "ana", RolId: 1, Rol: "ADMINISTRADOR", Activo: true };
-  expected.push({ pattern: /FROM Usuarios WHERE Activo/, records: [user] });
+  expected.push({ pattern: /FROM Usuarios$/, records: [user] });
   expected.push({ pattern: /FROM Roles WHERE RolId/, records: [{ Codigo: "ADMINISTRADOR" }], parameters: { id: 1 } });
     assert.deepEqual(await request("GET", "/api/auth/users"), { status: 200, body: [user] });
   expected.push({ pattern: /FROM Usuarios WHERE UsuarioId/, records: [user], parameters: { id: 7 } });

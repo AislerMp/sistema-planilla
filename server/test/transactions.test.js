@@ -64,6 +64,42 @@ beforeEach(() => {
 afterEach(() => assert.equal(expected.length, 0, "Faltan consultas esperadas"));
 
 const puesto = { PuestoId: 7, Nombre: "Cajero", TarifaHora: 1000, Activo: true };
+
+const editUserData = { nombreUsuario: "ana.nueva", rolId: 2, colaboradorId: 12 };
+for (const scenario of ["success", "audit", "duplicate", "linked", "inactive"]) {
+  test("editar usuario: " + scenario, async () => {
+    expected.push({ pattern: /FROM Roles/, transactional: false, records: [{ RolId: 2 }] });
+    expected.push({ pattern: /FROM Usuarios WITH/, records: [{
+      UsuarioId: 7, NombreUsuario: "ana", RolId: 1, ColaboradorId: 12,
+      Activo: scenario !== "inactive", PasswordHash: "never-audit-this",
+    }] });
+    if (scenario !== "inactive") {
+      expected.push({ pattern: /FROM Usuarios WHERE NombreUsuario/, records: scenario === "duplicate" ? [{ UsuarioId: 8 }] : [] });
+      if (scenario !== "duplicate") {
+        expected.push({ pattern: /FROM Colaboradores/, records: [{ ColaboradorId: 12, Activo: true }] });
+        expected.push({ pattern: /FROM Usuarios WHERE ColaboradorId/, records: [{ UsuarioId: scenario === "linked" ? 8 : 7 }] });
+        if (scenario !== "linked") {
+          expected.push({ pattern: /UPDATE Usuarios SET NombreUsuario/ });
+          expected.push({ pattern: /INSERT INTO dbo.Bitacora/, ...(scenario === "audit" ? { error: new Error("audit failed") } : {}) });
+        }
+      }
+    }
+    if (scenario === "success") {
+      assert.equal(await auth.updateUser(7, editUserData, 3), true);
+      const audit = events.at(-2).parameters;
+      assert.equal(audit.UsuarioId, 3);
+      assert.equal(audit.Accion, "ACTUALIZAR");
+      assert.deepEqual(JSON.parse(audit.DatosNuevos), editUserData);
+      assert.deepEqual(JSON.parse(audit.DatosAnteriores), { nombreUsuario: "ana", rolId: 1, colaboradorId: 12 });
+      assert.equal(events.at(-1).type, "commit");
+    } else {
+      await assert.rejects(auth.updateUser(7, editUserData, 3), scenario === "audit" ? /audit failed/ : { status: 409 });
+      assert.equal(events.at(-1).type, "rollback");
+      assert.equal(events.some(event => event.type === "commit"), false);
+    }
+  });
+}
+
 const restaurante = {
   RestauranteId: 7, Nombre: "Centro", DistritoId: null, DetalleDireccion: null, Activo: true,
 };
@@ -109,6 +145,14 @@ const operations = [
     action: activo ? "ACTIVAR" : "DESACTIVAR", previous: { ColaboradorId: 7, Activo: !activo },
     run: actor => (activo ? colaboradores.activarColaborador : colaboradores.desactivarColaborador)(7, actor),
     write: /UPDATE Colaboradores SET Activo/,
+    before: { activo: !activo }, after: { activo },
+  })),
+  ...[false, true].map(activo => ({
+    name: activo ? "activar usuario" : "desactivar usuario", entity: "Usuarios",
+    action: activo ? "ACTIVAR" : "DESACTIVAR",
+    previous: { UsuarioId: 7, Activo: !activo },
+    run: actor => (activo ? auth.activarUsuario : auth.desactivarUsuario)(7, actor),
+    write: /UPDATE Usuarios SET Activo/,
     before: { activo: !activo }, after: { activo },
   })),
 ];

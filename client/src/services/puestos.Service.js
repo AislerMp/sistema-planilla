@@ -10,10 +10,10 @@ function ensureApiUrl() {
 
 const endpoint = `${API_URL}/puestos`;
 
-export async function getPuestos() {
+export async function getPuestos(estado = 'activos') {
   ensureApiUrl();
 
-  const response = await fetch(`${endpoint}/`, {
+  const response = await fetch(`${endpoint}/?estado=${encodeURIComponent(estado)}`, {
     method: "GET",
     credentials: "include",
   });

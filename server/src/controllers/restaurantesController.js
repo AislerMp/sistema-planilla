@@ -8,7 +8,7 @@ import {
 } from "../services/restaurantesService.js";
 
 export async function getRestaurantesController(req, res) {
-  const restaurantes = await getRestaurantes();
+  const restaurantes = await getRestaurantes(req.query?.estado === "todos");
   return res.status(200).json(restaurantes);
 }
 

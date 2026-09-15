@@ -1,4 +1,4 @@
-import { parseResponse } from "../utils/helper";
+import { parseResponse } from "../utils/helper.js";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -80,6 +80,39 @@ export async function getUserById(id) {
   return parseResponse(response);
 }
 
+export async function activateUser(id) {
+  ensureApiUrl();
+
+  const response = await fetch(`${API_URL}/auth/users/activate/${id}`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  return parseResponse(response);
+}
+
+export async function updateUser(id, { nombreUsuario, rolId, colaboradorId }) {
+  ensureApiUrl();
+  const response = await fetch(`${API_URL}/auth/users/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ nombreUsuario, rolId, colaboradorId }),
+  });
+  return parseResponse(response);
+}
+
+export async function deactivateUser(id) {
+  ensureApiUrl();
+
+  const response = await fetch(`${API_URL}/auth/users/${id}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+
+  return parseResponse(response);
+}
+
 export async function getCurrentUser() {
   ensureApiUrl();
 
@@ -103,11 +136,14 @@ export async function logout() {
 }
 
 export default {
+  updateUser,
   loginUser,
   registerUser,
   changePassword,
   getUsers,
   getUserById,
+  activateUser,
+  deactivateUser,
   getCurrentUser,
   logout,
 };

@@ -10,10 +10,10 @@ function ensureApiUrl() {
 
 const endpoint = `${API_URL}/restaurantes`;
 
-export async function getRestaurantes() {
+export async function getRestaurantes(estado = 'activos') {
   ensureApiUrl();
 
-  const response = await fetch(`${endpoint}/`, {
+  const response = await fetch(`${endpoint}/?estado=${encodeURIComponent(estado)}`, {
     method: "GET",
     credentials: "include",
   });

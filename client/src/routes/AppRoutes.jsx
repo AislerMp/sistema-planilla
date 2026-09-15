@@ -1,65 +1,58 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router";
-
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout.jsx";
-import ModuloPage from "../pages/ModuloPage.jsx";
+import RestaurantesDashboard from "../pages/restaurantes/RestaurantesDashboard.jsx";
+import PuestosDashboard from "../pages/puestos/PuestosDashboard.jsx";
 import HomePage from "../pages/homePage.jsx";
-export default function AppRoutes() {
+import Login from "../pages/login.jsx";
+import NotFoundPage from "../pages/notFoundPage.jsx";
+import ProtectedRoute from "./ProtectedRoute.jsx";
+
+import ColaboradoresDashboard from "../pages/colaboradores/colaboradoresDashboard.jsx";
+import CreateColaborador from "../pages/colaboradores/createColaborador.jsx";
+import UpdateColaborador from "../pages/colaboradores/updateColaborador.jsx";
+import UsuariosDashboard from "../pages/usuarios/usuariosDashboard.jsx";
+import CreateUsuario from "../pages/usuarios/createUsuario.jsx";
+import UpdateUsuario from "../pages/usuarios/updateUsuario.jsx";
+export default function AppRoutes({ theme, onToggleTheme }) {
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<AppLayout />}>
-          <Route index element={<Navigate to="/colaboradores" replace />} />
+        {/* RUTAS PUBLICAS */}
+        <Route path="/" element={<Navigate to="/inicio" replace />} />
+        <Route
+          path="/login"
+          element={<Login theme={theme} onToggleTheme={onToggleTheme} />}
+        />
 
+        {/* RUTAS PROTEGIDAS */}
+        <Route element={<ProtectedRoute />}>
           <Route
-            path="/colaboradores"
-            element={
-              <ModuloPage
-                title="Colaboradores"
-                description="Consultá y administrá los datos del personal."
-              />
-            }
-          />
-          <Route path="/homepage" element={<HomePage />} />
+            element={<AppLayout theme={theme} onToggleTheme={onToggleTheme} />}
+          >
+            <Route path="/inicio" element={<HomePage />} />
+            <Route path="/usuarios/registrar" element={<CreateUsuario />} />
+            <Route path="/usuarios/:usuarioId/editar" element={<UpdateUsuario />} />
 
-          <Route
-            path="/restaurantes"
-            element={
-              <ModuloPage
-                title="Restaurantes"
-                description="Administrá los restaurantes y sus ubicaciones."
-              />
-            }
-          />
-
-          <Route
-            path="/puestos"
-            element={
-              <ModuloPage
-                title="Puestos"
-                description="Consultá los puestos y sus tarifas por hora."
-              />
-            }
-          />
-
-          <Route
-            path="/usuarios"
-            element={
-              <ModuloPage
-                title="Usuarios"
-                description="Administrá las cuentas y sus perfiles de acceso."
-              />
-            }
-          />
-
-          <Route
-            path="*"
-            element={
-              <ModuloPage
-                title="Página no encontrada"
-                description="Seleccioná una opción del menú para continuar."
-              />
-            }
-          />
+            <Route path="/colaboradores" element={<ColaboradoresDashboard />} />
+            <Route path="/colaboradores/registrar" element={<CreateColaborador />} />
+            <Route
+              path="/colaboradores/:colaboradorId/editar"
+              element={<UpdateColaborador />}
+            />
+            <Route
+              path="/restaurantes"
+              element={<RestaurantesDashboard />}
+            />
+            <Route
+              path="/puestos"
+              element={<PuestosDashboard />}
+            />
+            <Route
+              path="/usuarios"
+              element={<UsuariosDashboard />}
+            />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
         </Route>
       </Routes>
     </BrowserRouter>

@@ -2,7 +2,12 @@ import { createRequest, sql } from "../config/database.js";
 
 export async function getAllColaboradores() {
   const request = await createRequest();
-  const result = await request.query("SELECT * FROM Colaboradores WHERE Activo = 1");
+  const result = await request.query(`
+    SELECT c.*, p.Nombre AS NombrePuesto, r.Nombre AS NombreRestaurante
+    FROM Colaboradores AS c
+    LEFT JOIN Puestos AS p ON p.PuestoId = c.PuestoId
+    LEFT JOIN Restaurantes AS r ON r.RestauranteId = c.RestauranteId
+  `);
   return result.recordset || [];
 }
 

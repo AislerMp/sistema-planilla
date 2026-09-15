@@ -10,7 +10,7 @@ export default function useAsyncRequest(requestFn, deps = []) {
 
     const runFn = async () => {
       try {
-        if (mounted) setIsLoading(true);
+        if (mounted) { setIsLoading(true); setError(null); }
         const result = await requestFn();
         if (mounted) setData(result); 
       } catch (err) {

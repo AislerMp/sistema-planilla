@@ -12,9 +12,9 @@ export async function crearPuesto(puesto, transaction = null) {
   return result.recordset?.[0]?.PuestoId ?? null;
 }
 
-export async function getPuestos(){
+export async function getPuestos(incluirInactivos = false){
     const request = await createRequest();
-    const result = await request.query("SELECT * FROM Puestos WHERE Activo = 1");
+    const result = await request.query(incluirInactivos ? "SELECT * FROM Puestos" : "SELECT * FROM Puestos WHERE Activo = 1");
     return result.recordset || [];
 }
 

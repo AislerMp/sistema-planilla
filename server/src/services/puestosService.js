@@ -13,8 +13,8 @@ function validateTarifa(value) {
   return Number(text);
 }
 
-export async function getPuestos() {
-  return puestosRepository.getPuestos();
+export async function getPuestos(incluirInactivos = false) {
+  return puestosRepository.getPuestos(incluirInactivos);
 }
 
 export async function getPuesto(id) {

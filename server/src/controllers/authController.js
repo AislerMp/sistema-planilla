@@ -4,6 +4,9 @@ import {
   loginUser,
   registerUser,
   changePassword,
+  activarUsuario,
+  desactivarUsuario,
+  updateUser,
 } from "../services/authService.js";
 
 export async function getUserController(req, res) {
@@ -14,6 +17,15 @@ export async function getUserController(req, res) {
 export async function getUsersController(req, res) {
   const users = await getUsers();
   return res.status(200).json(users);
+}
+
+export async function updateUserController(req, res) {
+  await updateUser(req.params.id, req.body ?? {}, req.user?.UsuarioId);
+  // Actualizar también esta sesión si el administrador editó su propia cuenta.
+  if (Number(req.params.id) === req.user.UsuarioId) {
+    req.session.user = await getUser(req.user.UsuarioId);
+  }
+  return res.status(200).json({ message: "Usuario actualizado correctamente." });
 }
 
 export async function loginUserController(req, res) {
@@ -77,5 +89,23 @@ export async function logoutController(req, res, next) {
     return res.status(200).json({
       message: "Sesión cerrada correctamente.",
     });
+  });
+}
+
+export async function activarUsuarioController(req, res) {
+  await activarUsuario(req.params.id, req.user?.UsuarioId);
+
+  return res.status(200).json({
+    message: "Usuario activado correctamente.",
+    activo: true,
+  });
+}
+
+export async function desactivarUsuarioController(req, res) {
+  await desactivarUsuario(req.params.id, req.user?.UsuarioId);
+
+  return res.status(200).json({
+    message: "Usuario desactivado correctamente.",
+    activo: false,
   });
 }

@@ -15,8 +15,8 @@ async function validateRestaurante(restaurante) {
   return data;
 }
 
-export async function getRestaurantes() {
-  return restaurantesRepository.getRestaurantes();
+export async function getRestaurantes(incluirInactivos = false) {
+  return restaurantesRepository.getRestaurantes(incluirInactivos);
 }
 
 export async function getRestaurante(id) {
