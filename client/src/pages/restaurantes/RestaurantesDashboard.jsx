@@ -1,4 +1,6 @@
 import { useState } from "react";
+import LoadingState from "../../components/loadingState.jsx";
+import AlertMessage from "../../components/AlertMessage.jsx";
 import { Link } from "react-router-dom";
 import { Edit, Power, PowerOff, Plus } from "lucide-react";
 import SearchBar from "../../components/searchBar.jsx";
@@ -22,9 +24,11 @@ export default function RestaurantesDashboard() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("todos");
   const [reloadKey, setReloadKey] = useState(0);
+
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState(null);
   const [message, setMessage] = useState("");
+
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -137,14 +141,14 @@ export default function RestaurantesDashboard() {
         )}
       </div>
       {actionError && (
-        <p className="catalog-message" role="alert">
+        <AlertMessage title="No se pudo completar la acción">
           {actionError}
-        </p>
+        </AlertMessage>
       )}
       {message && (
-        <p className="catalog-message" role="status">
+        <AlertMessage type="success" onClose={() => setMessage("")}>
           {message}
-        </p>
+        </AlertMessage>
       )}
       {isAdmin && showForm && (
         <form className="catalog-form data-panel" onSubmit={save}>
@@ -161,12 +165,14 @@ export default function RestaurantesDashboard() {
                 onChange={(e) => setForm({ ...form, nombre: e.target.value })}
               />
             </label>
+
             <DireccionFields
               key={editing?.RestauranteId ?? "nuevo"}
               form={form}
               setForm={setForm}
               initialDistritoId={editing?.DistritoId}
             />
+
             <div className="table-actions">
               <button className="button button-primary" type="submit">
                 {busy ? "Guardando..." : "Guardar"}
@@ -204,12 +210,10 @@ export default function RestaurantesDashboard() {
           </div>
         </div>
         {isLoading || (!data && !error) ? (
-          <p className="catalog-message" role="status">
-            Cargando restaurantes...
-          </p>
+          <LoadingState entidad="restaurantes" />
         ) : error ? (
           <div className="catalog-message">
-            <p role="alert">{error}</p>
+            <AlertMessage title="No se pudieron cargar los restaurantes">{error}</AlertMessage>
             <button
               className="button button-secondary"
               onClick={() => setReloadKey((current) => current + 1)}
@@ -229,7 +233,8 @@ export default function RestaurantesDashboard() {
                 <thead>
                   <tr>
                     <th scope="col">Nombre</th>
-                    <th scope="col">Dirección</th>
+                    <th scope="col">Distrito</th>
+                    <th scope="col">Detalle de dirección</th>
                     <th scope="col">Estado</th>
                     {isAdmin && <th scope="col">Acciones</th>}
                   </tr>
@@ -239,6 +244,9 @@ export default function RestaurantesDashboard() {
                     <tr key={row.RestauranteId}>
                       <td>
                         <strong>{row.Nombre}</strong>
+                      </td>
+                      <td>
+                        {row.NombreDistrito || "Sin distrito registrado"}
                       </td>
                       <td>
                         {row.DetalleDireccion || "Sin dirección registrada"}

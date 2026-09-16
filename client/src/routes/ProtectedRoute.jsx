@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import LoadingState from "../components/loadingState.jsx";
 
 export default function ProtectedRoute() {
   const { user, isCheckingSession } = useAuth();
@@ -7,9 +8,11 @@ export default function ProtectedRoute() {
 
   if (isCheckingSession) {
     return (
-      <main className="session-loading" aria-live="polite">
-        <span className="loading-mark" />
-        <p>Comprobando sesión...</p>
+      <main className="session-loading">
+        <LoadingState
+          mensaje="Comprobando sesión..."
+          descripcion="Estamos preparando tu espacio de trabajo."
+        />
       </main>
     );
   }

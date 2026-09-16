@@ -1,4 +1,7 @@
 import { useState } from "react";
+import LoadingState from "../../components/loadingState.jsx";
+import AlertMessage from "../../components/AlertMessage.jsx";
+import { notifySuccess } from "../../utils/notifications.js";
 import { Link, useNavigate } from "react-router-dom";
 import { Edit, Power, PowerOff, SearchX } from "lucide-react";
 import SearchBar from "../../components/searchBar.jsx";
@@ -38,6 +41,7 @@ export default function UsuariosDashboard() {
       setActionError(null);
 
       await activateUser(usuarioId);
+      notifySuccess("Usuario activado correctamente.");
 
       setReloadKey((currentKey) => currentKey + 1);
     } catch (error) {
@@ -54,6 +58,7 @@ export default function UsuariosDashboard() {
       setActionError(null);
 
       await deactivateUser(usuarioId);
+      notifySuccess("Usuario desactivado correctamente.");
       setReloadKey((current) => current + 1);
     } catch (error) {
       setActionError(error.message);
@@ -99,16 +104,13 @@ export default function UsuariosDashboard() {
           </div>
 
           {isLoading && (
-            <div className="loading-state" role="status">
-              <span className="loading-mark" aria-hidden="true" />
-              <p>Cargando usuarios...</p>
-            </div>
+            <LoadingState entidad="usuarios" />
           )}
 
           {(error || actionError) && (
-            <p className="error-message" role="alert">
+            <AlertMessage>
               {actionError ?? error}
-            </p>
+            </AlertMessage>
           )}
 
           {!isLoading && !error && (

@@ -1027,6 +1027,83 @@ label {
 .catalog-form .table-actions, .catalog-form fieldset > p { grid-column: 1 / -1; }
 .catalog-message { padding: 16px 24px; }
 
+/* Mensajes persistentes: el color se acompaña de un ícono y un título. */
+.alert-message {
+  --alert-color: var(--color-error);
+  --alert-background: var(--color-error-background);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  margin: 0 0 20px;
+  border: 1px solid var(--alert-color);
+  border-left-width: 4px;
+  border-radius: 10px;
+  background: var(--alert-background);
+  color: var(--alert-color);
+  text-align: left;
+  animation: page-enter 200ms ease both;
+}
+
+.alert-message--success {
+  --alert-color: var(--color-success);
+  --alert-background: var(--color-success-background);
+}
+
+.alert-message--warning {
+  --alert-color: var(--color-warning);
+  --alert-background: var(--color-warning-background);
+}
+
+.alert-message--info {
+  --alert-color: var(--color-info);
+  --alert-background: var(--color-info-background);
+}
+
+.alert-message-icon { margin-top: 2px; }
+.alert-message-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.alert-message-title { font-size: 13px; font-weight: 650; }
+.alert-message-text { margin-top: 4px; font-size: 13px; color: var(--color-text); }
+
+.alert-message-close {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin: -4px -4px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+}
+
+.alert-message-close:hover { background: var(--color-surface); }
+.data-panel > .alert-message { margin: 16px 24px; }
+.catalog-form fieldset > .alert-message { grid-column: 1 / -1; margin: 0; }
+.login-fields > .alert-message { margin: 8px 0 0; }
+
+/* Notificaciones SweetAlert2, con los mismos colores de la aplicación. */
+.swal2-popup.swal2-toast.app-notification {
+  font-family: inherit;
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-success);
+  border-radius: 12px;
+  box-shadow: var(--color-shadow);
+}
+
+.app-notification.swal2-toast .swal2-title {
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: normal;
+  overflow-wrap: anywhere;
+}
+
+.app-notification .swal2-close { color: var(--color-text-muted); }
+.app-notification .swal2-close:focus-visible { outline: 2px solid var(--color-focus); }
+.app-notification .swal2-timer-progress-bar { background: var(--color-success); }
+
 .collaborator-form .form-section-title,
 .collaborator-form .form-error,
 .collaborator-form .form-actions {
@@ -1377,13 +1454,80 @@ tbody tr:hover td {
   color: var(--color-text-muted);
 }
 
-.loading-mark {
-  width: 30px;
-  height: 30px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: loading-spin 700ms linear infinite;
+/* Estado de carga compartido por listados, formularios y sesión. */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 250px;
+  width: 100%;
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--color-text);
+  animation: page-enter 250ms ease both;
+}
+
+.loading-state-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-avatar);
+  color: var(--color-accent);
+}
+
+.loading-state-spinner {
+  animation: loading-spin 1s linear infinite;
+}
+
+.loading-state-copy {
+  min-width: 0;
+  max-width: 340px;
+  overflow-wrap: anywhere;
+}
+
+.loading-state-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.loading-state-description {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.loading-state--compact {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 12px;
+  min-height: auto;
+  padding: 16px 0;
+  text-align: left;
+}
+
+.loading-state--compact .loading-state-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+
+.loading-state--compact .loading-state-spinner {
+  width: 20px;
+  height: 20px;
+}
+
+.loading-state--compact .loading-state-title {
+  font-size: 13px;
+}
+
+.catalog-form fieldset > .loading-state {
+  grid-column: 1 / -1;
 }
 
 @keyframes loading-spin {

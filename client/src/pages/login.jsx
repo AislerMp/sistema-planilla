@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import Brand from "../components/Brand.jsx";
+import LoadingState from "../components/loadingState.jsx";
+import AlertMessage from "../components/AlertMessage.jsx";
 import ThemeButton from "../components/ThemeButton.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -56,8 +58,10 @@ export default function Login({ theme, onToggleTheme }) {
   if (isCheckingSession) {
     return (
       <main className="session-loading">
-        <span className="loading-mark" aria-hidden="true" />
-        <p>Comprobando sesión...</p>
+        <LoadingState
+          mensaje="Comprobando sesión..."
+          descripcion="Estamos preparando tu espacio de trabajo."
+        />
       </main>
     );
   }
@@ -138,7 +142,7 @@ export default function Login({ theme, onToggleTheme }) {
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-            {error && <p role="alert">{error}</p>}
+            <AlertMessage title="No se pudo iniciar sesión">{error}</AlertMessage>
             <button
               className="button button-primary"
               disabled={isLoading}

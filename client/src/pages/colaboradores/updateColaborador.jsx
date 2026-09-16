@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import LoadingState from "../../components/loadingState.jsx";
+import AlertMessage from "../../components/AlertMessage.jsx";
+import { notifySuccess } from "../../utils/notifications.js";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Save } from "lucide-react";
@@ -92,6 +95,7 @@ export default function UpdateColaborador() {
         detalleDireccion: direccion.detalleDireccion.trim() || null,
       });
 
+      notifySuccess("Colaborador actualizado correctamente.");
       navigate("/colaboradores", { replace: true });
     } catch (error) {
       setSubmitError(error.message);
@@ -109,17 +113,14 @@ export default function UpdateColaborador() {
     (!colaborador && !error)
   ) {
     return (
-      <div className="loading-state" role="status">
-        <span className="loading-mark" aria-hidden="true" />
-        <p>Cargando colaborador...</p>
-      </div>
+      <LoadingState entidad="colaborador" />
     );
   }
 
   if (error) {
     return (
       <section className="data-panel catalog-message">
-        <p role="alert">{error}</p>
+        <AlertMessage title="No se pudo cargar el colaborador">{error}</AlertMessage>
         <Link to="/colaboradores" className="button button-secondary">
           <ArrowLeft size={18} />
           Volver a colaboradores
@@ -278,9 +279,9 @@ export default function UpdateColaborador() {
           />
 
           {(restaurantesError || puestosError || submitError) && (
-            <p className="form-error" role="alert">
+            <AlertMessage>
               {submitError ?? restaurantesError ?? puestosError}
-            </p>
+            </AlertMessage>
           )}
 
           <div className="table-actions form-actions">

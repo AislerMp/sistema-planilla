@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, LogOut, Menu, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ThemeButton from "../ThemeButton.jsx";
+import AlertMessage from "../AlertMessage.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function Header({
@@ -113,9 +114,9 @@ export default function Header({
                   : "Cerrar sesión"}
               </button>
               {logoutError && (
-                <p className="logout-error" role="alert">
+                <AlertMessage title="No se pudo cerrar sesión">
                   {logoutError}
-                </p>
+                </AlertMessage>
               )}
             </div>
           )}

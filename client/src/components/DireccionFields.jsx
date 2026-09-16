@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import LoadingState from "./loadingState.jsx";
+import AlertMessage from "./AlertMessage.jsx";
 import {
   getProvincias,
   getCantones,
@@ -15,8 +17,10 @@ export default function DireccionFields({
   const [provincias, setProvincias] = useState([]);
   const [cantones, setCantones] = useState([]);
   const [distritos, setDistritos] = useState([]);
+
   const [provincia, setProvincia] = useState("");
   const [canton, setCanton] = useState("");
+
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   
@@ -79,8 +83,8 @@ export default function DireccionFields({
 
   return (
     <>
-      {error && <p role="alert">{error}</p>}
-      {loading && <p role="status">Cargando ubicación...</p>}
+      <AlertMessage title="No se pudo cargar la ubicación">{error}</AlertMessage>
+      {loading && <LoadingState entidad="ubicación" compacto descripcion="" />}
       <label>
         Provincia
         <select
@@ -91,7 +95,6 @@ export default function DireccionFields({
             setCanton("");
             setCantones([]);
             setDistritos([]);
-            setForm((current) => ({ ...current, distritoId: "" }));
           }}
         >
           <option value="">Seleccionar provincia</option>
@@ -110,7 +113,6 @@ export default function DireccionFields({
           onChange={(e) => {
             setCanton(e.target.value);
             setDistritos([]);
-            setForm((current) => ({ ...current, distritoId: "" }));
           }}
         >
           <option value="">Seleccionar cantón</option>
@@ -121,10 +123,10 @@ export default function DireccionFields({
           ))}
         </select>
       </label>
+
       <label>
         Distrito
         <select
-          required={Boolean(form.detalleDireccion.trim())}
           disabled={!canton || loading}
           value={form.distritoId}
           onChange={(e) =>
@@ -139,11 +141,11 @@ export default function DireccionFields({
           ))}
         </select>
       </label>
+
       <label>
         Detalle de dirección
         <input
           maxLength={300}
-          required={Boolean(form.distritoId)}
           value={form.detalleDireccion}
           onChange={(e) =>
             setForm((current) => ({

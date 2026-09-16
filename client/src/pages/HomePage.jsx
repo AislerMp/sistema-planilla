@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import LoadingState from "../components/loadingState.jsx";
+import AlertMessage from "../components/AlertMessage.jsx";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -118,8 +120,15 @@ export default function HomePage() {
             );
           })}
         </div>
+        {(isLoading || !counts) && (
+          <LoadingState entidad="resumen" compacto descripcion="" />
+        )}
       </section>
-      {counts?.some(count => count === null) && <p role="alert">No se pudieron cargar todas las cantidades. Ingresá al módulo para reintentar la consulta.</p>}
+      {counts?.some(count => count === null) && (
+        <AlertMessage type="warning" title="El resumen está incompleto">
+          No se pudieron cargar todas las cantidades. Ingresá al módulo para reintentar la consulta.
+        </AlertMessage>
+      )}
     </>
   );
 }

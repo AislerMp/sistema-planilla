@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 
 export default function useAsyncRequest(requestFn, deps = []) {
   const [data, setData] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {

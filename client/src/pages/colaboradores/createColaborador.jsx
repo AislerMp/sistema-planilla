@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";import { Link, Navigate, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save } from "lucide-react";
 import DireccionFields from "../../components/DireccionFields.jsx";
+import LoadingState from "../../components/loadingState.jsx";
+import AlertMessage from "../../components/AlertMessage.jsx";
+import { notifySuccess } from "../../utils/notifications.js";
 import useAsyncRequest from "../../hooks/useAsyncRequest.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { createColaborador } from "../../services/colaboradores.Service.js";
@@ -62,6 +65,7 @@ export default function CreateColaborador() {
         detalleDireccion: direccion.detalleDireccion.trim() || null,
       });
 
+      notifySuccess("Colaborador registrado correctamente.");
       navigate("/colaboradores", { replace: true });
     } catch (error) {
       setSubmitError(error.message);
@@ -93,6 +97,9 @@ export default function CreateColaborador() {
         onSubmit={handleSubmit(onSubmit)}
         noValidate
       >
+        {(loadingRestaurantes || loadingPuestos) && (
+          <LoadingState entidad="restaurantes y puestos" compacto descripcion="" />
+        )}
         <fieldset disabled={isSubmitting}>
           <label>
             Identificación
@@ -216,9 +223,9 @@ export default function CreateColaborador() {
           <DireccionFields form={direccion} setForm={setDireccion} />
 
           {(restaurantesError || puestosError || submitError) && (
-            <p className="form-error" role="alert">
+            <AlertMessage>
               {submitError ?? restaurantesError ?? puestosError}
-            </p>
+            </AlertMessage>
           )}
 
           <div className="table-actions form-actions">

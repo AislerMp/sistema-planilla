@@ -1,4 +1,7 @@
 import { useState } from "react";
+import LoadingState from "../../components/loadingState.jsx";
+import AlertMessage from "../../components/AlertMessage.jsx";
+import { notifySuccess } from "../../utils/notifications.js";
 import { Link, useNavigate } from "react-router-dom";
 import { Edit, Power, PowerOff, SearchX } from "lucide-react";
 import SearchBar from "../../components/searchBar.jsx";
@@ -17,6 +20,7 @@ export default function ColaboradoresDashboard() {
   const { user } = useAuth();
 
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("todos");
   const [reloadKey, setReloadKey] = useState(0);
   const [actionId, setActionId] = useState(null);
   const [actionError, setActionError] = useState(null);
@@ -45,9 +49,11 @@ export default function ColaboradoresDashboard() {
     const normalizedSearch = search.trim().toLowerCase();
 
     return (
-      fullName.includes(normalizedSearch) ||
-      identification.includes(normalizedSearch) ||
-      restaurante.includes(normalizedSearch)
+      (fullName.includes(normalizedSearch) ||
+        identification.includes(normalizedSearch) ||
+        restaurante.includes(normalizedSearch)) &&
+      (status === "todos" ||
+        Boolean(colaborador.Activo) === (status === "activos"))
     );
   });
 
@@ -65,6 +71,7 @@ export default function ColaboradoresDashboard() {
       setActionError(null);
 
       await activateColaborador(colaboradorId);
+      notifySuccess("Colaborador activado correctamente.");
 
       // Provoca que useAsyncRequest consulte nuevamente los datos.
       setReloadKey((current) => current + 1);
@@ -83,6 +90,7 @@ export default function ColaboradoresDashboard() {
       setActionError(null);
 
       await deactivateColaborador(colaboradorId);
+      notifySuccess("Colaborador desactivado correctamente.");
 
       setReloadKey((current) => current + 1);
     } catch (error) {
@@ -127,19 +135,29 @@ export default function ColaboradoresDashboard() {
             id="colaborador-search"
             placeholder="Buscar por nombre o identificación o restaurante..."
           />
+
+          <div className="status-filter">
+            <label htmlFor="estado">Estado</label>
+            <select
+              id="estado"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              <option value="todos">Todos los estados</option>
+              <option value="activos">Activos</option>
+              <option value="inactivos">Inactivos</option>
+            </select>
+          </div>
         </div>
 
         {isLoading && (
-          <div className="loading-state" role="status">
-            <span className="loading-mark" aria-hidden="true" />
-            <p>Cargando colaboradores...</p>
-          </div>
+          <LoadingState entidad="colaboradores" />
         )}
 
         {(error || actionError) && (
-          <p className="error-message" role="alert">
+          <AlertMessage>
             {actionError ?? error}
-          </p>
+          </AlertMessage>
         )}
 
         {!isLoading && !error && (

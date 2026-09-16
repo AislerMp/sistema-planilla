@@ -1,4 +1,7 @@
 import { useState } from "react";
+import LoadingState from "../../components/loadingState.jsx";
+import AlertMessage from "../../components/AlertMessage.jsx";
+import { notifySuccess } from "../../utils/notifications.js";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Save, ArrowLeft, Eye, EyeOff } from "lucide-react";
@@ -27,7 +30,7 @@ export default function CreateUsuario() {
   if (error)
     return (
       <div className="data-panel catalog-message">
-        <p role="alert">{error}</p>
+        <AlertMessage title="No se pudo cargar el formulario">{error}</AlertMessage>
         <button
           className="button button-secondary"
           onClick={() => setReloadKey((value) => value + 1)}
@@ -42,9 +45,7 @@ export default function CreateUsuario() {
 
   if (!data)
     return (
-      <p className="catalog-message" role="status">
-        Cargando formulario...
-      </p>
+      <LoadingState entidad="formulario" />
     );
 
   return <UsuarioForm data={data} />;
@@ -87,6 +88,7 @@ function UsuarioForm({ data }) {
         password: form.password,
       });
 
+      notifySuccess("Usuario registrado correctamente.");
       navigate("/usuarios", { replace: true });
     } catch (error) {
       setSubmitError(error.message);
@@ -228,9 +230,9 @@ function UsuarioForm({ data }) {
           )}
 
           {submitError && (
-            <p className="form-error" role="alert">
+            <AlertMessage title="No se pudo registrar el usuario">
               {submitError}
-            </p>
+            </AlertMessage>
           )}
 
           <div className="table-actions">

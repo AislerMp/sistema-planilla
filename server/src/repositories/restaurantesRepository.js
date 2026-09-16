@@ -2,9 +2,12 @@ import { sql, createRequest } from "../config/database.js";
 
 export async function getRestaurantes(incluirInactivos = false) {
   const request = await createRequest();
-  const result = await request.query(
-    incluirInactivos ? "SELECT * FROM Restaurantes" : "SELECT * FROM Restaurantes WHERE Activo = 1",
-  );
+  const result = await request.query(`
+    SELECT r.*, d.Nombre AS NombreDistrito
+    FROM Restaurantes AS r
+    LEFT JOIN Distritos AS d ON d.DistritoId = r.DistritoId
+    ${incluirInactivos ? "" : "WHERE r.Activo = 1"}
+  `);
   return result.recordset || [];
 }
 

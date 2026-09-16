@@ -1,4 +1,6 @@
 import { useState } from "react";
+import LoadingState from "../../components/loadingState.jsx";
+import AlertMessage from "../../components/AlertMessage.jsx";
 import { Link } from "react-router-dom";
 import { Edit, Power, PowerOff, Plus } from "lucide-react";
 import SearchBar from "../../components/searchBar.jsx";
@@ -28,6 +30,7 @@ export default function PuestosDashboard() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState(null);
   const [message, setMessage] = useState("");
+
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -136,14 +139,14 @@ export default function PuestosDashboard() {
         )}
       </div>
       {actionError && (
-        <p className="catalog-message" role="alert">
+        <AlertMessage title="No se pudo completar la acción">
           {actionError}
-        </p>
+        </AlertMessage>
       )}
       {message && (
-        <p className="catalog-message" role="status">
+        <AlertMessage type="success" onClose={() => setMessage("")}>
           {message}
-        </p>
+        </AlertMessage>
       )}
       {isAdmin && showForm && (
         <form className="catalog-form data-panel" onSubmit={save}>
@@ -211,13 +214,12 @@ export default function PuestosDashboard() {
             </select>
           </div>
         </div>
+        
         {isLoading || (!data && !error) ? (
-          <p className="catalog-message" role="status">
-            Cargando puestos...
-          </p>
+          <LoadingState entidad="puestos" />
         ) : error ? (
           <div className="catalog-message">
-            <p role="alert">{error}</p>
+            <AlertMessage title="No se pudieron cargar los puestos">{error}</AlertMessage>
             <button
               className="button button-secondary"
               onClick={() => setReloadKey((current) => current + 1)}
