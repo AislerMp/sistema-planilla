@@ -9,7 +9,7 @@ Object.assign(process.env, {
   DB_USER: "test", DB_PASSWORD: "test",
   SESSION_SECRET: "secreto-ficticio-exclusivo-de-tests",
 });
-const { pool, sql } = await import("../src/config/database.js");
+const { pool, sql } = await import("../src/shared/config/database.js");
 const { default: app } = await import("../src/app.js");
 
 let expected;
@@ -28,6 +28,7 @@ mock.method(pool, "request", () => {
       assert.match(query, next.pattern);
       if (next.parameters) assert.deepEqual(parameters, next.parameters);
       calls.push({ query, parameters });
+      if (next.error) throw next.error;
       return { recordset: next.records ?? [], rowsAffected: [1] };
     },
   };
@@ -44,7 +45,8 @@ before(async () => {
     resave: false, saveUninitialized: false,
   }));
   harness.use((req, res, next) => {
-    if (identity) req.session.user = identity;
+    // Las sesiones reales incluyen Activo; cada prueba puede sobrescribirlo.
+    if (identity) req.session.user = { Activo: true, ...identity };
     next();
   });
   harness.use(app);
@@ -100,13 +102,154 @@ for (const rol of ["COLABORADOR", "GERENTE", "RECURSOS_HUMANOS", "ADMINISTRADOR"
     for (const [path, table, parameter, parent] of reads) {
       if (parent) expected.push({ pattern: new RegExp(`FROM ${parent}`), records: [{ Nombre: "Padre" }], parameters: { id: 7 } });
       const row = { Nombre: "Ejemplo" };
-      expected.push({ pattern: new RegExp(`FROM ${table}`), records: [row], parameters: parameter ? { [parameter]: 7 } : {} });
+      const parameters = parameter ? { [parameter]: 7 } : {};
+      if (rol === "GERENTE" && table === "Colaboradores") {
+        expected.push({
+          pattern: /FROM Usuarios AS u/, records: [{ RestauranteId: 2 }],
+          parameters: { usuarioId: 3 },
+        });
+        parameters.restauranteId = 2;
+      }
+      expected.push({ pattern: new RegExp(`FROM ${table}`), records: [row], parameters });
       const result = await request("GET", path);
       assert.equal(result.status, 200, path);
       assert.deepEqual(result.body, parameter === "id" ? row : [row]);
     }
   });
 }
+
+test("gerente puede filtrar por su restaurante e ignora identidades enviadas en la URL", async () => {
+  identity = { UsuarioId: 3, Rol: "GERENTE", ColaboradorId: 999, RestauranteId: 99 };
+  const rows = [
+    { ColaboradorId: 7, RestauranteId: 2, Activo: true },
+    { ColaboradorId: 8, RestauranteId: 2, Activo: false },
+  ];
+  expected.push(
+    {
+      pattern: /FROM Usuarios AS u[\s\S]*c.ColaboradorId = u.ColaboradorId[\s\S]*u.UsuarioId = @usuarioId AND u.Activo = 1 AND c.Activo = 1/,
+      parameters: { usuarioId: 3 }, records: [{ RestauranteId: 2 }],
+    },
+    {
+      pattern: /FROM Colaboradores AS c[\s\S]*WHERE c.RestauranteId = @restauranteId/,
+      parameters: { restauranteId: 2 }, records: rows,
+    },
+  );
+  const response = await request("GET", "/colaboradores?restauranteId=2&UsuarioId=99&ColaboradorId=999&Rol=ADMINISTRADOR");
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body, rows);
+});
+
+test("administrador y recursos humanos pueden filtrar colaboradores por cualquier restaurante", async () => {
+  for (const Rol of ["ADMINISTRADOR", "RECURSOS_HUMANOS"]) {
+    identity = { UsuarioId: 3, Rol };
+    for (const restauranteId of [2, 5]) {
+      const rows = [{ ColaboradorId: 7, RestauranteId: restauranteId }];
+      expected.push({
+        pattern: /WHERE c.RestauranteId = @restauranteId/,
+        parameters: { restauranteId }, records: rows,
+      });
+      const response = await request("GET", `/colaboradores?restauranteId=${restauranteId}`);
+      assert.equal(response.status, 200);
+      assert.deepEqual(response.body, rows);
+    }
+  }
+});
+
+test("gerente no puede elegir un restaurante ajeno ni ampliar su acceso enviando otro rol", async () => {
+  identity = { UsuarioId: 3, Rol: "GERENTE" };
+  expected.push({ pattern: /FROM Usuarios AS u/, parameters: { usuarioId: 3 }, records: [{ RestauranteId: 2 }] });
+  const response = await request("GET", "/colaboradores?restauranteId=5&Rol=ADMINISTRADOR");
+  assert.equal(response.status, 403);
+  assert.match(response.body.message, /tu restaurante asignado/);
+  assert.equal(calls.length, 1);
+});
+
+test("el filtro de restaurante rechaza IDs inválidos antes de consultar SQL", async () => {
+  identity = { UsuarioId: 3, Rol: "ADMINISTRADOR" };
+  for (const value of ["0", "-1", "1.5", "abc", "true", "2147483648", "1 OR 1=1"]) {
+    assert.equal((await request("GET", `/colaboradores?restauranteId=${encodeURIComponent(value)}`)).status, 400);
+  }
+  assert.equal((await request("GET", "/colaboradores?restauranteId=2&restauranteId=5")).status, 400);
+  assert.deepEqual(calls, []);
+});
+
+test("un restaurante sin resultados devuelve un arreglo vacío y el filtro vacío equivale a omitirlo", async () => {
+  identity = { UsuarioId: 3, Rol: "ADMINISTRADOR" };
+  expected.push({ pattern: /WHERE c.RestauranteId = @restauranteId/, parameters: { restauranteId: 999 }, records: [] });
+  assert.deepEqual(await request("GET", "/colaboradores?restauranteId=999"), { status: 200, body: [] });
+  expected.push({ pattern: /FROM Colaboradores AS c/, parameters: {}, records: [] });
+  assert.deepEqual(await request("GET", "/colaboradores?restauranteId="), { status: 200, body: [] });
+  assert.doesNotMatch(calls.at(-1).query, /WHERE c.RestauranteId/);
+});
+
+test("gerente puede consultar un colaborador propio, pero otro restaurante y un ID inexistente devuelven 404", async () => {
+  identity = { UsuarioId: 3, Rol: "GERENTE" };
+  for (const [id, records, status] of [
+    [7, [{ ColaboradorId: 7, RestauranteId: 2 }], 200],
+    [8, [], 404], // El colaborador 8 pertenece a otro restaurante: SQL no devuelve la fila.
+    [999, [], 404],
+  ]) {
+    expected.push(
+      { pattern: /FROM Usuarios AS u/, parameters: { usuarioId: 3 }, records: [{ RestauranteId: 2 }] },
+      {
+        pattern: /WHERE ColaboradorId = @id\s+AND RestauranteId = @restauranteId/,
+        parameters: { id, restauranteId: 2 }, records,
+      },
+    );
+    const response = await request("GET", `/colaboradores/${id}?restauranteId=99`);
+    assert.equal(response.status, status);
+    assert.deepEqual(response.body, status === 200 ? records[0] : { message: "Colaborador no encontrado" });
+  }
+});
+
+test("gerente sin asignación activa recibe 403 en listado y detalle sin consultar otros colaboradores", async () => {
+  identity = { UsuarioId: 3, Rol: "GERENTE" };
+  for (const records of [[], [{ RestauranteId: null }]]) {
+    for (const path of ["/colaboradores", "/colaboradores/7"]) {
+      expected.push({ pattern: /FROM Usuarios AS u/, parameters: { usuarioId: 3 }, records });
+      const response = await request("GET", path);
+      assert.equal(response.status, 403);
+      assert.match(response.body.message, /restaurante asignado/);
+    }
+  }
+  assert.equal(calls.length, 4);
+  assert.ok(calls.every(({ query }) => !query.includes("SELECT c.*")));
+});
+
+test("un cambio de asignación del gerente se aplica en la siguiente consulta sin volver a iniciar sesión", async () => {
+  identity = { UsuarioId: 3, Rol: "GERENTE", RestauranteId: 2 };
+  for (const restauranteId of [2, 5]) {
+    const rows = [{ ColaboradorId: restauranteId * 10, RestauranteId: restauranteId }];
+    expected.push(
+      { pattern: /FROM Usuarios AS u/, parameters: { usuarioId: 3 }, records: [{ RestauranteId: restauranteId }] },
+      { pattern: /WHERE c.RestauranteId = @restauranteId/, parameters: { restauranteId }, records: rows },
+    );
+    const response = await request("GET", "/colaboradores");
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body, rows);
+  }
+});
+
+test("administrador y recursos humanos conservan el acceso a colaboradores de distintos restaurantes", async () => {
+  const rows = [{ ColaboradorId: 7, RestauranteId: 2 }, { ColaboradorId: 8, RestauranteId: 5 }];
+  for (const Rol of ["ADMINISTRADOR", "RECURSOS_HUMANOS"]) {
+    identity = { UsuarioId: 3, Rol };
+    expected.push({ pattern: /FROM Colaboradores AS c/, parameters: {}, records: rows });
+    const response = await request("GET", "/colaboradores");
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body, rows);
+    assert.doesNotMatch(calls.at(-1).query, /WHERE c.RestauranteId/);
+  }
+});
+
+test("si falla la consulta de la asignación del gerente, no se devuelve un listado sin filtro", async (t) => {
+  t.mock.method(console, "error", () => {});
+  identity = { UsuarioId: 3, Rol: "GERENTE" };
+  expected.push({ pattern: /FROM Usuarios AS u/, error: new Error("Error de base de datos") });
+  const response = await request("GET", "/colaboradores");
+  assert.equal(response.status, 500);
+  assert.equal(calls.length, 1);
+});
 
 test("colaborador, gerente y recursos humanos no pueden crear, modificar ni desactivar", async () => {
   for (const rol of ["COLABORADOR", "GERENTE", "RECURSOS_HUMANOS", "colaborador", "gerente", "recursosHumanos"]) {

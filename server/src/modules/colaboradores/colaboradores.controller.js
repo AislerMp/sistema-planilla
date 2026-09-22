@@ -1,0 +1,60 @@
+import {
+  getColaboradores,
+  getColaborador,
+  createNewColaborador,
+  updateExistingColaborador,
+  activarColaborador,
+  desactivarColaborador,
+} from "./colaboradores.service.js";
+
+export async function getColaboradoresController(req, res) {
+  const colaboradores = await getColaboradores(req.user, {
+    restauranteId: req.query?.restauranteId,
+  });
+  return res.status(200).json(colaboradores);
+}
+
+export async function getColaboradorByIdController(req, res) {
+  const colaborador = await getColaborador(req.params.id, req.user);
+  return res.status(200).json(colaborador);
+}
+
+export async function createColaboradorController(req, res) {
+  const usuarioActorId = req.user?.UsuarioId;
+  const colaboradorId = await createNewColaborador(req.body ?? {}, usuarioActorId);
+  return res.status(201).json({
+    message: "Colaborador registrado correctamente.",
+    id: colaboradorId,
+  });
+}
+
+export async function updateColaboradorController(req, res) {
+  const usuarioActorId = req.user?.UsuarioId;
+  const actualizado = await updateExistingColaborador(
+    req.params.id,
+    req.body ?? {},
+    usuarioActorId
+  );
+  return res.status(200).json({
+    message: "Colaborador actualizado correctamente.",
+    actualizado,
+  });
+}
+
+export async function desactivarColaboradorController(req, res) {
+  const usuarioActorId = req.user?.UsuarioId;
+  await desactivarColaborador(req.params.id, usuarioActorId);
+  return res.status(200).json({
+    message: "Colaborador desactivado correctamente.",
+    activo: false,
+  });
+}
+
+export async function activarColaboradorController(req, res) {
+  const usuarioActorId = req.user?.UsuarioId;
+  await activarColaborador(req.params.id, usuarioActorId);
+  return res.status(200).json({
+    message: "Colaborador activado correctamente.",
+    activo: true,
+  });
+}

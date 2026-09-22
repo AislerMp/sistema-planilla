@@ -10,10 +10,16 @@ function ensureApiUrl() {
 
 const endpoint = `${API_URL}/colaboradores`;
 
-export async function getColaboradores() {
+export async function getColaboradores({ restauranteId } = {}) {
   ensureApiUrl();
 
-  const response = await fetch(`${endpoint}/`, {
+  const params = new URLSearchParams();
+  if (restauranteId !== undefined && restauranteId !== null && restauranteId !== "") {
+    params.set("restauranteId", restauranteId);
+  }
+  const query = params.toString();
+
+  const response = await fetch(`${endpoint}/${query ? `?${query}` : ""}`, {
     method: "GET",
     credentials: "include",
   });

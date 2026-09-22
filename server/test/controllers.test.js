@@ -3,20 +3,20 @@ import { test, beforeEach, afterEach, mock } from "node:test";
 import express from "express";
 import { once } from "node:events";
 import { hash } from "bcrypt";
-import { errorHandler } from "../src/middlewares/error.middleware.js";
+import { errorHandler } from "../src/shared/middlewares/error.middleware.js";
 
 // Se ejecutan controladores y servicios reales, pero no se conecta a SQL Server.
 Object.assign(process.env, {
   DB_SERVER: "test.invalid", DB_PORT: "1433", DB_NAME: "test",
   DB_USER: "test", DB_PASSWORD: "test",
 });
-const { pool, sql } = await import("../src/config/database.js");
-const auth = await import("../src/controllers/authController.js");
-const colaboradores = await import("../src/controllers/colaboradoresController.js");
-const puestos = await import("../src/controllers/puestosController.js");
-const restaurantes = await import("../src/controllers/restaurantesController.js");
-const roles = await import("../src/controllers/rolesController.js");
-const ubicaciones = await import("../src/controllers/ubicacionesController.js");
+const { pool, sql } = await import("../src/shared/config/database.js");
+const auth = await import("../src/modules/auth/auth.controller.js");
+const colaboradores = await import("../src/modules/colaboradores/colaboradores.controller.js");
+const puestos = await import("../src/modules/puestos/puestos.controller.js");
+const restaurantes = await import("../src/modules/restaurantes/restaurantes.controller.js");
+const roles = await import("../src/modules/roles/roles.controller.js");
+const ubicaciones = await import("../src/modules/ubicaciones/ubicaciones.controller.js");
 
 let expected;
 let calls;

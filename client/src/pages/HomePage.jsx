@@ -1,14 +1,8 @@
 import { Link } from "react-router-dom";
 import LoadingState from "../components/loadingState.jsx";
 import AlertMessage from "../components/AlertMessage.jsx";
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Users,
-  Store,
-  BriefcaseBusiness,
-  UserRoundCog,
-} from "lucide-react";
+import { menuItems } from "../utils/menuItems.js";
+import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 
 import useAsyncRequest from "../hooks/useAsyncRequest.js";
@@ -18,44 +12,23 @@ import { getPuestos } from "../services/puestos.Service.js";
 import { getUsers } from "../services/auth.Service.js";
 
 async function loadCounts() {
-  const results = await Promise.allSettled([getColaboradores(), getRestaurantes("todos"), getPuestos("todos"), getUsers()]);
-  return results.map(result => result.status === "fulfilled" ? result.value.filter(row => row.Activo).length : null);
+  const results = await Promise.allSettled([
+    getColaboradores(),
+    getRestaurantes("todos"),
+    getPuestos("todos"),
+    getUsers(),
+  ]);
+  return results.map((result) =>
+    result.status === "fulfilled"
+      ? result.value.filter((row) => row.Activo).length
+      : null,
+  );
 }
-
-const cards = [
-  {
-    title: "Colaboradores",
-    path: "/colaboradores",
-    icon: Users,
-    description: "Las personas, sus puestos y sus asignaciones.",
-    label: "colaboradores activos",
-  },
-  {
-    title: "Restaurantes",
-    path: "/restaurantes",
-    icon: Store,
-    description: "Ubicaciones y datos de cada restaurante.",
-    label: "restaurantes activos",
-  },
-  {
-    title: "Puestos",
-    path: "/puestos",
-    icon: BriefcaseBusiness,
-    description: "Cargos y tarifas de pago por hora.",
-    label: "puestos activos",
-  },
-  {
-    title: "Usuarios",
-    path: "/usuarios",
-    icon: UserRoundCog,
-    description: "Cuentas y perfiles de acceso al sistema.",
-    label: "usuarios activos",
-  },
-];
 
 export default function HomePage() {
   const { user } = useAuth();
   const { data: counts, isLoading } = useAsyncRequest(loadCounts);
+  console.log(counts);
   const displayName = user?.NombreUsuario ?? "Usuario";
 
   return (
@@ -100,33 +73,38 @@ export default function HomePage() {
           <span className="subtle-tag">ADMINISTRACIÓN</span>
         </div>
         <div className="module-grid">
-          {cards.map((card, index) => {
+          {menuItems.map((card, index) => {
             const Icon = card.icon;
-            return (
-              <Link to={card.path} className="module-card" key={card.path}>
-                <div className="module-card-top">
-                  <span className="module-icon">
-                    <Icon size={23} />
-                  </span>
-                  <ArrowUpRight className="card-arrow" size={20} />
-                </div>
-                <h3>{card.title}</h3>
-                <p>{card.description}</p>
-                <div className="module-card-bottom">
-                  <strong>{isLoading || !counts ? "…" : counts[index] ?? "—"}</strong>
-                  <span>{card.label}</span>
-                </div>
-              </Link>
-            );
+            if (!card.nonPermision.includes(user?.Rol)) {
+              return (
+                <Link to={card.path} className="module-card" key={card.path}>
+                  <div className="module-card-top">
+                    <span className="module-icon">
+                      <Icon size={23} />
+                    </span>
+                    <ArrowUpRight className="card-arrow" size={20} />
+                  </div>
+                  <h3>{card.title}</h3>
+                  <p>{card.description}</p>
+                  <div className="module-card-bottom">
+                    <strong>
+                      {isLoading || !counts ? "…" : (counts[index] ?? "—")}
+                    </strong>
+                    <span>{card.label}</span>
+                  </div>
+                </Link>
+              );
+            }
           })}
         </div>
         {(isLoading || !counts) && (
           <LoadingState entidad="resumen" compacto descripcion="" />
         )}
       </section>
-      {counts?.some(count => count === null) && (
+      {counts?.some((count) => count === null) && (
         <AlertMessage type="warning" title="El resumen está incompleto">
-          No se pudieron cargar todas las cantidades. Ingresá al módulo para reintentar la consulta.
+          No se pudieron cargar todas las cantidades. Ingresá al módulo para
+          reintentar la consulta.
         </AlertMessage>
       )}
     </>

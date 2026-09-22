@@ -2,15 +2,17 @@ import express from "express";
 import session from "express-session";
 import cors from "cors";
 
-import routes from "./routes/index.js";
-import authRoutes from "./routes/auth.routes.js";
-import colaboradoresRoutes from "./routes/colaboradores.routes.js";
-import puestosRoutes from "./routes/puestos.routes.js";
-import restaurantesRoutes from "./routes/restaurantes.routes.js";
-import rolesRoutes from "./routes/roles.routes.js";
-import ubicacionesRoutes from "./routes/ubicaciones.routes.js";
-import { isAuthenticate } from "./middlewares/auth.middleware.js";
-import { errorHandler } from "./middlewares/error.middleware.js";
+import routes from "./modules/health/health.routes.js";
+import authRoutes from "./modules/auth/auth.routes.js";
+import colaboradoresRoutes from "./modules/colaboradores/colaboradores.routes.js";
+import puestosRoutes from "./modules/puestos/puestos.routes.js";
+import restaurantesRoutes from "./modules/restaurantes/restaurantes.routes.js";
+import rolesRoutes from "./modules/roles/roles.routes.js";
+import ubicacionesRoutes from "./modules/ubicaciones/ubicaciones.routes.js";
+import periodosPlanillasRoutes from "./modules/periodoPlanilla/periodosPlanillas.routes.js";
+import asistenciasDiariasRoutes from "./modules/asistenciasDiarias/asistenciasDiarias.routes.js";
+import { isAuthenticate } from "./shared/middlewares/auth.middleware.js";
+import { errorHandler } from "./shared/middlewares/error.middleware.js";
 
 const app = express();
 
@@ -48,6 +50,8 @@ app.use("/api/puestos", puestosRoutes);
 app.use("/api/restaurantes", restaurantesRoutes);
 app.use("/api/roles", rolesRoutes);
 app.use("/api/ubicaciones", ubicacionesRoutes);
+app.use("/api/periodos-planilla", periodosPlanillasRoutes);
+app.use("/api/AsistenciasDiarias", asistenciasDiariasRoutes);
 
 app.use(errorHandler);
 

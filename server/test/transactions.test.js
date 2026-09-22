@@ -6,11 +6,11 @@ Object.assign(process.env, {
   DB_SERVER: "test.invalid", DB_PORT: "1433", DB_NAME: "test",
   DB_USER: "test", DB_PASSWORD: "test",
 });
-const { pool, sql } = await import("../src/config/database.js");
-const puestos = await import("../src/services/puestosService.js");
-const restaurantes = await import("../src/services/restaurantesService.js");
-const colaboradores = await import("../src/services/colaboradorService.js");
-const auth = await import("../src/services/authService.js");
+const { pool, sql } = await import("../src/shared/config/database.js");
+const puestos = await import("../src/modules/puestos/puestos.service.js");
+const restaurantes = await import("../src/modules/restaurantes/restaurantes.service.js");
+const colaboradores = await import("../src/modules/colaboradores/colaboradores.service.js");
+const auth = await import("../src/modules/auth/auth.service.js");
 
 let expected;
 let events;

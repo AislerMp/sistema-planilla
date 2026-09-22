@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import express from "express";
 import { once } from "node:events";
-import { AppError } from "../src/utils/AppError.js";
-import { errorHandler } from "../src/middlewares/error.middleware.js";
+import { AppError } from "../src/shared/utils/AppError.js";
+import { errorHandler } from "../src/shared/middlewares/error.middleware.js";
 
 test("el middleware expone solo mensajes de AppError 4xx y normaliza estados inválidos", (t) => {
   t.mock.method(console, "error", () => {});

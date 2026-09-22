@@ -112,7 +112,11 @@ export default function ColaboradoresDashboard() {
         <div>
           <p className="eyebrow accent">PERSONAS Y EQUIPO</p>
           <h1>Colaboradores</h1>
-          <p>Consultá y administrá la información de los colaboradores.</p>
+          <p>
+            {user?.Rol === "GERENTE"
+              ? "Consultá los colaboradores de tu restaurante asignado."
+              : "Consultá y administrá la información de los colaboradores."}
+          </p>
         </div>
 
         {isAdministrator && (

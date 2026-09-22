@@ -1,26 +1,20 @@
 import { NavLink, Link } from "react-router-dom";
-import {
-  House,
-  Users,
-  Store,
-  BriefcaseBusiness,
-  UserRoundCog,
-  MapPin,
-} from "lucide-react";
-import Brand from "../Brand.jsx";
+import { House, MapPin } from "lucide-react";
 
-const menuItems = [
-  { label: "Colaboradores", path: "/colaboradores", icon: Users },
-  { label: "Restaurantes", path: "/restaurantes", icon: Store },
-  { label: "Puestos", path: "/puestos", icon: BriefcaseBusiness },
-  { label: "Usuarios", path: "/usuarios", icon: UserRoundCog },
-];
+import { menuItems } from "../../utils/menuItems.js";
+
+import Brand from "../Brand.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function Sidebar({ isOpen, onNavigate }) {
   function linkClass({ isActive }) {
     return "sidebar-link " + (isActive ? "sidebar-link--active" : "");
   }
 
+  const { user } = useAuth();
+  const visibleItems = menuItems.filter(
+    (item) => !item.nonPermision.includes(user?.Rol),
+  );
   return (
     <aside
       id="main-sidebar"
@@ -39,32 +33,41 @@ export default function Sidebar({ isOpen, onNavigate }) {
           <House size={19} />
           Inicio
         </NavLink>
-        <p className="sidebar-section">ADMINISTRACIÓN</p>
-        <div className="sidebar-links">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                onClick={onNavigate}
-                className={linkClass}
-              >
-                <Icon size={19} />
-                {item.label}
-              </NavLink>
-            );
-          })}
-        </div>
+
+        {visibleItems.length > 0 && (
+          <>
+            <p className="sidebar-section">
+              {user?.Rol === "GERENTE" ? "MI RESTAURANTE" : "ADMINISTRACIÓN"}
+            </p>
+            <div className="sidebar-links">
+              {visibleItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    onClick={onNavigate}
+                    className={linkClass}
+                  >
+                    <Icon size={19} />
+                    {item.title}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </>
+        )}
       </nav>
       <div className="sidebar-footer">
         <p>
           <MapPin size={15} />
-          Todos los restaurantes
+          {user?.Rol === "GERENTE"
+            ? "Tu restaurante asignado"
+            : user?.Rol === "COLABORADOR"
+              ? "Tu información personal"
+              : "Todos los restaurantes"}
         </p>
-        <span className="sidebar-session">
-          Sesión activa
-        </span>
+        <span className="sidebar-session">Sesión activa</span>
       </div>
     </aside>
   );

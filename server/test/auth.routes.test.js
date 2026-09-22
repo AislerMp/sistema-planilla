@@ -10,7 +10,7 @@ Object.assign(process.env, {
   DB_USER: "test", DB_PASSWORD: "test",
   SESSION_SECRET: "secreto-ficticio-exclusivo-de-tests",
 });
-const { pool, sql } = await import("../src/config/database.js");
+const { pool, sql } = await import("../src/shared/config/database.js");
 const { default: app } = await import("../src/app.js");
 
 let expected;
@@ -42,7 +42,8 @@ before(async () => {
     resave: false, saveUninitialized: false,
   }));
   harness.use((req, res, next) => {
-    if (identity) req.session.user = identity;
+    // Las sesiones reales incluyen Activo; cada prueba puede sobrescribirlo.
+    if (identity) req.session.user = { Activo: true, ...identity };
     next();
   });
   harness.use(app);
@@ -87,6 +88,22 @@ test("las rutas privadas rechazan solicitudes anónimas aunque el body declare u
     });
     assert.equal(result.status, 401);
     assert.equal(result.body.message, "Debés iniciar sesión.");
+  }
+});
+
+test("una sesión inactiva o sin estado válido no permite consultar ni modificar datos", async () => {
+  for (const Activo of [false, 0, null, undefined]) {
+    identity = { UsuarioId: 7, Rol: "ADMINISTRADOR", Activo };
+    for (const [method, path] of [
+      ["GET", "/api/auth/users"],
+      ["GET", "/api/colaboradores"],
+      ["POST", "/api/auth/register"],
+      ["DELETE", "/api/colaboradores/7"],
+    ]) {
+      const result = await request(method, path);
+      assert.equal(result.status, 401);
+      assert.equal(result.body.message, "El usuario actual está BLOQUEADO");
+    }
   }
 });
 

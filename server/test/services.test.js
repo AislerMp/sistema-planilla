@@ -7,13 +7,14 @@ Object.assign(process.env, {
   DB_SERVER: "test.invalid", DB_PORT: "1433", DB_NAME: "test",
   DB_USER: "test", DB_PASSWORD: "test",
 });
-const { pool, sql } = await import("../src/config/database.js");
-const auth = await import("../src/services/authService.js");
-const colaboradores = await import("../src/services/colaboradorService.js");
-const puestos = await import("../src/services/puestosService.js");
-const restaurantes = await import("../src/services/restaurantesService.js");
-const roles = await import("../src/services/rolesService.js");
-const ubicaciones = await import("../src/services/ubicacionesService.js");
+const { pool, sql } = await import("../src/shared/config/database.js");
+const auth = await import("../src/modules/auth/auth.service.js");
+const colaboradores = await import("../src/modules/colaboradores/colaboradores.service.js");
+const puestos = await import("../src/modules/puestos/puestos.service.js");
+const restaurantes = await import("../src/modules/restaurantes/restaurantes.service.js");
+const roles = await import("../src/modules/roles/roles.service.js");
+const ubicaciones = await import("../src/modules/ubicaciones/ubicaciones.service.js");
+const asistencias = await import("../src/modules/asistenciasDiarias/asistenciasDiarias.service.js");
 
 let expected;
 let calls;
@@ -47,6 +48,97 @@ afterEach(() => assert.equal(expected.length, 0, "Faltaron consultas esperadas")
 function respond(pattern, records = [], affected = 1) {
   expected.push({ pattern, records, affected });
 }
+
+test("actualizar minutos rechaza tipos y valores inválidos antes de consultar", async () => {
+  const usuario = { UsuarioId: 1, Rol: "ADMINISTRADOR" };
+  for (const minutos of [-1, 1.5, "60", null, undefined, NaN, Infinity, 2147483648]) {
+    await assert.rejects(asistencias.actualizarMinutosAsistencia(1, minutos, "Ajustados", "Corrección", usuario), { status: 400 });
+  }
+  for (const tipo of [undefined, "calculados", "Otro"]) {
+    await assert.rejects(asistencias.actualizarMinutosAsistencia(1, 60, tipo, "Corrección", usuario), { status: 400 });
+  }
+});
+
+test("actualizar minutos permite cero en ambos tipos y confirma la bitácora", async () => {
+  for (const tipo of ["Calculados", "Ajustados"]) {
+    respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, PeriodoId: 2, RestauranteId: 3 }]);
+    respond(/FROM dbo.PeriodosPlanilla/, [{ Estado: "EN_REVISION", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") }]);
+    respond(new RegExp(`SET Minutos${tipo} = @Minutos`), [{ AsistenciaId: 1, [`Minutos${tipo}`]: 0 }]);
+    respond(/INSERT INTO dbo.Bitacora/);
+    const commits = sql.Transaction.prototype.commit.mock.callCount();
+    const result = await asistencias.actualizarMinutosAsistencia(1, 0, tipo, "Corrección", { UsuarioId: 1, Rol: "ADMINISTRADOR" });
+    assert.equal(result[`Minutos${tipo}`], 0);
+    assert.equal(sql.Transaction.prototype.commit.mock.callCount(), commits + 1);
+  }
+});
+
+test("actualizar minutos revierte ante período cerrado o plazo vencido", async () => {
+  for (const periodo of [
+    { Estado: "CERRADO", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") },
+    { Estado: "ABIERTO", FechaLimiteAjustes: new Date("2000-12-31T00:00:00Z") },
+  ]) {
+    respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, PeriodoId: 2 }]);
+    respond(/FROM dbo.PeriodosPlanilla/, [periodo]);
+    const rollbacks = sql.Transaction.prototype.rollback.mock.callCount();
+    await assert.rejects(asistencias.actualizarMinutosAsistencia(1, 60, "Ajustados", "Corrección", { UsuarioId: 1, Rol: "ADMINISTRADOR" }), { status: 409 });
+    assert.equal(sql.Transaction.prototype.rollback.mock.callCount(), rollbacks + 1);
+  }
+});
+
+test("asistencias valida la fecha con un mensaje identificable", async () => {
+  await assert.rejects(
+    asistencias.obtenerAsistenciaPorColaboradorYfecha(1, "incorrecta"),
+    { status: 400, message: "Fecha asignada debe tener el formato YYYY-MM-DD" },
+  );
+});
+
+test("asistencias requiere filtros y restaurante explícito para administración", async () => {
+  await assert.rejects(asistencias.listarAsistenciasPorColaborador(1), { status: 400 });
+  await assert.rejects(
+    asistencias.listarAsistenciasPorRestaurante(
+      { UsuarioId: 1, Rol: "ADMINISTRADOR" }, null, { periodoId: 1 },
+    ),
+    { status: 400 },
+  );
+});
+
+test("asistencias de restaurante rechaza usuario ausente y rol colaborador", async () => {
+  for (const [usuario, status] of [
+    [undefined, 401],
+    [{ UsuarioId: 1, Rol: "COLABORADOR" }, 403],
+  ]) {
+    await assert.rejects(
+      asistencias.listarAsistenciasPorRestaurante(usuario, 2, { periodoId: 1 }),
+      { status },
+    );
+  }
+});
+
+test("asistencias de restaurante detecta un listado vacío", async () => {
+  respond(/FROM dbo.AsistenciasDiarias AS a/, []);
+  await assert.rejects(
+    asistencias.listarAsistenciasPorRestaurante(
+      { UsuarioId: 1, Rol: "RECURSOS_HUMANOS" }, 2, { periodoId: 1 },
+    ),
+    { status: 404 },
+  );
+});
+
+test("gerente consulta su restaurante sin enviarlo y no puede consultar otro", async () => {
+  const usuario = { UsuarioId: 1, Rol: "GERENTE" };
+  respond(/FROM Usuarios/, [{ RestauranteId: 2 }]);
+  respond(/FROM dbo.AsistenciasDiarias AS a/, [{ AsistenciaId: 7 }]);
+  assert.deepEqual(
+    await asistencias.listarAsistenciasPorRestaurante(usuario, null, { periodoId: 1 }),
+    [{ AsistenciaId: 7 }],
+  );
+  assert.equal(calls.at(-1).parameters.RestauranteId.value, 2);
+  respond(/FROM Usuarios/, [{ RestauranteId: 2 }]);
+  await assert.rejects(
+    asistencias.listarAsistenciasPorRestaurante(usuario, 3, { periodoId: 1 }),
+    { status: 403 },
+  );
+});
 function activeReferences() {
   respond(/FROM Restaurantes WHERE RestauranteId = @id/, [{ RestauranteId: 1, Activo: true }]);
   respond(/FROM Puestos WHERE PuestoId = @id/, [{ PuestoId: 2, Activo: true }]);
@@ -321,7 +413,7 @@ test("listas vacías de los catálogos y colaboradores devuelven arreglos", asyn
   for (const [list, table] of [
     [roles.getRoles, "Roles"], [ubicaciones.getProvincias, "Provincias"],
     [puestos.getPuestos, "Puestos"], [restaurantes.getRestaurantes, "Restaurantes"],
-    [colaboradores.getColaboradores, "Colaboradores"],
+    [() => colaboradores.getColaboradores({ UsuarioId: 3, Rol: "ADMINISTRADOR" }), "Colaboradores"],
   ]) {
     respond(new RegExp(`FROM ${table}`), undefined);
     assert.deepEqual(await list(), []);

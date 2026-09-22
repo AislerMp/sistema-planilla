@@ -5,7 +5,7 @@ import app from "./app.js";
 import {
   getConnection,
   closeConnection,
-} from "./config/database.js";
+} from "./shared/config/database.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
 
