@@ -16,6 +16,7 @@ import {
 import { registrarBitacora, entidades } from "../bitacora/bitacora.service.js";
 
 import { getRestaurantePermitido } from "../colaboradores/colaboradores.service.js";
+import { sincronizarHorasExtras } from "../extras/horasExtras.service.js";
 import { beginTransaction } from "../../shared/config/database.js";
 
 export async function obtenerAsistencia(id) {
@@ -96,6 +97,11 @@ export async function listarAsistenciasPorRestaurante(
   restauranteId,
   filtros = {},
 ) {
+  if (!usuario) throw serviceError("Debe iniciar sesión", 401);
+  if (!["GERENTE", "RECURSOS_HUMANOS", "ADMINISTRADOR"].includes(usuario.Rol)) {
+    throw serviceError("No tiene permisos para consultar asistencias del restaurante", 403);
+  }
+
   let fechaDesde = validateDate(filtros?.desde, "Fecha desde", true);
   const fechaHasta = validateDate(filtros?.hasta, "Fecha hasta", true);
   const periodoId = validateId(filtros?.periodoId, "periodoId", true);
@@ -226,6 +232,7 @@ export async function crearAsistenciaDiaria(
   return asistenciaCreada;
 }
 
+// El gerente es el que realiza el ajustes de las horas
 export async function ajustarMinutosAsistencia(
   asistenciaId,
   minutos,
@@ -329,6 +336,12 @@ export async function ajustarMinutosAsistencia(
       transaction,
     );
 
+    await sincronizarHorasExtras(
+      asistenciaActualizada,
+      actorId,
+      transaction,
+    );
+
     await transaction.commit();
 
     return {
@@ -351,6 +364,7 @@ export async function ajustarMinutosAsistencia(
   }
 }
 
+// Explicitamente para la salida del colaborador
 export async function actualizarMinutosCalculados(
   idAsistencia,
   totalMinutos,

@@ -1,4 +1,4 @@
-const PUBLIC_PATHS = ["/api/auth/login", "/login", "/api/health", "/health"];
+const PUBLIC_PATHS = ["/api/auth/login", "/login"];
 
 export function soloAdministrador(req, res, next) {
   if (!req.user) {

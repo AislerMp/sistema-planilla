@@ -4,7 +4,6 @@ Los prefijos completos se montan en `src/app.js`. Las rutas con acceso
 
 | Método | URL | Acceso | Operación |
 | --- | --- | --- | --- |
-| GET | `/api/health` | Público | Estado de la API |
 | POST | `/api/auth/login` | Público | Verificar credenciales |
 | POST | `/api/auth/register` | Administrador | Crear usuario |
 | GET | `/api/auth/users` | Autenticado | Listar usuarios |

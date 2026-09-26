@@ -36,7 +36,7 @@ export async function crearPeriodoController(req, res) {
 }
 
 export async function cambiarEstadoPeriodoController(req, res) {
-  const nuevoEstado = req.body ?? {};
+  const nuevoEstado = req.body?.estado;
   const periodo = await cambiarEstadoPeriodo(
     req.params.id,
     nuevoEstado,

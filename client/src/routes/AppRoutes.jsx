@@ -13,6 +13,7 @@ import UpdateColaborador from "../pages/colaboradores/updateColaborador.jsx";
 import UsuariosDashboard from "../pages/usuarios/usuariosDashboard.jsx";
 import CreateUsuario from "../pages/usuarios/createUsuario.jsx";
 import UpdateUsuario from "../pages/usuarios/updateUsuario.jsx";
+
 export default function AppRoutes({ theme, onToggleTheme }) {
   return (
     <BrowserRouter>

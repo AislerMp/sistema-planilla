@@ -158,13 +158,12 @@ test("cambiar contraseña utiliza la identidad autenticada aunque se envíe otro
   assert.equal(result.body.message, "Usuario no encontrado");
 });
 
-test("los errores de auth alcanzan el middleware global y health sigue disponible", async (t) => {
+test("los errores de auth alcanzan el middleware global", async (t) => {
   const logger = t.mock.method(console, "error", () => {});
   expected.push({ pattern: /FROM Usuarios/, error: new Error("Detalle SQL privado") });
   const result = await request("POST", "/api/auth/login", { nombreUsuario: "ana", password: "clave" });
   assert.deepEqual(result, { status: 500, body: { message: "No fue posible procesar la solicitud" } });
   assert.equal(logger.mock.callCount(), 1);
-  assert.equal((await request("GET", "/api/health")).status, 200);
 });
 
 test("crear colaboradores exige autenticación y rechaza todos los roles no administradores", async () => {

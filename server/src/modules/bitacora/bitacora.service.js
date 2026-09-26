@@ -14,6 +14,7 @@ export const entidades = {
   PERIODOS_PLANILLA: "PeriodosPlanilla",
   ASISTENCIAS_DIARIAS: "AsistenciasDiarias",
   HORAS_EXTRAS: "HorasExtras",
+  SOLICITUDES_HORAS_EXTRAS: "SolicitudesHorasExtras",
 };
 
 export const accionesPermitidas = [

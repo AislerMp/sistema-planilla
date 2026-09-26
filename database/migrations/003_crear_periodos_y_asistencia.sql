@@ -172,70 +172,99 @@ BEGIN TRY
             )
     );
 
+
     CREATE TABLE dbo.HorasExtras (
-    HoraExtraId INT IDENTITY(1,1) NOT NULL,
-    AsistenciaId INT NOT NULL,
-    MinutosDetectados INT NOT NULL,
-    MinutosAprobados INT NULL,
+        HoraExtraId INT IDENTITY(1,1) NOT NULL,
+        AsistenciaId INT NOT NULL,
+        MinutosDetectados INT NOT NULL,
 
-    Estado VARCHAR(15) NOT NULL
-        CONSTRAINT DF_HorasExtras_Estado
-        DEFAULT ('PENDIENTE'),
+        CONSTRAINT PK_HorasExtras
+            PRIMARY KEY (HoraExtraId),
 
-    RevisadoPorUsuarioId INT NULL,
-    Observacion NVARCHAR(500) NULL,
+        CONSTRAINT FK_HorasExtras_AsistenciasDiarias
+            FOREIGN KEY (AsistenciaId)
+            REFERENCES dbo.AsistenciasDiarias(AsistenciaId),
 
-    CONSTRAINT PK_HorasExtras
-        PRIMARY KEY (HoraExtraId),
+        CONSTRAINT UQ_HorasExtras_Asistencia
+            UNIQUE (AsistenciaId),
 
-    CONSTRAINT FK_HorasExtras_AsistenciasDiarias
-        FOREIGN KEY (AsistenciaId)
-        REFERENCES dbo.AsistenciasDiarias(AsistenciaId),
+        CONSTRAINT CK_HorasExtras_MinutosDetectados
+            CHECK (MinutosDetectados >= 0)
+    );
 
-    CONSTRAINT FK_HorasExtras_Usuarios
-        FOREIGN KEY (RevisadoPorUsuarioId)
-        REFERENCES dbo.Usuarios(UsuarioId),
+    CREATE TABLE dbo.SolicitudesHorasExtras (
+        SolicitudHoraExtraId INT IDENTITY(1,1) NOT NULL,
 
-    CONSTRAINT UQ_HorasExtras_Asistencia
-        UNIQUE (AsistenciaId),
+        ColaboradorId INT NOT NULL,
+        RestauranteId INT NOT NULL,
+        FechaSolicitada DATE NOT NULL,
 
-    CONSTRAINT CK_HorasExtras_MinutosDetectados
-        CHECK (MinutosDetectados >= 0),
+        MinutosSolicitados INT NOT NULL,
+        Motivo NVARCHAR(500) NOT NULL,
 
-    CONSTRAINT CK_HorasExtras_MinutosAprobados
-        CHECK (
-            MinutosAprobados IS NULL
-            OR MinutosAprobados BETWEEN 0 AND MinutosDetectados
-        ),
+        Estado VARCHAR(15) NOT NULL
+            CONSTRAINT DF_SolicitudesHorasExtras_Estado
+            DEFAULT ('PENDIENTE'),
 
-    CONSTRAINT CK_HorasExtras_Estado
-        CHECK (
-            Estado IN ('PENDIENTE', 'APROBADA', 'RECHAZADA')
-        ),
+        MinutosAutorizados INT NULL,
+        RevisadoPorUsuarioId INT NULL,
+        Observacion NVARCHAR(500) NULL,
 
-    CONSTRAINT CK_HorasExtras_Revision
-        CHECK (
-            (
-                Estado = 'PENDIENTE'
-                AND MinutosAprobados IS NULL
-                AND RevisadoPorUsuarioId IS NULL
+        CONSTRAINT PK_SolicitudesHorasExtras
+            PRIMARY KEY (SolicitudHoraExtraId),
+
+        CONSTRAINT FK_SolicitudesHorasExtras_Colaboradores
+            FOREIGN KEY (ColaboradorId)
+            REFERENCES dbo.Colaboradores(ColaboradorId),
+
+        CONSTRAINT FK_SolicitudesHorasExtras_Restaurantes
+            FOREIGN KEY (RestauranteId)
+            REFERENCES dbo.Restaurantes(RestauranteId),
+
+        CONSTRAINT FK_SolicitudesHorasExtras_Usuarios
+            FOREIGN KEY (RevisadoPorUsuarioId)
+            REFERENCES dbo.Usuarios(UsuarioId),
+
+        CONSTRAINT CK_SolicitudesHorasExtras_MinutosSolicitados
+            CHECK (MinutosSolicitados > 0),
+
+        CONSTRAINT CK_SolicitudesHorasExtras_Motivo
+            CHECK (LEN(LTRIM(RTRIM(Motivo))) > 0),
+
+        CONSTRAINT CK_SolicitudesHorasExtras_MinutosAutorizados
+            CHECK (
+                MinutosAutorizados IS NULL
+                OR MinutosAutorizados BETWEEN 0 AND MinutosSolicitados
+            ),
+
+        CONSTRAINT CK_SolicitudesHorasExtras_Estado
+            CHECK (
+                Estado IN ('PENDIENTE', 'APROBADA', 'RECHAZADA')
+            ),
+
+        CONSTRAINT CK_SolicitudesHorasExtras_Revision
+            CHECK (
+                (
+                    Estado = 'PENDIENTE'
+                    AND MinutosAutorizados IS NULL
+                    AND RevisadoPorUsuarioId IS NULL
+                )
+                OR
+                (
+                    Estado = 'APROBADA'
+                    AND MinutosAutorizados IS NOT NULL
+                    AND MinutosAutorizados > 0
+                    AND RevisadoPorUsuarioId IS NOT NULL
+                )
+                OR
+                (
+                    Estado = 'RECHAZADA'
+                    AND MinutosAutorizados IS NOT NULL
+                    AND MinutosAutorizados = 0
+                    AND RevisadoPorUsuarioId IS NOT NULL
+                )
             )
-            OR
-            (
-                Estado = 'APROBADA'
-                AND MinutosAprobados IS NOT NULL
-                AND MinutosAprobados > 0
-                AND RevisadoPorUsuarioId IS NOT NULL
-            )
-            OR
-            (
-                Estado = 'RECHAZADA'
-                AND MinutosAprobados IS NOT NULL
-                AND MinutosAprobados = 0
-                AND RevisadoPorUsuarioId IS NOT NULL
-            )
-        )
-);
+    );
 
     ------------------------------------------------------------
     -- 4. SOLO UNA PAREJA PENDIENTE POR COLABORADOR Y DÍA

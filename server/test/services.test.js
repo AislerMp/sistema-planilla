@@ -15,6 +15,7 @@ const restaurantes = await import("../src/modules/restaurantes/restaurantes.serv
 const roles = await import("../src/modules/roles/roles.service.js");
 const ubicaciones = await import("../src/modules/ubicaciones/ubicaciones.service.js");
 const asistencias = await import("../src/modules/asistenciasDiarias/asistenciasDiarias.service.js");
+const marcas = await import("../src/modules/marcas/marcas.service.js");
 
 let expected;
 let calls;
@@ -49,38 +50,108 @@ function respond(pattern, records = [], affected = 1) {
   expected.push({ pattern, records, affected });
 }
 
-test("actualizar minutos rechaza tipos y valores inválidos antes de consultar", async () => {
-  const usuario = { UsuarioId: 1, Rol: "ADMINISTRADOR" };
+test("consulta marcas propias usa el colaborador autenticado y permite días vacíos", async () => {
+  respond(/FROM dbo.MarcasAsistencia/, []);
+  assert.deepEqual(await marcas.consultarMisMarcas(
+    { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" }, "2026-09-21",
+  ), []);
+  assert.equal(calls[0].parameters.colaboradorId.value, 8);
+});
+
+test("consulta marcas valida sesión, roles y fecha antes de consultar", async () => {
+  await assert.rejects(marcas.consultarMisMarcas(null, "2026-09-21"), { status: 401 });
+  await assert.rejects(marcas.consultarMisMarcas({ UsuarioId: 1, Rol: "GERENTE" }, "2026-09-21"), { status: 403 });
+  await assert.rejects(marcas.consultarMisMarcas({ UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" }, "2026-02-30"), { status: 400 });
+  await assert.rejects(marcas.consultarMarcasColaborador({ UsuarioId: 1, Rol: "COLABORADOR" }, 8, "2026-09-21"), { status: 403 });
+});
+
+test("consulta marcas del gerente comprueba el restaurante de la asistencia", async () => {
+  const usuario = { UsuarioId: 1, Rol: "GERENTE" };
+  respond(/FROM Usuarios/, [{ RestauranteId: 2 }]);
+  respond(/FROM dbo.AsistenciasDiarias/, [{ RestauranteId: 2 }]);
+  respond(/FROM dbo.MarcasAsistencia/, [{ MarcaId: 7 }]);
+  assert.deepEqual(await marcas.consultarMarcasColaborador(usuario, 8, "2026-09-21"), [{ MarcaId: 7 }]);
+  respond(/FROM Usuarios/, [{ RestauranteId: 2 }]);
+  respond(/FROM dbo.AsistenciasDiarias/, [{ RestauranteId: 3 }]);
+  await assert.rejects(marcas.consultarMarcasColaborador(usuario, 8, "2026-09-21"), { status: 403 });
+});
+
+test("consulta marcas del gerente sin asistencia devuelve vacío y sin asignación rechaza", async () => {
+  const usuario = { UsuarioId: 1, Rol: "GERENTE" };
+  respond(/FROM Usuarios/, [{ RestauranteId: 2 }]);
+  respond(/FROM dbo.AsistenciasDiarias/, []);
+  assert.deepEqual(await marcas.consultarMarcasColaborador(usuario, 8, "2026-09-21"), []);
+  respond(/FROM Usuarios/, []);
+  await assert.rejects(marcas.consultarMarcasColaborador(usuario, 8, "2026-09-21"), { status: 403 });
+});
+
+test("actualizar minutos rechaza valores invalidos en ambos servicios", async () => {
+  const gerente = { UsuarioId: 1, Rol: "GERENTE" };
+  const colaborador = { UsuarioId: 2, ColaboradorId: 8, Rol: "COLABORADOR" };
+  const transaction = new sql.Transaction(pool);
   for (const minutos of [-1, 1.5, "60", null, undefined, NaN, Infinity, 2147483648]) {
-    await assert.rejects(asistencias.actualizarMinutosAsistencia(1, minutos, "Ajustados", "Corrección", usuario), { status: 400 });
+    await assert.rejects(asistencias.ajustarMinutosAsistencia(1, minutos, "Correccion", gerente), { status: 400 });
+    await assert.rejects(asistencias.actualizarMinutosCalculados(1, minutos, transaction, colaborador), { status: 400 });
   }
-  for (const tipo of [undefined, "calculados", "Otro"]) {
-    await assert.rejects(asistencias.actualizarMinutosAsistencia(1, 60, tipo, "Corrección", usuario), { status: 400 });
-  }
+  await assert.rejects(asistencias.actualizarMinutosCalculados(1, 60, null, colaborador), { status: 500 });
 });
 
-test("actualizar minutos permite cero en ambos tipos y confirma la bitácora", async () => {
-  for (const tipo of ["Calculados", "Ajustados"]) {
-    respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, PeriodoId: 2, RestauranteId: 3 }]);
-    respond(/FROM dbo.PeriodosPlanilla/, [{ Estado: "EN_REVISION", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") }]);
-    respond(new RegExp(`SET Minutos${tipo} = @Minutos`), [{ AsistenciaId: 1, [`Minutos${tipo}`]: 0 }]);
-    respond(/INSERT INTO dbo.Bitacora/);
-    const commits = sql.Transaction.prototype.commit.mock.callCount();
-    const result = await asistencias.actualizarMinutosAsistencia(1, 0, tipo, "Corrección", { UsuarioId: 1, Rol: "ADMINISTRADOR" });
-    assert.equal(result[`Minutos${tipo}`], 0);
-    assert.equal(sql.Transaction.prototype.commit.mock.callCount(), commits + 1);
-  }
+test("ajustar minutos permite cero y confirma la bitacora", async () => {
+  respond(/FROM Usuarios/, [{ RestauranteId: 3 }]);
+  respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, PeriodoId: 2, RestauranteId: 3, MinutosCalculados: 60, MinutosAjustados: null }]);
+  respond(/FROM dbo.PeriodosPlanilla/, [{ Estado: "EN_REVISION", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") }]);
+  respond(/SET MinutosAjustados = @Minutos/, [{ AsistenciaId: 1, MinutosCalculados: 60, MinutosAjustados: 0 }]);
+  respond(/INSERT INTO dbo.Bitacora/);
+  respond(/FROM dbo.HorasExtras/, []);
+  const commits = sql.Transaction.prototype.commit.mock.callCount();
+  const result = await asistencias.ajustarMinutosAsistencia(1, 0, "Correccion", { UsuarioId: 1, Rol: "GERENTE" });
+  assert.equal(result.MinutosAjustados, 0);
+  assert.equal(result.MinutosEfectivos, 0);
+  assert.equal(sql.Transaction.prototype.commit.mock.callCount(), commits + 1);
 });
 
-test("actualizar minutos revierte ante período cerrado o plazo vencido", async () => {
+test("ajustar minutos revierte si falla la sincronizacion de horas extras", async () => {
+  respond(/FROM Usuarios/, [{ RestauranteId: 3 }]);
+  respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, PeriodoId: 2, RestauranteId: 3, MinutosCalculados: 600, MinutosAjustados: null }]);
+  respond(/FROM dbo.PeriodosPlanilla/, [{ Estado: "EN_REVISION", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") }]);
+  respond(/SET MinutosAjustados = @Minutos/, [{ AsistenciaId: 1, MinutosCalculados: 600, MinutosAjustados: 0 }]);
+  respond(/INSERT INTO dbo.Bitacora/);
+  respond(/FROM dbo.HorasExtras/, [{ HoraExtraId: 9, AsistenciaId: 1, MinutosDetectados: 120 }]);
+  const error = new Error("Fallo al sincronizar horas extras");
+  expected.push({ pattern: /UPDATE dbo.HorasExtras/, error });
+  const commits = sql.Transaction.prototype.commit.mock.callCount();
+  const rollbacks = sql.Transaction.prototype.rollback.mock.callCount();
+  await assert.rejects(
+    asistencias.ajustarMinutosAsistencia(1, 0, "Correccion", { UsuarioId: 1, Rol: "GERENTE" }),
+    actual => actual === error,
+  );
+  assert.equal(calls.at(-1).parameters.minutosDetectados.value, 0);
+  assert.equal(sql.Transaction.prototype.commit.mock.callCount(), commits);
+  assert.equal(sql.Transaction.prototype.rollback.mock.callCount(), rollbacks + 1);
+});
+
+test("minutos calculados permite cero y usa la transaccion del llamador", async () => {
+  respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, PeriodoId: 2, ColaboradorId: 8, MinutosCalculados: 60, MinutosAjustados: null }]);
+  respond(/FROM dbo.PeriodosPlanilla/, [{ Estado: "ABIERTO" }]);
+  respond(/SET MinutosCalculados = @Minutos/, [{ AsistenciaId: 1, MinutosCalculados: 0, MinutosAjustados: null }]);
+  respond(/INSERT INTO dbo.Bitacora/);
+  const transaction = new sql.Transaction(pool);
+  const commits = sql.Transaction.prototype.commit.mock.callCount();
+  const result = await asistencias.actualizarMinutosCalculados(1, 0, transaction, { UsuarioId: 2, ColaboradorId: 8 });
+  assert.equal(result.MinutosCalculados, 0);
+  assert.equal(sql.Transaction.prototype.commit.mock.callCount(), commits);
+});
+
+test("ajustar minutos revierte ante periodo cerrado o plazo vencido", async () => {
   for (const periodo of [
     { Estado: "CERRADO", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") },
     { Estado: "ABIERTO", FechaLimiteAjustes: new Date("2000-12-31T00:00:00Z") },
   ]) {
-    respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, PeriodoId: 2 }]);
+    respond(/FROM Usuarios/, [{ RestauranteId: 3 }]);
+    respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, PeriodoId: 2, RestauranteId: 3 }]);
     respond(/FROM dbo.PeriodosPlanilla/, [periodo]);
     const rollbacks = sql.Transaction.prototype.rollback.mock.callCount();
-    await assert.rejects(asistencias.actualizarMinutosAsistencia(1, 60, "Ajustados", "Corrección", { UsuarioId: 1, Rol: "ADMINISTRADOR" }), { status: 409 });
+    await assert.rejects(asistencias.ajustarMinutosAsistencia(1, 60, "Correccion", { UsuarioId: 1, Rol: "GERENTE" }), { status: 409 });
     assert.equal(sql.Transaction.prototype.rollback.mock.callCount(), rollbacks + 1);
   }
 });
@@ -105,6 +176,7 @@ test("asistencias requiere filtros y restaurante explícito para administración
 test("asistencias de restaurante rechaza usuario ausente y rol colaborador", async () => {
   for (const [usuario, status] of [
     [undefined, 401],
+    [null, 401],
     [{ UsuarioId: 1, Rol: "COLABORADOR" }, 403],
   ]) {
     await assert.rejects(

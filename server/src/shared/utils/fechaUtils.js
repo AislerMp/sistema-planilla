@@ -1,5 +1,5 @@
 // Obtiene el día y la hora actuales de Costa Rica.
-export function obtenerCalendarioActual() {
+export function obtenerCalendarioActual(instante = new Date()) {
   const partes = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Costa_Rica",
     year: "numeric",
@@ -7,7 +7,7 @@ export function obtenerCalendarioActual() {
     day: "2-digit",
     hour: "2-digit",
     hourCycle: "h23",
-  }).formatToParts(new Date());
+  }).formatToParts(instante);
 
   const anio = partes.find((parte) => parte.type === "year").value;
   const mes = partes.find((parte) => parte.type === "month").value;
