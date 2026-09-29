@@ -9,11 +9,18 @@ function ensureApiUrl() {
   }
 }
 
-// fechaAsignada usa el formato YYYY-MM-DD.
-export async function getMisMarcas(fechaAsignada) {
+// Limites opcionales e inclusivos (YYYY-MM-DD); sin filtros devuelve todo el historial.
+export async function getMisMarcas({ desde, hasta } = {}) {
   ensureApiUrl();
-  const params = new URLSearchParams({ fechaAsignada });
-  const response = await fetch(`${endpoint}/mis-marcas?${params}`, {
+  
+  const params = new URLSearchParams();
+  for (const [campo, valor] of Object.entries({ desde, hasta })) {
+    if (valor !== undefined && valor !== null && valor !== "") {
+      params.set(campo, valor);
+    }
+  }
+  const query = params.toString();
+  const response = await fetch(`${endpoint}/mis-marcas${query ? `?${query}` : ""}`, {
     method: "GET",
     credentials: "include",
   });

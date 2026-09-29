@@ -53,15 +53,47 @@ function respond(pattern, records = [], affected = 1) {
 test("consulta marcas propias usa el colaborador autenticado y permite días vacíos", async () => {
   respond(/FROM dbo.MarcasAsistencia/, []);
   assert.deepEqual(await marcas.consultarMisMarcas(
-    { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" }, "2026-09-21",
+    { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" }, { desde: "2026-09-21", hasta: "2026-09-25" },
   ), []);
   assert.equal(calls[0].parameters.colaboradorId.value, 8);
+  assert.equal(calls[0].parameters.desde.value.toISOString().slice(0, 10), "2026-09-21");
+  assert.equal(calls[0].parameters.hasta.value.toISOString().slice(0, 10), "2026-09-25");
+  assert.match(calls[0].query, /@desde IS NULL OR FechaAsignada >= @desde/);
+  assert.match(calls[0].query, /@hasta IS NULL OR FechaAsignada <= @hasta/);
+});
+
+test("mis marcas devuelve el historial completo con orden descendente sin fecha", async () => {
+  const historial = [
+    { MarcaId: 12, ColaboradorId: 8, FechaAsignada: "2026-09-25" },
+    { MarcaId: 11, ColaboradorId: 8, FechaAsignada: "2026-09-24" },
+  ];
+  respond(/FROM dbo.MarcasAsistencia/, historial);
+  assert.deepEqual(await marcas.consultarMisMarcas(
+    { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" },
+  ), historial);
+  assert.equal(calls[0].parameters.colaboradorId.value, 8);
+  assert.equal(calls[0].parameters.desde.value, null);
+  assert.equal(calls[0].parameters.hasta.value, null);
+  assert.match(calls[0].query, /WHERE ColaboradorId = @colaboradorId/);
+  assert.match(calls[0].query, /ORDER BY FechaAsignada DESC, FechaHoraEntrada DESC, MarcaId DESC/);
+  assert.doesNotMatch(calls[0].query, /TOP\s*\(/i);
+});
+
+test("mis marcas permite limpiar el filtro y devuelve una lista vacia sin registros", async () => {
+  for (const fecha of [undefined, null, ""]) {
+    respond(/FROM dbo.MarcasAsistencia/, []);
+    assert.deepEqual(await marcas.consultarMisMarcas(
+      { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" }, { desde: fecha, hasta: fecha },
+    ), []);
+    assert.equal(calls.at(-1).parameters.desde.value, null);
+    assert.equal(calls.at(-1).parameters.hasta.value, null);
+  }
 });
 
 test("consulta marcas valida sesión, roles y fecha antes de consultar", async () => {
-  await assert.rejects(marcas.consultarMisMarcas(null, "2026-09-21"), { status: 401 });
-  await assert.rejects(marcas.consultarMisMarcas({ UsuarioId: 1, Rol: "GERENTE" }, "2026-09-21"), { status: 403 });
-  await assert.rejects(marcas.consultarMisMarcas({ UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" }, "2026-02-30"), { status: 400 });
+  await assert.rejects(marcas.consultarMisMarcas(null), { status: 401 });
+  await assert.rejects(marcas.consultarMisMarcas({ UsuarioId: 1, Rol: "GERENTE" }), { status: 403 });
+  await assert.rejects(marcas.consultarMisMarcas({ UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" }, { desde: "2026-02-30" }), { status: 400 });
   await assert.rejects(marcas.consultarMarcasColaborador({ UsuarioId: 1, Rol: "COLABORADOR" }, 8, "2026-09-21"), { status: 403 });
 });
 
@@ -215,6 +247,22 @@ function activeReferences() {
   respond(/FROM Restaurantes WHERE RestauranteId = @id/, [{ RestauranteId: 1, Activo: true }]);
   respond(/FROM Puestos WHERE PuestoId = @id/, [{ PuestoId: 2, Activo: true }]);
 }
+
+test("asistencias consulta periodo completo sin fechas nulas y semana dentro del periodo", async () => {
+  const usuario = { UsuarioId: 1, Rol: "ADMINISTRADOR" };
+  for (const filtros of [
+    { periodoId: 12 },
+    { periodoId: 12, desde: "2026-08-24", hasta: "2026-08-30" },
+  ]) {
+    respond(/FROM dbo.AsistenciasDiarias AS a/, [{ AsistenciaId: 7 }]);
+    assert.deepEqual(await asistencias.listarAsistenciasPorRestaurante(usuario, 3, filtros), [{ AsistenciaId: 7 }]);
+    assert.equal(calls.at(-1).parameters.PeriodoId.value, 12);
+    assert.equal(calls.at(-1).parameters.Desde.value?.toISOString().slice(0, 10) ?? null, filtros.desde ?? null);
+    assert.equal(calls.at(-1).parameters.Hasta.value?.toISOString().slice(0, 10) ?? null, filtros.hasta ?? null);
+  }
+  respond(/FROM dbo.AsistenciasDiarias AS a/, [{ AsistenciaId: 8 }]);
+  assert.deepEqual(await asistencias.listarAsistenciasPorColaborador(8, { periodoId: 12 }), [{ AsistenciaId: 8 }]);
+});
 const colaborador = {
   identificacion: "123456789", correo: "persona@example.com", nombre: "Ana", apellido: "Mora",
   fechaIngreso: "2026-01-10", restauranteId: 1, puestoId: 2,
@@ -530,4 +578,32 @@ test("los servicios propagan errores de lectura sin transformarlos", async () =>
     expected.push({ pattern: new RegExp(`FROM ${table}`), error });
     await assert.rejects(read(1), (received) => received === error);
   }
+});
+
+
+test("mis marcas admite limites independientes y el mismo dia", async () => {
+  const usuario = { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" };
+  for (const filtros of [
+    { desde: "2026-09-21" },
+    { hasta: "2026-09-25" },
+    { desde: "2026-09-25", hasta: "2026-09-25" },
+  ]) {
+    respond(/FROM dbo.MarcasAsistencia/, []);
+    assert.deepEqual(await marcas.consultarMisMarcas(usuario, filtros), []);
+    for (const campo of ["desde", "hasta"]) {
+      assert.equal(calls.at(-1).parameters[campo].value?.toISOString().slice(0, 10) ?? null, filtros[campo] ?? null);
+    }
+  }
+});
+
+test("mis marcas rechaza rangos invertidos y fechas invalidas antes de consultar", async () => {
+  const usuario = { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" };
+  for (const filtros of [
+    { desde: "2026-09-25", hasta: "2026-09-21" },
+    { hasta: "2026-02-30" },
+    { desde: "incorrecta" },
+  ]) {
+    await assert.rejects(marcas.consultarMisMarcas(usuario, filtros), { status: 400 });
+  }
+  assert.equal(calls.length, 0);
 });

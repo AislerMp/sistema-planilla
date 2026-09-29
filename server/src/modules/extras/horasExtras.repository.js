@@ -12,7 +12,8 @@ export async function getHorasExtrasByAsistencia(
       SELECT
         HoraExtraId,
         AsistenciaId,
-        MinutosDetectados
+        MinutosDetectados,
+        MinutosAjustados
       FROM dbo.HorasExtras
       WHERE AsistenciaId = @asistenciaId;
     `);
@@ -32,6 +33,7 @@ export async function createHorasExtras(datos, transaction = null) {
         INSERTED.HoraExtraId,
         INSERTED.AsistenciaId,
         INSERTED.MinutosDetectados
+        INSERTED.MinutosAjustados
       VALUES (
         @asistenciaId,
         @minutosDetectados
@@ -55,8 +57,33 @@ export async function updateMinutosExtras(
         INSERTED.HoraExtraId,
         INSERTED.AsistenciaId,
         INSERTED.MinutosDetectados
+        INSERTED.MinutosAjustados
       WHERE AsistenciaId = @asistenciaId;
     `);
+  return result.recordset[0] ?? null;
+}
+
+export async function updateMinutosExtrasAjustados(
+  asistenciaId,
+  minutosAjustados,
+  transaction = null,
+) {
+  const request = await createRequest(transaction);
+
+  const result = await request
+    .input("asistenciaId", sql.Int, asistenciaId)
+    .input("minutosAjustados", sql.Int, minutosAjustados)
+    .query(`
+      UPDATE dbo.HorasExtras
+      SET MinutosAjustados = @minutosAjustados
+      OUTPUT
+        INSERTED.HoraExtraId,
+        INSERTED.AsistenciaId,
+        INSERTED.MinutosDetectados,
+        INSERTED.MinutosAjustados
+      WHERE AsistenciaId = @asistenciaId;
+    `);
+
   return result.recordset[0] ?? null;
 }
 

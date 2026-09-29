@@ -1,3 +1,5 @@
+import { validateDate } from "./serviceUtils.js";
+
 // Obtiene el día y la hora actuales de Costa Rica.
 export function obtenerCalendarioActual(instante = new Date()) {
   const partes = new Intl.DateTimeFormat("en-US", {
@@ -40,4 +42,16 @@ export function obtenerCalendarioActual(instante = new Date()) {
 // Requiere options.useUTC: true en la conexión.
 export function fechaSQLComoTexto(fecha) {
   return fecha.toISOString().slice(0, 10);
+}
+
+export function obtenerRangoSemanaActual() {
+  const { fechaAsignada } = obtenerCalendarioActual();
+  const hasta = validateDate(fechaAsignada, "Fecha hasta");
+  const desde = new Date(`${fechaAsignada}T00:00:00.000Z`);
+  const diaSemana = desde.getUTCDay();
+  const diasDesdeLunes = diaSemana === 0 ? 6 : diaSemana - 1;
+
+  desde.setUTCDate(desde.getUTCDate() - diasDesdeLunes);
+
+  return { desde, hasta };
 }

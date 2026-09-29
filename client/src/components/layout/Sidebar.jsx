@@ -37,7 +37,7 @@ export default function Sidebar({ isOpen, onNavigate }) {
         {visibleItems.length > 0 && (
           <>
             <p className="sidebar-section">
-              {user?.Rol === "GERENTE" ? "MI RESTAURANTE" : "ADMINISTRACIÓN"}
+              {user?.Rol === "COLABORADOR" ? "MI JORNADA" : user?.Rol === "GERENTE" ? "MI RESTAURANTE" : "ADMINISTRACIÓN"}
             </p>
             <div className="sidebar-links">
               {visibleItems.map((item) => {

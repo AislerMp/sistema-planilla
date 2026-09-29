@@ -44,6 +44,33 @@ export async function getMarcasByFechaAndColaborador(
   return result.recordset;
 }
 
+export async function getMarcasByColaborador(
+  colaboradorId,
+  { desde = null, hasta = null } = {},
+  transaction = null,
+) {
+  const request = await createRequest(transaction);
+  const result = await request
+    .input("colaboradorId", sql.Int, colaboradorId)
+    .input("desde", sql.Date, desde)
+    .input("hasta", sql.Date, hasta).query(`
+      SELECT
+        MarcaId,
+        ColaboradorId,
+        FechaAsignada,
+        NumeroIntervalo,
+        FechaHoraEntrada,
+        FechaHoraSalida
+      FROM dbo.MarcasAsistencia
+      WHERE ColaboradorId = @colaboradorId
+        AND (@desde IS NULL OR FechaAsignada >= @desde)
+        AND (@hasta IS NULL OR FechaAsignada <= @hasta)
+      ORDER BY FechaAsignada DESC, FechaHoraEntrada DESC, MarcaId DESC;
+    `);
+
+  return result.recordset;
+}
+
 export async function getLastMarca(colaboradorId, transaction = null) {
   const request = await createRequest(transaction);
 

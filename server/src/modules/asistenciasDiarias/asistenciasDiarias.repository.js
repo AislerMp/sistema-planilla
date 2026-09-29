@@ -98,24 +98,59 @@ export async function getAsistenciasByColaborador(
     .input("Hasta", sql.Date, hasta)
     .input("PeriodoId", sql.Int, periodoId).query(`
       SELECT
-        AsistenciaId,
-        ColaboradorId,
-        RestauranteId,
-        PeriodoId,
-        FechaAsignada,
-        MinutosCalculados,
-        MinutosAjustados,
+        a.AsistenciaId,
+        a.FechaAsignada,
+
+        a.RestauranteId,
+        r.Nombre AS Restaurante,
+
+        a.ColaboradorId,
+        c.Nombres,
+        c.Apellidos,
+        c.Identificacion,
+
+        p.TarifaHora,
+
+        a.PeriodoId,
+        pp.FechaInicio AS FechaInicioPeriodo,
+        pp.FechaFin AS FechaFinPeriodo,
+        pp.Estado AS EstadoPeriodo,
+        pp.FechaLimiteAjustes,
+
         COALESCE(
-          MinutosAjustados,
-          MinutosCalculados
+            a.MinutosAjustados,
+            a.MinutosCalculados
         ) AS MinutosEfectivos,
-        FechaCreacion
-      FROM dbo.AsistenciasDiarias
-      WHERE ColaboradorId = @ColaboradorId
-      AND (@Desde IS NULL OR FechaAsignada >= @Desde)
-      AND (@Hasta IS NULL OR FechaAsignada <= @Hasta)
-      AND (@PeriodoId IS NULL OR PeriodoId = @PeriodoId)
-      ORDER BY FechaAsignada DESC;
+
+        COALESCE(
+            h.MinutosAjustados,
+            h.MinutosDetectados,
+            0
+        ) AS MinutosExtras
+
+      FROM dbo.AsistenciasDiarias AS a
+
+      INNER JOIN dbo.Colaboradores AS c
+          ON c.ColaboradorId = a.ColaboradorId
+
+      INNER JOIN dbo.Restaurantes AS r
+          ON r.RestauranteId = a.RestauranteId
+
+      INNER JOIN dbo.Puestos AS p
+          ON p.PuestoId = c.PuestoId
+
+      INNER JOIN dbo.PeriodosPlanilla AS pp
+          ON pp.PeriodoId = a.PeriodoId
+
+      LEFT JOIN dbo.HorasExtras AS h
+          ON h.AsistenciaId = a.AsistenciaId
+
+      WHERE a.ColaboradorId = @colaboradorId
+        AND (@desde IS NULL OR a.FechaAsignada >= @desde)
+        AND (@hasta IS NULL OR a.FechaAsignada <= @hasta)
+        AND (@periodoId IS NULL OR a.PeriodoId = @periodoId)
+
+      ORDER BY a.FechaAsignada;
     `);
 
   return result.recordset ?? [];
@@ -137,30 +172,62 @@ export async function getAsistenciasByRestaurante(
     .input("PeriodoId", sql.Int, periodoId).query(`
       SELECT
         a.AsistenciaId,
+        a.FechaAsignada,
+
+        a.RestauranteId,
+        r.Nombre AS Restaurante,
+
         a.ColaboradorId,
         c.Nombres,
         c.Apellidos,
-        a.RestauranteId,
+        c.Identificacion,
+
+        p.TarifaHora,
+
         a.PeriodoId,
-        a.FechaAsignada,
-        a.MinutosCalculados,
-        a.MinutosAjustados,
+        pp.FechaInicio AS FechaInicioPeriodo,
+        pp.FechaFin AS FechaFinPeriodo,
+        pp.Estado AS EstadoPeriodo,
+        pp.FechaLimiteAjustes,
+
         COALESCE(
-          a.MinutosAjustados,
-          a.MinutosCalculados
+            a.MinutosAjustados,
+            a.MinutosCalculados
         ) AS MinutosEfectivos,
-        a.FechaCreacion
-        FROM dbo.AsistenciasDiarias AS a
-        INNER JOIN dbo.Colaboradores AS c
-        ON c.ColaboradorId = a.ColaboradorId
-        WHERE a.RestauranteId = @RestauranteId
-        AND (@Desde IS NULL OR a.FechaAsignada >= @Desde)
-        AND (@Hasta IS NULL OR a.FechaAsignada <= @Hasta)
-        AND (@PeriodoId IS NULL OR a.PeriodoId = @PeriodoId)
-        ORDER BY 
-        a.FechaAsignada DESC,
-        c.Nombres,
-        a.ColaboradorId;
+
+        COALESCE(
+            h.MinutosAjustados,
+            h.MinutosDetectados,
+            0
+        ) AS MinutosExtras
+
+      FROM dbo.AsistenciasDiarias AS a
+
+      INNER JOIN dbo.Colaboradores AS c
+          ON c.ColaboradorId = a.ColaboradorId
+
+      INNER JOIN dbo.Restaurantes AS r
+          ON r.RestauranteId = a.RestauranteId
+
+      INNER JOIN dbo.Puestos AS p
+          ON p.PuestoId = c.PuestoId
+
+      INNER JOIN dbo.PeriodosPlanilla AS pp
+          ON pp.PeriodoId = a.PeriodoId
+
+      LEFT JOIN dbo.HorasExtras AS h
+          ON h.AsistenciaId = a.AsistenciaId
+
+      WHERE a.RestauranteId = @restauranteId
+        AND (@desde IS NULL OR a.FechaAsignada >= @desde)
+        AND (@hasta IS NULL OR a.FechaAsignada <= @hasta)
+        AND (@periodoId IS NULL OR a.PeriodoId = @periodoId)
+
+      ORDER BY
+          c.Nombres,
+          c.Apellidos,
+          a.ColaboradorId,
+          a.FechaAsignada;
     `);
 
   return result.recordset;

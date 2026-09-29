@@ -734,6 +734,7 @@ label {
 
 .app-main > .page-enter {
   width: 100%;
+  min-width: 0;
   max-width: 1130px;
   margin: 0 auto;
   flex: 1;
@@ -869,6 +870,10 @@ label {
 
 .module-section {
   margin-top: 34px;
+}
+
+.module-section > .alert-message {
+  margin-top: 20px;
 }
 
 .section-heading {
@@ -1255,6 +1260,131 @@ label {
   overflow-x: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;
+}
+
+/* La tabla crece en altura y mantiene el desplazamiento horizontal dentro del panel. */
+.resumen-periodo {
+  border-left: 3px solid var(--color-primary);
+  padding: 22px 24px;
+  margin-bottom: 20px;
+}
+.resumen-periodo-encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--color-border);
+}
+.resumen-periodo-encabezado p {
+  margin: 0 0 6px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.resumen-periodo-encabezado h2 {
+  margin: 0;
+  font-size: clamp(18px, 2vw, 22px);
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+}
+.resumen-periodo-encabezado .period-status { flex-shrink: 0; padding: 5px 12px; }
+.resumen-periodo dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px 24px;
+  margin: 0;
+}
+.resumen-periodo dl > div + div { border-left: 1px solid var(--color-border); padding-left: 24px; }
+.resumen-periodo dt { color: var(--color-text-muted); font-size: 12px; margin-bottom: 6px; }
+.resumen-periodo dd { margin: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .resumen-periodo { padding: 18px; }
+  .resumen-periodo dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .resumen-periodo dl > div:first-child { grid-column: 1 / -1; }
+  .resumen-periodo dl > div + div { border-left: 0; padding-left: 0; }
+}
+@media (max-width: 480px) {
+  .resumen-periodo dl { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+}
+.asistencias-page { min-width: 0; }
+.asistencias-page .page-header { margin-bottom: 20px; }
+.asistencias-page .page-header h1 { font-size: clamp(24px, 2.4vw, 32px); margin: 6px 0 8px; }
+.asistencias-page .catalog-form { padding: 20px; margin-bottom: 20px; }
+.asistencias-page .catalog-form h2 { font-size: 18px; margin-bottom: 16px; }
+.asistencias-page .catalog-form fieldset { gap: 14px; }
+.asistencias-page .catalog-form fieldset > p { font-size: 12px; }
+.asistencias-resultados { min-width: 0; }
+.asistencias-resultados .table-toolbar {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  padding: 18px 22px;
+}
+.asistencias-resultados h2 { font-size: 18px; margin: 0 0 4px; }
+.asistencias-resultados .table-toolbar p { margin: 0; font-size: 12px; }
+.asistencias-resultados .table-toolbar strong { color: var(--color-text); }
+.tabla-asistencias-contenedor {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) var(--color-field);
+}
+.tabla-asistencias-contenedor:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+.tabla-asistencias { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
+.tabla-asistencias th, .tabla-asistencias td {
+  min-width: 112px;
+  padding: 14px 18px;
+  text-align: center;
+}
+.tabla-asistencias thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-field);
+  font-size: 12px;
+  font-weight: 600;
+}
+.tabla-asistencias th:first-child {
+  position: sticky;
+  left: 0;
+  min-width: 200px;
+  max-width: 240px;
+  white-space: normal;
+  text-align: left;
+  border-right: 1px solid var(--color-border);
+}
+.tabla-asistencias thead th:first-child { z-index: 3; }
+.tabla-asistencias tbody th {
+  z-index: 1;
+  border-top: 0;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.tabla-asistencias td { font-size: 14px; }
+.tabla-asistencias small {
+  display: block;
+  margin-top: 5px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.tabla-asistencias td:last-child { background: var(--color-field); }
+.tabla-asistencias td:last-child strong { font-weight: 700; }
+.tabla-asistencias tbody tr:hover th { background: var(--color-hover); }
+.tabla-asistencias td button {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
 }
 
 table {
@@ -1843,6 +1973,330 @@ tbody tr:hover td {
 
   .login-top .preview-label {
     font-size: 10px;
+  }
+}
+
+.period-current {
+  padding: 23px 26px;
+  margin-bottom: 32px;
+}
+
+.period-current-heading,
+.period-section-title,
+.period-section-heading,
+.period-option,
+.period-workflow-step,
+.period-dates > div {
+  display: flex;
+  align-items: center;
+}
+
+.period-current-heading,
+.period-section-heading {
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.period-section-title {
+  gap: 10px;
+  color: var(--color-primary);
+}
+
+.period-section-title h2 {
+  color: var(--color-text);
+  font-size: 17px;
+}
+
+.period-status {
+  justify-content: center;
+  min-height: 26px;
+  background: var(--color-soft);
+  color: var(--color-text-muted);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.period-status--abierto,
+.period-status--pagado {
+  background: var(--color-success-background);
+  color: var(--color-success);
+}
+
+.period-status--en_revision {
+  background: var(--color-warning-background);
+  color: var(--color-warning);
+}
+
+.period-status--cerrado {
+  background: var(--color-soft);
+  color: var(--color-text);
+}
+
+.period-current-content {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(0, 1.2fr);
+  gap: 26px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border);
+}
+
+.period-current-number {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+}
+
+.period-current-number > span,
+.period-step-number {
+  color: var(--color-text-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.period-current-number strong {
+  font-size: 27px;
+  font-weight: 600;
+}
+
+.period-current-number small {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.period-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.period-dates > div {
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  padding-left: 17px;
+  border-left: 1px solid var(--color-border);
+}
+
+.period-dates dt {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.period-dates dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.period-empty {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding-top: 20px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.period-section {
+  margin: 0 0 34px;
+}
+
+.period-section-heading {
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+
+.period-section-heading h2 {
+  margin-top: 5px;
+  font-size: 20px;
+}
+
+.period-section-heading > p {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.period-option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.period-option {
+  min-width: 0;
+  gap: 14px;
+  padding: 17px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-surface);
+  box-shadow: var(--color-shadow);
+  transition: border-color 180ms ease, transform 180ms ease;
+}
+
+.period-option:hover {
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+}
+
+.period-option-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 6px;
+  background: var(--color-soft);
+  color: var(--color-primary);
+}
+
+.period-option-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 5px;
+}
+
+.period-option-copy strong {
+  font-size: 13px;
+}
+
+.period-option-copy small {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.period-option-arrow {
+  color: var(--color-text-muted);
+}
+
+.period-workflow {
+  border-top: 1px solid var(--color-border);
+}
+
+.period-workflow-step {
+  gap: 17px;
+  min-height: 100px;
+  padding: 17px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.period-step-number {
+  align-self: flex-start;
+  padding-top: 4px;
+  color: var(--color-primary);
+}
+
+.period-step-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.period-step-copy > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 9px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.period-step-copy h3 {
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.period-step-copy p {
+  margin-top: 4px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.period-workflow-step > .button {
+  flex: 0 0 auto;
+}
+
+.period-create-form {
+  max-width: 850px;
+}
+
+.period-create-form fieldset {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.period-create-form label {
+  align-content: start;
+}
+
+.period-create-form .table-actions {
+  margin-top: 6px;
+}
+
+.table-footer > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 760px) {
+  .period-current {
+    padding: 20px;
+  }
+
+  .period-current-content {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 19px;
+  }
+
+  .period-dates > div:first-child {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .period-option-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .period-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .period-create-form fieldset {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 440px) {
+  .period-workflow-step {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px 13px;
+    padding-inline: 0;
+  }
+
+  .period-step-copy {
+    flex-basis: calc(100% - 40px);
+  }
+
+  .period-workflow-step > .button {
+    margin-left: 37px;
+  }
+
+  .period-dates {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .period-dates > div {
+    border-left: 0;
+    padding-left: 0;
   }
 }
 

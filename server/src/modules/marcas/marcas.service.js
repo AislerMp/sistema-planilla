@@ -24,16 +24,24 @@ import {
 import { sincronizarHorasExtras } from "../extras/horasExtras.service.js";
 import { beginTransaction } from "../../shared/config/database.js";
 
-export async function consultarMisMarcas(usuario, fechaAsignada) {
+export async function consultarMisMarcas(usuario, filtros = {}) {
   if (!usuario) throw serviceError("Debe iniciar sesion", 401);
   if (usuario.Rol !== "COLABORADOR") {
     throw serviceError("Esta consulta corresponde al colaborador.", 403);
   }
 
   const colaboradorId = validateId(usuario.ColaboradorId, "ColaboradorId");
-  const fecha = validateDate(fechaAsignada, "Fecha asignada");
+  let desde = validateDate(filtros.desde, "Fecha desde", true);
+  const hasta = validateDate(filtros.hasta, "Fecha hasta", true);
 
-  return marcasRepository.getMarcasByFechaAndColaborador(fecha, colaboradorId);
+  if (desde && hasta && desde > hasta) {
+    throw serviceError("La fecha desde no puede ser mayor que la fecha hasta", 400);
+  }
+
+  if(!desde && hasta)
+    desde = hasta;
+  
+  return marcasRepository.getMarcasByColaborador(colaboradorId, { desde, hasta });
 }
 
 export async function consultarMarcasColaborador(

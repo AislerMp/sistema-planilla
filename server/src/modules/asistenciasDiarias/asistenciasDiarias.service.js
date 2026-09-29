@@ -11,6 +11,7 @@ import * as periodoRepository from "../periodoPlanilla/periodosPlanillas.reposit
 import {
   obtenerCalendarioActual,
   fechaSQLComoTexto,
+  obtenerRangoSemanaActual,
 } from "../../shared/utils/fechaUtils.js";
 
 import { registrarBitacora, entidades } from "../bitacora/bitacora.service.js";
@@ -54,7 +55,7 @@ export async function listarAsistenciasPorColaborador(
   filtros = {},
 ) {
   let fechaDesde = validateDate(filtros?.desde, "Fecha desde", true);
-  const fechaHasta = validateDate(filtros?.hasta, "Fecha hasta", true);
+  let fechaHasta = validateDate(filtros?.hasta, "Fecha hasta", true);
   const periodoId = validateId(filtros?.periodoId, "periodoId", true);
   const validColaboradorId = validateId(colaboradorId);
 
@@ -65,13 +66,26 @@ export async function listarAsistenciasPorColaborador(
     );
   }
 
+  // Buscar por default la ultima semana actual
   if (!fechaDesde && !fechaHasta && !periodoId) {
-    throw serviceError("Debe aplicar al menos un filtro", 400);
+    const rango = obtenerRangoSemanaActual();
+    fechaDesde = rango.desde;
+    fechaHasta = rango.hasta;
   }
 
   // Si solo se indica fechaHasta, buscar únicamente ese día.
   if (!fechaDesde && fechaHasta) {
     fechaDesde = fechaHasta;
+  }
+
+  // Una consulta por periodo completo no necesita limites de fecha.
+  // Calcular la amplitud solo cuando ambos limites estan presentes.
+  const diasIncluidos = fechaDesde && fechaHasta
+    ? (fechaHasta.getTime() - fechaDesde.getTime()) / 86400000 + 1
+    : 0;
+
+  if (diasIncluidos > 14) {
+    throw serviceError("La consulta permite un máximo de 14 días", 400);
   }
 
   const asistenciasFiltered =
@@ -97,13 +111,8 @@ export async function listarAsistenciasPorRestaurante(
   restauranteId,
   filtros = {},
 ) {
-  if (!usuario) throw serviceError("Debe iniciar sesión", 401);
-  if (!["GERENTE", "RECURSOS_HUMANOS", "ADMINISTRADOR"].includes(usuario.Rol)) {
-    throw serviceError("No tiene permisos para consultar asistencias del restaurante", 403);
-  }
-
   let fechaDesde = validateDate(filtros?.desde, "Fecha desde", true);
-  const fechaHasta = validateDate(filtros?.hasta, "Fecha hasta", true);
+  let fechaHasta = validateDate(filtros?.hasta, "Fecha hasta", true);
   const periodoId = validateId(filtros?.periodoId, "periodoId", true);
 
   const restauranteSolicitado = validateId(
@@ -138,7 +147,19 @@ export async function listarAsistenciasPorRestaurante(
   }
 
   if (!fechaDesde && !fechaHasta && !periodoId) {
-    throw serviceError("Debe aplicar al menos un filtro", 400);
+    const rango = obtenerRangoSemanaActual();
+    fechaDesde = rango.desde;
+    fechaHasta = rango.hasta;
+  }
+
+  // Una consulta por periodo completo no necesita limites de fecha.
+  // Calcular la amplitud solo cuando ambos limites estan presentes.
+  const diasIncluidos = fechaDesde && fechaHasta
+    ? (fechaHasta.getTime() - fechaDesde.getTime()) / 86400000 + 1
+    : 0;
+
+  if (diasIncluidos > 14) {
+    throw serviceError("La consulta permite un máximo de 14 días", 400);
   }
 
   // Solo hasta significa únicamente ese día.
@@ -336,11 +357,7 @@ export async function ajustarMinutosAsistencia(
       transaction,
     );
 
-    await sincronizarHorasExtras(
-      asistenciaActualizada,
-      actorId,
-      transaction,
-    );
+    await sincronizarHorasExtras(asistenciaActualizada, actorId, transaction);
 
     await transaction.commit();
 

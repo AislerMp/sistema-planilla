@@ -3,7 +3,7 @@ import * as marcasServices from "./marcas.service.js";
 export async function getMisMarcasController(req, res) {
   const marcas = await marcasServices.consultarMisMarcas(
     req.user,
-    req.query.fechaAsignada,
+    { desde: req.query.desde, hasta: req.query.hasta },
   );
   return res.status(200).json(marcas);
 }

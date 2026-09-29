@@ -70,6 +70,42 @@ async function request(method, path, body) {
   return { status: response.status, body: await response.json() };
 }
 
+const periodReads = [
+  "/periodos-planilla",
+  "/periodos-planilla/actual",
+  "/periodos-planilla/por-fecha?fechaAsignada=2026-08-17",
+  "/periodos-planilla/7",
+];
+
+test("periodos requiere autenticacion para consultar", async () => {
+  for (const path of periodReads) {
+    assert.equal((await request("GET", path)).status, 401, path);
+  }
+  assert.deepEqual(calls, []);
+});
+
+for (const rol of ["COLABORADOR", "GERENTE", "RECURSOS_HUMANOS", "ADMINISTRADOR"]) {
+  test(`periodos permite consultar a ${rol}`, async () => {
+    identity = { UsuarioId: 3, Rol: rol };
+    const periodo = { PeriodoId: 7, FechaInicio: "2026-08-16", FechaFin: "2026-08-31" };
+    for (const path of periodReads) {
+      expected.push({ pattern: /FROM dbo.PeriodosPlanilla/, records: [periodo] });
+      const response = await request("GET", path);
+      assert.equal(response.status, 200, path);
+      assert.deepEqual(response.body, path === "/periodos-planilla" ? [periodo] : periodo);
+    }
+  });
+}
+
+test("periodos impide crear o cambiar estado a colaboradores y gerentes", async () => {
+  for (const rol of ["COLABORADOR", "GERENTE"]) {
+    identity = { UsuarioId: 3, Rol: rol };
+    assert.equal((await request("POST", "/periodos-planilla", {})).status, 403, rol);
+    assert.equal((await request("PATCH", "/periodos-planilla/7/estado", { estado: "CERRADO" })).status, 403, rol);
+  }
+  assert.deepEqual(calls, []);
+});
+
 const reads = [
   ["/colaboradores", "Colaboradores"], ["/colaboradores/7", "Colaboradores", "id"],
   ["/puestos", "Puestos"], ["/puestos/7", "Puestos", "id"],

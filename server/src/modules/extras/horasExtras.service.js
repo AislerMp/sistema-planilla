@@ -11,6 +11,7 @@ import {
   getRestaurantePermitido,
   getColaborador,
 } from "../colaboradores/colaboradores.service.js";
+import * as periodoRepository from "../periodoPlanilla/periodosPlanillas.repository.js";
 
 import {
   obtenerCalendarioActual,
@@ -108,61 +109,152 @@ export async function insertarHorasExtra(
 }
 
 export async function actualizarHorasExtra(
-  id,
-  minutosDetectados,
-  usuarioActorId,
+  idAsistencia,
+  minutosAjustados,
+  motivo,
+  usuario,
 ) {
-  const asistenciaId = validateId(id);
-  const minutos = validarMinutosDetectados(minutosDetectados);
-  const actorId = validateId(usuarioActorId, "usuarioActorId");
+  if (usuario.Rol !== "GERENTE") {
+    throw serviceError("Solo el gerente puede ajustar las horas extras", 403);
+  }
+
+  const asistenciaId = validateId(idAsistencia, "AsistenciaId");
+  const actorId = validateId(usuario.UsuarioId, "UsuarioId");
+
+  validarMinutosDetectados(minutosAjustados);
+
+  const motivoValidado = validateText(motivo, "Motivo", 500, true);
+
+  const restaurantePermitido = validateId(
+    await getRestaurantePermitido(usuario),
+    "Restaurante asignado",
+  );
 
   const transaction = await beginTransaction();
+
   try {
-    const horasExtrasAnteriores =
+    // 1. Buscar la asistencia y comprobar el restaurante.
+    const asistencia = await asistenciasRepository.getAsistenciaById(
+      asistenciaId,
+      transaction,
+    );
+
+    if (!asistencia) {
+      throw serviceError("La asistencia diaria no existe", 404);
+    }
+
+    if (asistencia.RestauranteId !== restaurantePermitido) {
+      throw serviceError(
+        "Solo podés ajustar las horas extras de tu restaurante",
+        403,
+      );
+    }
+
+    // 2. Comprobar que el período permita ajustes.
+    const periodo = await periodoRepository.getPeriodoById(
+      asistencia.PeriodoId,
+      transaction,
+    );
+
+    if (!periodo) {
+      throw serviceError("El período de planilla no existe", 404);
+    }
+
+    if (!["ABIERTO", "EN_REVISION"].includes(periodo.Estado)) {
+      throw serviceError(
+        "El período está cerrado o pagado y no permite ajustes",
+        409,
+      );
+    }
+
+    const { fechaHoy } = obtenerCalendarioActual();
+    const fechaLimite = fechaSQLComoTexto(periodo.FechaLimiteAjustes);
+
+    if (fechaHoy > fechaLimite) {
+      throw serviceError(
+        "El plazo para ajustar las horas de este período terminó",
+        409,
+      );
+    }
+
+    // 4. Buscar el registro de extras.
+    const registroAnterior =
       await horasExtraRepository.getHorasExtrasByAsistencia(
         asistenciaId,
         transaction,
       );
 
-    if (!horasExtrasAnteriores) {
-      throw serviceError("Horas extras no encontradas", 404);
-    }
-
-    const horasExtrasActualizadas =
-      await horasExtraRepository.updateMinutosExtras(
-        asistenciaId,
-        minutos,
+    // Si todavía no existe, crear su base automática.
+    if (!registroAnterior) {
+      const registroCreado = await horasExtraRepository.createHorasExtras(
+        {
+          asistenciaId,
+          minutosDetectados: Math.max(0, minutosEfectivos - 480),
+        },
         transaction,
       );
 
-    if (!horasExtrasActualizadas) {
-      throw serviceError("Horas extras no encontradas", 404);
+      if (!registroCreado) {
+        throw serviceError("No se pudo crear el registro de horas extras", 500);
+      }
     }
 
+    // 5. Guardar únicamente el ajuste manual.
+    const registroActualizado =
+      await horasExtraRepository.updateMinutosExtrasAjustados(
+        asistenciaId,
+        minutosAjustados,
+        transaction,
+      );
+
+    if (!registroActualizado) {
+      throw serviceError("No se pudieron ajustar las horas extras", 500);
+    }
+
+    // 6. Registrar el cambio.
     await registrarBitacora(
       {
         usuarioId: actorId,
         entidad: entidades.HORAS_EXTRAS,
-        registroId: horasExtrasAnteriores.HoraExtraId,
-        accion: "AJUSTAR_HORAS",
-        datosAnteriores: {
-          minutosDetectados: horasExtrasAnteriores.MinutosDetectados,
-        },
+        registroId: registroActualizado.HoraExtraId,
+        accion: registroAnterior ? "AJUSTAR_HORAS" : "CREAR",
+
+        datosAnteriores: registroAnterior
+          ? {
+              asistenciaId,
+              minutosDetectados: registroAnterior.MinutosDetectados,
+              minutosAjustados: registroAnterior.MinutosAjustados,
+            }
+          : null,
+
         datosNuevos: {
-          minutosDetectados: horasExtrasActualizadas.MinutosDetectados,
+          asistenciaId,
+          minutosDetectados: registroActualizado.MinutosDetectados,
+          minutosAjustados: registroActualizado.MinutosAjustados,
+          motivo: motivoValidado,
         },
       },
       transaction,
     );
 
     await transaction.commit();
-    return horasExtrasActualizadas;
+
+    return {
+      ...registroActualizado,
+      MinutosExtras:
+        registroActualizado.MinutosAjustados ??
+        registroActualizado.MinutosDetectados,
+    };
   } catch (error) {
     try {
       await transaction.rollback();
     } catch (rollbackError) {
-      console.error("No se pudo completar el rollback.", rollbackError);
+      console.error(
+        "Error al revertir el ajuste de horas extras:",
+        rollbackError,
+      );
     }
+
     throw error;
   }
 }
