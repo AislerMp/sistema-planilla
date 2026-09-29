@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import {
+  actualizarHorasExtraController,
   obtenerSolicitudController,
   listarMisSolicitudesController,
   listarSolicitudesRestauranteController,
@@ -11,6 +12,13 @@ import {
 import { permitirRoles } from "../../shared/middlewares/auth.middleware.js";
 
 const router = Router();
+
+// El ID corresponde a la asistencia, no a una solicitud de horas extras.
+router.patch(
+  "/asistencias/:id/minutos",
+  permitirRoles("GERENTE"),
+  actualizarHorasExtraController,
+);
 
 // Las rutas específicas van antes de /solicitudes/:id.
 router.get(

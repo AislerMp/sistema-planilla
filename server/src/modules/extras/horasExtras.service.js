@@ -177,6 +177,39 @@ export async function actualizarHorasExtra(
       );
     }
 
+    // Las extras son la parte del total que supera las ocho horas.
+    // Quitar extras de una jornada corta no debe convertirla en ocho horas.
+    const totalMinutos = minutosAjustados > 0
+      ? 480 + minutosAjustados
+      : Math.min(asistencia.MinutosEfectivos, 480);
+    validarMinutosDetectados(totalMinutos);
+
+    if (totalMinutos !== asistencia.MinutosEfectivos) {
+      const asistenciaActualizada = await asistenciasRepository.updateMinutosAsistencia(
+        asistenciaId, totalMinutos, "Ajustados", transaction,
+      );
+
+      if (!asistenciaActualizada) {
+        throw serviceError("No se pudo ajustar el total trabajado", 500);
+      }
+      
+      await registrarBitacora({
+        usuarioId: actorId,
+        entidad: entidades.ASISTENCIAS_DIARIAS,
+        registroId: asistenciaId,
+        accion: "AJUSTAR_HORAS",
+        datosAnteriores: {
+          minutosCalculados: asistencia.MinutosCalculados,
+          minutosAjustados: asistencia.MinutosAjustados,
+        },
+        datosNuevos: {
+          minutosCalculados: asistenciaActualizada.MinutosCalculados,
+          minutosAjustados: totalMinutos,
+          motivo: motivoValidado,
+        },
+      }, transaction);
+    }
+
     // 4. Buscar el registro de extras.
     const registroAnterior =
       await horasExtraRepository.getHorasExtrasByAsistencia(
@@ -189,7 +222,7 @@ export async function actualizarHorasExtra(
       const registroCreado = await horasExtraRepository.createHorasExtras(
         {
           asistenciaId,
-          minutosDetectados: Math.max(0, minutosEfectivos - 480),
+          minutosDetectados: Math.max(0, asistencia.MinutosEfectivos - 480),
         },
         transaction,
       );
@@ -199,7 +232,7 @@ export async function actualizarHorasExtra(
       }
     }
 
-    // 5. Guardar únicamente el ajuste manual.
+    // 5. Guardar el ajuste de extras en la misma transacción que el total.
     const registroActualizado =
       await horasExtraRepository.updateMinutosExtrasAjustados(
         asistenciaId,
@@ -241,6 +274,7 @@ export async function actualizarHorasExtra(
 
     return {
       ...registroActualizado,
+      MinutosEfectivos: totalMinutos,
       MinutosExtras:
         registroActualizado.MinutosAjustados ??
         registroActualizado.MinutosDetectados,
@@ -264,6 +298,7 @@ export async function sincronizarHorasExtras(
   asistencia,
   usuarioActorId,
   transaction,
+  restablecerAjuste = false,
 ) {
   if (!transaction) {
     throw serviceError(
@@ -300,7 +335,8 @@ export async function sincronizarHorasExtras(
   // No hubo cambios en los minutos extras.
   if (
     registroAnterior &&
-    registroAnterior.MinutosDetectados === minutosExtras
+    registroAnterior.MinutosDetectados === minutosExtras &&
+    !(restablecerAjuste && registroAnterior.MinutosAjustados != null)
   ) {
     return registroAnterior;
   }
@@ -312,6 +348,7 @@ export async function sincronizarHorasExtras(
       asistenciaId,
       minutosExtras,
       transaction,
+      restablecerAjuste,
     );
   } else {
     registroGuardado = await horasExtraRepository.createHorasExtras(
@@ -338,12 +375,14 @@ export async function sincronizarHorasExtras(
         ? {
             asistenciaId,
             minutosDetectados: registroAnterior.MinutosDetectados,
+            minutosAjustados: registroAnterior.MinutosAjustados,
           }
         : null,
 
       datosNuevos: {
         asistenciaId,
         minutosDetectados: registroGuardado.MinutosDetectados,
+        minutosAjustados: registroGuardado.MinutosAjustados,
       },
     },
     transaction,

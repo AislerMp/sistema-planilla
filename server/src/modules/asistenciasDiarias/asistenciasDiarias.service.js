@@ -357,7 +357,8 @@ export async function ajustarMinutosAsistencia(
       transaction,
     );
 
-    await sincronizarHorasExtras(asistenciaActualizada, actorId, transaction);
+    // Un nuevo total manual reemplaza la base del ajuste anterior de extras.
+    await sincronizarHorasExtras(asistenciaActualizada, actorId, transaction, true);
 
     await transaction.commit();
 

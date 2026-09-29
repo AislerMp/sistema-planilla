@@ -70,6 +70,53 @@ async function request(method, path, body) {
   return { status: response.status, body: await response.json() };
 }
 
+test("ajuste de extras exige sesion y rol gerente", async () => {
+  const path = "/extras/asistencias/7/minutos";
+  assert.equal((await request("PATCH", path, {})).status, 401);
+  for (const Rol of ["COLABORADOR", "ADMINISTRADOR", "RECURSOS_HUMANOS"]) {
+    identity = { UsuarioId: 3, Rol };
+    assert.equal((await request("PATCH", path, {})).status, 403);
+  }
+  identity = { UsuarioId: 3, Rol: "GERENTE" };
+  assert.equal((await request("PATCH", path, {})).status, 400);
+  assert.deepEqual(calls, []);
+});
+
+for (const existeRegistro of [true, false]) {
+ for (const [totalAnterior, extras, totalEsperado] of [[720, 0, 480], [720, 120, 600], [360, 0, 360], [360, 60, 540]]) {
+  test(`ajuste de extras sincroniza ${totalAnterior} minutos con ${extras} extras (registro existente: ${existeRegistro})`, async () => {
+    identity = { UsuarioId: 3, Rol: "GERENTE" };
+    const registro = { HoraExtraId: 9, AsistenciaId: 7, MinutosDetectados: Math.max(0, totalAnterior - 480), MinutosAjustados: extras };
+    expected.push(
+      { pattern: /FROM Usuarios AS u/, records: [{ RestauranteId: 2 }] },
+      { pattern: /FROM dbo.AsistenciasDiarias/, parameters: { AsistenciaId: 7 }, records: [{ AsistenciaId: 7, RestauranteId: 2, PeriodoId: 4, MinutosCalculados: totalAnterior, MinutosEfectivos: totalAnterior }] },
+      { pattern: /FROM dbo.PeriodosPlanilla/, records: [{ Estado: "ABIERTO", FechaLimiteAjustes: new Date("2099-12-31T00:00:00Z") }] },
+    );
+    if (totalAnterior !== totalEsperado) expected.push(
+      { pattern: /SET MinutosAjustados = @Minutos/, parameters: { AsistenciaId: 7, Minutos: totalEsperado }, records: [{ AsistenciaId: 7, MinutosCalculados: totalAnterior, MinutosAjustados: totalEsperado }] },
+      { pattern: /INSERT INTO dbo.Bitacora/ },
+    );
+    expected.push({ pattern: /FROM dbo.HorasExtras/, records: existeRegistro ? [registro] : [] });
+    if (!existeRegistro) expected.push({
+      pattern: /INSERT INTO dbo.HorasExtras/,
+      parameters: { asistenciaId: 7, minutosDetectados: Math.max(0, totalAnterior - 480) },
+      records: [registro],
+    });
+    expected.push(
+      { pattern: /UPDATE dbo.HorasExtras/, parameters: { asistenciaId: 7, minutosAjustados: extras }, records: [registro] },
+      { pattern: /INSERT INTO dbo.Bitacora/ },
+    );
+    const response = await request("PATCH", "/extras/asistencias/7/minutos", {
+      minutosAjustados: extras, motivo: "Correccion", usuarioId: 99,
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.horasExtras, { ...registro, MinutosExtras: extras, MinutosEfectivos: totalEsperado });
+    assert.equal(calls.at(-1).parameters.UsuarioId, 3);
+    assert.equal(JSON.parse(calls.at(-1).parameters.DatosNuevos).motivo, "Correccion");
+  });
+ }
+}
+
 const periodReads = [
   "/periodos-planilla",
   "/periodos-planilla/actual",

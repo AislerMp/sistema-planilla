@@ -32,7 +32,7 @@ export async function createHorasExtras(datos, transaction = null) {
       OUTPUT
         INSERTED.HoraExtraId,
         INSERTED.AsistenciaId,
-        INSERTED.MinutosDetectados
+        INSERTED.MinutosDetectados,
         INSERTED.MinutosAjustados
       VALUES (
         @asistenciaId,
@@ -46,17 +46,20 @@ export async function updateMinutosExtras(
   asistenciaId,
   minutosDetectados,
   transaction = null,
+  restablecerAjuste = false,
 ) {
   const request = await createRequest(transaction);
   const result = await request
     .input("asistenciaId", sql.Int, asistenciaId)
-    .input("minutosDetectados", sql.Int, minutosDetectados).query(`
+    .input("minutosDetectados", sql.Int, minutosDetectados)
+    .input("restablecerAjuste", sql.Bit, restablecerAjuste).query(`
       UPDATE dbo.HorasExtras
-      SET MinutosDetectados = @minutosDetectados
+      SET MinutosDetectados = @minutosDetectados,
+          MinutosAjustados = CASE WHEN @restablecerAjuste = 1 THEN NULL ELSE MinutosAjustados END
       OUTPUT
         INSERTED.HoraExtraId,
         INSERTED.AsistenciaId,
-        INSERTED.MinutosDetectados
+        INSERTED.MinutosDetectados,
         INSERTED.MinutosAjustados
       WHERE AsistenciaId = @asistenciaId;
     `);

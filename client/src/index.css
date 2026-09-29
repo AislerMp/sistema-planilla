@@ -1308,6 +1308,35 @@ label {
 @media (max-width: 480px) {
   .resumen-periodo dl { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 }
+.editar-horas-modal {
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 24px;
+  overflow-y: auto;
+  color: var(--color-text);
+  box-shadow: 0 24px 80px #0006;
+}
+.editar-horas-modal::backdrop { background: #080a10b3; }
+.editar-horas-encabezado { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.editar-horas-encabezado h2 { font-size: 21px; margin: 2px 0 6px; }
+.editar-horas-encabezado > button { min-width: 36px; padding: 6px; font-size: 20px; }
+.editar-horas-modal p { margin: 0; font-size: 12px; }
+.editar-horas-modal h3 { margin: 0; font-size: 14px; }
+.editar-horas-modal fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 18px; }
+.editar-horas-modal section { border-top: 1px solid var(--color-border); padding-top: 16px; }
+.editar-horas-modal form { margin-top: 20px; }
+.editar-horas-campos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.editar-horas-modal label { display: grid; gap: 6px; font-size: 11px; color: var(--color-text-muted); }
+.editar-horas-modal input, .editar-horas-modal textarea {
+  width: 100%; min-width: 0; padding: 10px;
+  border: 1px solid var(--color-border); border-radius: 6px;
+  background: var(--color-field); color: var(--color-text); font: inherit; font-size: 12px;
+}
+.editar-horas-modal textarea { resize: vertical; min-height: 64px; }
+.editar-horas-modal .table-actions { justify-content: flex-end; margin: 0; }
+.editar-horas-modal .alert-message { margin: 0; }
+.tabla-asistencias td button:hover { background: var(--color-soft); }
 .asistencias-page { min-width: 0; }
 .asistencias-page .page-header { margin-bottom: 20px; }
 .asistencias-page .page-header h1 { font-size: clamp(24px, 2.4vw, 32px); margin: 6px 0 8px; }

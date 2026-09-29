@@ -78,7 +78,20 @@ export async function resolverSolicitud(id, { estado, minutosAutorizados, observ
   return parseResponse(response);
 }
 
+// idAsistencia identifica la jornada cuyas horas extras se ajustan.
+export async function actualizarHorasExtra(idAsistencia, { minutosAjustados, motivo }) {
+  ensureApiUrl();
+  const response = await fetch(`${API_URL}/extras/asistencias/${idAsistencia}/minutos`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ minutosAjustados, motivo }),
+  });
+  return parseResponse(response);
+}
+
 export default {
+  actualizarHorasExtra,
   getSolicitud,
   getMisSolicitudes,
   getSolicitudesPorRestaurante,

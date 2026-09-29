@@ -1,10 +1,26 @@
 import {
+  actualizarHorasExtra,
   getSolicitudById,
   getSolicitudesByColaborador,
   getSolicitudesByRestaurante,
   crearSolicitudHorasExtras,
   resolverSolicitudHorasExtras,
 } from "./horasExtras.service.js";
+
+export async function actualizarHorasExtraController(req, res) {
+  const { minutosAjustados, motivo } = req.body ?? {};
+  const horasExtras = await actualizarHorasExtra(
+    req.params.id,
+    minutosAjustados,
+    motivo,
+    req.user,
+  );
+
+  return res.status(200).json({
+    message: "Horas extras ajustadas correctamente.",
+    horasExtras,
+  });
+}
 
 export async function obtenerSolicitudController(req, res) {
   const solicitud = await getSolicitudById(req.params.id, req.user);

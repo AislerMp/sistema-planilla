@@ -16,6 +16,7 @@ const roles = await import("../src/modules/roles/roles.service.js");
 const ubicaciones = await import("../src/modules/ubicaciones/ubicaciones.service.js");
 const asistencias = await import("../src/modules/asistenciasDiarias/asistenciasDiarias.service.js");
 const marcas = await import("../src/modules/marcas/marcas.service.js");
+const { obtenerCalendarioActual } = await import("../src/shared/utils/fechaUtils.js");
 
 let expected;
 let calls;
@@ -48,6 +49,54 @@ afterEach(() => assert.equal(expected.length, 0, "Faltaron consultas esperadas")
 
 function respond(pattern, records = [], affected = 1) {
   expected.push({ pattern, records, affected });
+}
+
+test("corte de marcas conserva el 28 hasta las 03:59:59 de Costa Rica", () => {
+  for (const [instante, fechaAsignada] of [
+    ["2026-09-29T06:00:00Z", "2026-09-28"],
+    ["2026-09-29T09:59:59Z", "2026-09-28"],
+    ["2026-09-29T10:00:00Z", "2026-09-29"],
+  ]) {
+    assert.equal(obtenerCalendarioActual(new Date(instante)).fechaAsignada, fechaAsignada);
+  }
+});
+
+for (const extrasExistentes of [false, true]) {
+  test(`salida de madrugada conserva fecha y guarda extras (existentes: ${extrasExistentes})`, async (t) => {
+    const salida = new Date("2026-09-29T08:00:00Z"); // 02:00 en Costa Rica.
+    t.mock.timers.enable({ apis: ["Date"], now: salida });
+    const commit = t.mock.method(sql.Transaction.prototype, "commit", async () => {});
+    const rollback = t.mock.method(sql.Transaction.prototype, "rollback", async () => {});
+    const marca = {
+      MarcaId: 10, ColaboradorId: 8, NumeroIntervalo: 2,
+      FechaAsignada: new Date("2026-09-28T00:00:00Z"),
+      FechaHoraEntrada: new Date("2026-09-28T23:32:00Z"),
+    };
+    const asistencia = { AsistenciaId: 4, ColaboradorId: 8, PeriodoId: 2, MinutosCalculados: 240, MinutosAjustados: null };
+    const actualizada = { ...asistencia, MinutosCalculados: 748 };
+    respond(/FROM Colaboradores/, [{ ColaboradorId: 8, Activo: true }]);
+    respond(/FROM dbo.PeriodosPlanilla/, [{ PeriodoId: 2, Estado: "ABIERTO" }]);
+    respond(/FROM dbo.MarcasAsistencia/, [marca]);
+    respond(/FROM dbo.AsistenciasDiarias/, [asistencia]);
+    respond(/UPDATE dbo.MarcasAsistencia/, [{ ...marca, FechaHoraSalida: salida }]);
+    respond(/FROM dbo.AsistenciasDiarias/, [asistencia]);
+    respond(/FROM dbo.PeriodosPlanilla/, [{ PeriodoId: 2, Estado: "ABIERTO" }]);
+    respond(/UPDATE dbo.AsistenciasDiarias/, [actualizada]);
+    respond(/INSERT INTO dbo.Bitacora/);
+    respond(/FROM dbo.HorasExtras/, extrasExistentes ? [{ HoraExtraId: 5, MinutosDetectados: 0 }] : []);
+    // Comprueba también la separación de columnas que SQL Server requiere en OUTPUT.
+    respond(/(?:INSERT INTO|UPDATE) dbo.HorasExtras[\s\S]*INSERTED.MinutosDetectados,\s*INSERTED.MinutosAjustados/,
+      [{ HoraExtraId: 5, AsistenciaId: 4, MinutosDetectados: 268 }]);
+    respond(/INSERT INTO dbo.Bitacora/);
+
+    const resultado = await marcas.registrarSalida({ UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" });
+    assert.equal(resultado.marca.FechaAsignada.toISOString().slice(0, 10), "2026-09-28");
+    assert.equal(resultado.asistencia.MinutosCalculados, 748);
+    assert.equal(calls[2].parameters.fechaAsignada.value.toISOString().slice(0, 10), "2026-09-28");
+    assert.equal(calls.at(-1).parameters.minutosDetectados.value, 268);
+    assert.equal(commit.mock.callCount(), 1);
+    assert.equal(rollback.mock.callCount(), 0);
+  });
 }
 
 test("consulta marcas propias usa el colaborador autenticado y permite días vacíos", async () => {
@@ -127,6 +176,24 @@ test("actualizar minutos rechaza valores invalidos en ambos servicios", async ()
   }
   await assert.rejects(asistencias.actualizarMinutosCalculados(1, 60, null, colaborador), { status: 500 });
 });
+
+for (const minutosDetectados of [60, 120]) {
+  test(`ajustar total a diez horas restablece extras manuales (detectados: ${minutosDetectados})`, async () => {
+    respond(/FROM Usuarios/, [{ RestauranteId: 3 }]);
+    respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, PeriodoId: 2, RestauranteId: 3, MinutosCalculados: 660, MinutosAjustados: null }]);
+    respond(/FROM dbo.PeriodosPlanilla/, [{ Estado: "EN_REVISION", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") }]);
+    respond(/SET MinutosAjustados = @Minutos/, [{ AsistenciaId: 1, MinutosCalculados: 660, MinutosAjustados: 600 }]);
+    respond(/INSERT INTO dbo.Bitacora/);
+    respond(/FROM dbo.HorasExtras/, [{ HoraExtraId: 9, AsistenciaId: 1, MinutosDetectados: minutosDetectados, MinutosAjustados: 60 }]);
+    respond(/MinutosAjustados = CASE WHEN @restablecerAjuste = 1 THEN NULL ELSE MinutosAjustados END/,
+      [{ HoraExtraId: 9, AsistenciaId: 1, MinutosDetectados: 120, MinutosAjustados: null }]);
+    respond(/INSERT INTO dbo.Bitacora/);
+    const result = await asistencias.ajustarMinutosAsistencia(1, 600, "Correccion del total", { UsuarioId: 1, Rol: "GERENTE" });
+    assert.equal(result.MinutosEfectivos, 600);
+    assert.equal(calls.at(-1).parameters.minutosDetectados.value, 120);
+    assert.equal(calls.at(-1).parameters.restablecerAjuste.value, true);
+  });
+}
 
 test("ajustar minutos permite cero y confirma la bitacora", async () => {
   respond(/FROM Usuarios/, [{ RestauranteId: 3 }]);

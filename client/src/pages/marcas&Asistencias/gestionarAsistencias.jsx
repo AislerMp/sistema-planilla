@@ -1,10 +1,13 @@
 import { useState } from "react";
 import TablaAsistencias from "../../components/TablaAsistencias.jsx";
+import EditarHorasModal from "../../components/EditarHorasModal.jsx";
 import ResumenPeriodo from "../../components/ResumenPeriodo.jsx";
+
 import { Link } from "react-router-dom";
 import { ArrowLeft, Filter, RotateCcw } from "lucide-react";
 import AlertMessage from "../../components/AlertMessage.jsx";
 import LoadingState from "../../components/loadingState.jsx";
+
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getRestaurantes } from "../../services/restaurantes.Service.js";
 import { getPeriodos } from "../../services/periodos.Service.js";
@@ -13,6 +16,8 @@ import {
   getAsistenciasPorRestaurante,
 } from "../../services/asistenciasDiarias.Service.js";
 import useAsyncRequest from "../../hooks/useAsyncRequest.js";
+import { formatDate, obtenerSemanas, etiquetaSemana } from "../../utils/fechaUtils.js";
+
 
 const emptyFilters = {
   restauranteId: null,
@@ -20,52 +25,6 @@ const emptyFilters = {
   hasta: "",
   periodoId: null,
 };
-
-function formatDate(value) {
-  const dateFormat = new Intl.DateTimeFormat("es-CR", {
-    dateStyle: "medium",
-    timeZone: "UTC",
-  });
-
-  return dateFormat.format(new Date(`${String(value).slice(0, 10)}T00:00:00Z`));
-}
-
-function obtenerSemanas(periodo) {
-  if (!periodo) return [];
-
-  const inicio = String(periodo.FechaInicio).slice(0, 10);
-  const fin = String(periodo.FechaFin).slice(0, 10);
-
-  const fecha = new Date(`${inicio}T00:00:00Z`);
-  fecha.setUTCDate(fecha.getUTCDate() + 6);
-
-  const finPrimeraSemana = fecha.toISOString().slice(0, 10);
-
-  if (finPrimeraSemana >= fin) {
-    return [{ desde: inicio, hasta: fin }];
-  }
-
-  fecha.setUTCDate(fecha.getUTCDate() + 1);
-
-  return [
-    // La más reciente primero.
-    { desde: fecha.toISOString().slice(0, 10), hasta: fin },
-    { desde: inicio, hasta: finPrimeraSemana },
-  ];
-}
-
-function etiquetaSemana({ desde, hasta }) {
-  const formato = new Intl.DateTimeFormat("es-CR", {
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  });
-
-  return formato.formatRange(
-    new Date(`${desde}T00:00:00Z`),
-    new Date(`${hasta}T00:00:00Z`),
-  );
-}
 
 export default function GestionarAsistencias() {
   const { user } = useAuth();
@@ -78,6 +37,7 @@ export default function GestionarAsistencias() {
   const [form, setForm] = useState(emptyFilters);
   const [filters, setFilters] = useState(emptyFilters);
   const [filterError, setFilterError] = useState("");
+  const [asistenciaSeleccionada, setAsistenciaSeleccionada] = useState(null);
 
   // Administracion y RR. HH. deben aplicar un restaurante antes de consultar.
   const puedeConsultar =
@@ -138,25 +98,18 @@ export default function GestionarAsistencias() {
   const semanaSeleccionada = semanas.findIndex(
     (semana) => semana.desde === form.desde && semana.hasta === form.hasta,
   );
-  const querying = puedeConsultar && isLoading;
-  const needsPeriodos = consultarPor.tipo === "Planillas";
-  
-  const catalogBlocked =
-    (puedeElegirRestaurante &&
-      (loadingRestaurantes ||
-        Boolean(errorRestaurantes) ||
-        restaurantes.length === 0)) ||
-    (needsPeriodos &&
-      (isLoadingPeriodos || Boolean(errorPeriodos) || periodos.length === 0));
+
 
   function handleFilters(e) {
     e.preventDefault();
-    if (querying || catalogBlocked) return;
+    if (isLoading) return;
     if (form.desde && form.hasta && form.desde > form.hasta) {
       setFilterError("La fecha desde no puede ser mayor que la fecha hasta.");
       return;
     }
+
     setFilterError("");
+
     if (form.desde && form.hasta) {
       const dias =
         (Date.parse(form.hasta) - Date.parse(form.desde)) / 86400000 + 1;
@@ -165,14 +118,17 @@ export default function GestionarAsistencias() {
         return;
       }
     }
+
     if (consultarPor.tipo === "Planillas" && !periodoSeleccionado) {
       setFilterError("Selecciona un periodo.");
       return;
     }
+
     if (puedeElegirRestaurante && !form.restauranteId) {
       setFilterError("Selecciona un restaurante.");
       return;
     }
+
     // En modo Fechas no enviar el periodo de una seleccion anterior.
     setFilters({
       ...form,
@@ -185,6 +141,10 @@ export default function GestionarAsistencias() {
     setForm(emptyFilters);
     setFilters({ ...emptyFilters });
     setFilterError("");
+  }
+
+  function onSeleccionarAsistencia(asistencia){
+    setAsistenciaSeleccionada(asistencia);
   }
 
   return (
@@ -218,7 +178,7 @@ export default function GestionarAsistencias() {
         </Link>
       </div>
 
-      {needsPeriodos && !isLoadingPeriodos && !errorPeriodos && (
+      {consultarPor.tipo === "Planillas" && (
         <ResumenPeriodo
           periodo={periodoSeleccionado}
           restaurante={restauranteSeleccionado}
@@ -232,9 +192,9 @@ export default function GestionarAsistencias() {
       >
         <h2 id="marks-filters-title">Filtros de asistencia</h2>
         <fieldset
-          disabled={querying}
+          disabled={isLoading}
           aria-label="Filtros de asistencia"
-          aria-busy={querying}
+          aria-busy={isLoading}
         >
           <label htmlFor="consultar">
             Consultar por
@@ -296,11 +256,7 @@ export default function GestionarAsistencias() {
                   id="periodoId"
                   name="periodoId"
                   value={form.periodoId ?? ""}
-                  disabled={
-                    isLoadingPeriodos ||
-                    Boolean(errorPeriodos) ||
-                    periodos.length === 0
-                  }
+                  disabled={isLoadingPeriodos}
                   onChange={(event) => {
                     setFilterError("");
                     setForm({
@@ -335,11 +291,7 @@ export default function GestionarAsistencias() {
                 <select
                   id="semana"
                   name="semana"
-                  disabled={
-                    !periodoSeleccionado ||
-                    isLoadingPeriodos ||
-                    Boolean(errorPeriodos)
-                  }
+                  disabled={!periodoSeleccionado}
                   value={
                     semanaSeleccionada === -1 ? "" : String(semanaSeleccionada)
                   }
@@ -385,11 +337,7 @@ export default function GestionarAsistencias() {
               <select
                 id="restauranteId"
                 value={form.restauranteId ?? ""}
-                disabled={
-                  loadingRestaurantes ||
-                  Boolean(errorRestaurantes) ||
-                  restaurantes.length === 0
-                }
+                disabled={loadingRestaurantes}
                 onChange={(event) => {
                   setFilterError("");
                   setForm({
@@ -421,44 +369,20 @@ export default function GestionarAsistencias() {
             </label>
           )}
           <p className="muted">
-            {needsPeriodos
+            {consultarPor.tipo === "Planillas"
               ? "Selecciona una semana o todo el periodo. Los cambios se consultan al aplicar los filtros."
               : "Sin fechas se consulta la semana actual. El rango incluye ambos días y permite hasta 14 días."}
           </p>
-          {puedeElegirRestaurante && loadingRestaurantes && (
-            <LoadingState entidad="restaurantes" compacto descripcion="" />
+          {errorRestaurantes && (
+            <AlertMessage title="No se pudieron cargar los restaurantes">
+              {errorRestaurantes}
+            </AlertMessage>
           )}
-          {puedeElegirRestaurante &&
-            !loadingRestaurantes &&
-            errorRestaurantes && (
-              <AlertMessage title="No se pudieron cargar los restaurantes">
-                {errorRestaurantes}
-              </AlertMessage>
-            )}
-          {puedeElegirRestaurante &&
-            !loadingRestaurantes &&
-            !errorRestaurantes &&
-            restaurantes.length === 0 && (
-              <AlertMessage type="info" title="Sin restaurantes activos">
-                No hay restaurantes disponibles para esta consulta.
-              </AlertMessage>
-            )}
-          {needsPeriodos && isLoadingPeriodos && (
-            <LoadingState entidad="periodos" compacto descripcion="" />
-          )}
-          {needsPeriodos && !isLoadingPeriodos && errorPeriodos && (
+          {consultarPor.tipo === "Planillas" && errorPeriodos && (
             <AlertMessage title="No se pudieron cargar los periodos">
               {errorPeriodos}
             </AlertMessage>
           )}
-          {needsPeriodos &&
-            !isLoadingPeriodos &&
-            !errorPeriodos &&
-            periodos.length === 0 && (
-              <AlertMessage type="info" title="Sin periodos disponibles">
-                Puedes consultar por fechas o volver a cargar el catálogo.
-              </AlertMessage>
-            )}
           {filterError && (
             <AlertMessage title="Revisa los filtros">
               {filterError}
@@ -469,10 +393,9 @@ export default function GestionarAsistencias() {
             <button
               type="submit"
               className="button button-primary"
-              disabled={catalogBlocked || querying}
             >
               <Filter size={17} aria-hidden="true" />{" "}
-              {querying ? "Consultando..." : "Aplicar filtros"}
+              {isLoading ? "Consultando..." : "Aplicar filtros"}
             </button>
             <button
               type="button"
@@ -484,12 +407,13 @@ export default function GestionarAsistencias() {
           </div>
         </fieldset>
       </form>
+
       {!puedeConsultar ? (
         <AlertMessage type="info" title="Prepara tu consulta">
           Selecciona un restaurante y aplica los filtros para consultar sus
           asistencias.
         </AlertMessage>
-      ) : querying ? (
+      ) : isLoading ? (
         <LoadingState entidad="asistencias" />
       ) : error ? (
         <>
@@ -514,6 +438,15 @@ export default function GestionarAsistencias() {
           desde={filters.desde || periodoAplicado?.FechaInicio?.slice(0, 10)}
           hasta={filters.hasta || periodoAplicado?.FechaFin?.slice(0, 10)}
           asistencias={asistenciasDiarias}
+          onSeleccionarAsistencia={isGerente ? onSeleccionarAsistencia : undefined}
+        />
+      )}
+      {asistenciaSeleccionada && (
+        <EditarHorasModal
+          key={asistenciaSeleccionada.AsistenciaId}
+          asistencia={asistenciaSeleccionada}
+          onCerrar={() => setAsistenciaSeleccionada(null)}
+          onActualizada={() => setFilters((actual) => ({ ...actual }))}
         />
       )}
     </div>
