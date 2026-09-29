@@ -46,7 +46,7 @@ export default function GestionarAsistencias() {
   const [consultarPor, setConsultarPor] = useState({
     tipo: "Fechas",
   });
-
+  
   const { data, isLoading, error } = useAsyncRequest(() => {
     if (!puedeConsultar) return Promise.resolve([]);
 

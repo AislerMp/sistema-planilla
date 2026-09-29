@@ -20,6 +20,7 @@ router.patch(
   actualizarHorasExtraController,
 );
 
+
 // Las rutas específicas van antes de /solicitudes/:id.
 router.get(
   "/solicitudes/mis-solicitudes",

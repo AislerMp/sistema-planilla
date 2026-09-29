@@ -128,22 +128,26 @@ export async function getSolicitudesByColaborador(
     .input("estado", sql.VarChar(15), estado ?? null)
     .query(`
       SELECT
-        SolicitudHoraExtraId,
-        ColaboradorId,
-        RestauranteId,
-        FechaSolicitada,
-        MinutosSolicitados,
-        Motivo,
-        Estado,
-        MinutosAutorizados,
-        RevisadoPorUsuarioId,
-        Observacion
-      FROM dbo.SolicitudesHorasExtras
-      WHERE ColaboradorId = @colaboradorId
-        AND (@desde IS NULL OR FechaSolicitada >= @desde)
-        AND (@hasta IS NULL OR FechaSolicitada <= @hasta)
-        AND (@estado IS NULL OR Estado = @estado)
-      ORDER BY FechaSolicitada DESC, SolicitudHoraExtraId DESC;
+        s.SolicitudHoraExtraId,
+        s.ColaboradorId,
+        s.RestauranteId,
+        s.FechaSolicitada,
+        s.MinutosSolicitados,
+        s.Motivo,
+        s.Estado,
+        s.MinutosAutorizados,
+        s.RevisadoPorUsuarioId,
+        s.Observacion,
+        c.Nombres,
+        c.Apellidos
+      FROM dbo.SolicitudesHorasExtras AS s
+      INNER JOIN dbo.Colaboradores AS c
+        ON c.ColaboradorId = s.ColaboradorId
+      WHERE s.ColaboradorId = @colaboradorId
+        AND (@desde IS NULL OR s.FechaSolicitada >= @desde)
+        AND (@hasta IS NULL OR s.FechaSolicitada <= @hasta)
+        AND (@estado IS NULL OR s.Estado = @estado)
+      ORDER BY s.FechaSolicitada DESC, s.SolicitudHoraExtraId DESC;
     `);
   return result.recordset;
 }

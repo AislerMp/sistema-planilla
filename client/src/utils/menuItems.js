@@ -7,10 +7,19 @@ import {
   UserRoundCog,
   CalendarDays,
   ClipboardList,
+  Clock3,
 } from "lucide-react";
 
 
 export const menuItems = [
+  {
+    title: "Solicitudes de horas extras",
+    path: "/solicitudes-horas-extras",
+    icon: Clock3,
+    description: "Consulta y seguimiento de solicitudes de horas extras.",
+    showCount: false,
+    nonPermision: [],
+  },
   {
     title: "Colaboradores",
     path: "/colaboradores",

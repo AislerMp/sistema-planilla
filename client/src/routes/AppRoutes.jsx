@@ -20,6 +20,7 @@ import CreatePeriodoPlanilla from "../pages/periodos/createPeriodoPlanilla.jsx";
 import AsistenciaMenu from "../pages/marcas&Asistencias/asistenciaMenu.jsx";
 import MisMarcas from "../pages/marcas&Asistencias/misMarcas.jsx";
 import GestionarAsistencias from "../pages/marcas&Asistencias/gestionarAsistencias.jsx";
+import SolicitudesHorasExtra from "../pages/SolicitudesHorasExtra.jsx";
 
 export default function AppRoutes({ theme, onToggleTheme }) {
   return (
@@ -65,6 +66,12 @@ export default function AppRoutes({ theme, onToggleTheme }) {
             <Route path="/asistencia" element={<AsistenciaMenu />} />
             <Route path="/asistencia/mis-marcas" element={<MisMarcas />} />
             <Route path="/asistencia/gestionar" element={<GestionarAsistencias />} />
+
+            <Route
+              path="/solicitudes-horas-extras"
+              element={<SolicitudesHorasExtra />}
+            />
+            
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Route>
