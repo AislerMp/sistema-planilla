@@ -16,6 +16,8 @@ const roles = await import("../src/modules/roles/roles.service.js");
 const ubicaciones = await import("../src/modules/ubicaciones/ubicaciones.service.js");
 const asistencias = await import("../src/modules/asistenciasDiarias/asistenciasDiarias.service.js");
 const marcas = await import("../src/modules/marcas/marcas.service.js");
+const permisos = await import("../src/modules/permisosLaborales/permisosLaborales.service.js");
+const { sincronizarHorasExtras } = await import("../src/modules/extras/horasExtras.service.js");
 const { obtenerCalendarioActual } = await import("../src/shared/utils/fechaUtils.js");
 
 let expected;
@@ -84,6 +86,8 @@ for (const extrasExistentes of [false, true]) {
     respond(/UPDATE dbo.AsistenciasDiarias/, [actualizada]);
     respond(/INSERT INTO dbo.Bitacora/);
     respond(/FROM dbo.HorasExtras/, extrasExistentes ? [{ HoraExtraId: 5, MinutosDetectados: 0 }] : []);
+    respond(/SET MinutosAjustados = @Minutos/, [{ ...actualizada, MinutosAjustados: 480 }]);
+    respond(/INSERT INTO dbo.Bitacora/);
     // Comprueba también la separación de columnas que SQL Server requiere en OUTPUT.
     respond(/(?:INSERT INTO|UPDATE) dbo.HorasExtras[\s\S]*INSERTED.MinutosDetectados,\s*INSERTED.MinutosAjustados/,
       [{ HoraExtraId: 5, AsistenciaId: 4, MinutosDetectados: 268 }]);
@@ -92,12 +96,38 @@ for (const extrasExistentes of [false, true]) {
     const resultado = await marcas.registrarSalida({ UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" });
     assert.equal(resultado.marca.FechaAsignada.toISOString().slice(0, 10), "2026-09-28");
     assert.equal(resultado.asistencia.MinutosCalculados, 748);
+    assert.equal(resultado.asistencia.MinutosAjustados, 480);
     assert.equal(calls[2].parameters.fechaAsignada.value.toISOString().slice(0, 10), "2026-09-28");
     assert.equal(calls.at(-1).parameters.minutosDetectados.value, 268);
     assert.equal(commit.mock.callCount(), 1);
     assert.equal(rollback.mock.callCount(), 0);
   });
 }
+
+test("sincronizar separa las normales aunque las extras no cambien y conserva extras al repetir", async () => {
+  const asistencia = { AsistenciaId: 4, MinutosCalculados: 600, MinutosAjustados: null };
+  const extras = { HoraExtraId: 5, AsistenciaId: 4, MinutosDetectados: 120, MinutosAjustados: null };
+  const transaction = new sql.Transaction(pool);
+  respond(/FROM dbo.HorasExtras/, [extras]);
+  respond(/SET MinutosAjustados = @Minutos/, [{ ...asistencia, MinutosAjustados: 480 }]);
+  respond(/INSERT INTO dbo.Bitacora/);
+  assert.deepEqual(await sincronizarHorasExtras(asistencia, 1, transaction), extras);
+  assert.equal(asistencia.MinutosAjustados, 480);
+  assert.equal(calls.at(-1).parameters.Minutos.value, 480);
+
+  respond(/FROM dbo.HorasExtras/, [extras]);
+  assert.deepEqual(await sincronizarHorasExtras(asistencia, 1, transaction), extras);
+  assert.equal(calls.length, 3); // La segunda sincronización solo consulta.
+
+  asistencia.MinutosCalculados = 720;
+  respond(/FROM dbo.HorasExtras/, [extras]);
+  respond(/UPDATE dbo.HorasExtras/, [{ ...extras, MinutosDetectados: 240 }]);
+  respond(/INSERT INTO dbo.Bitacora/);
+  const resultado = await sincronizarHorasExtras(asistencia, 1, transaction);
+  assert.equal(resultado.MinutosDetectados, 240);
+  assert.equal(calls.at(-1).parameters.minutosDetectados.value, 240);
+  assert.equal(asistencia.MinutosAjustados, 480);
+});
 
 test("consulta marcas propias usa el colaborador autenticado y permite días vacíos", async () => {
   respond(/FROM dbo.MarcasAsistencia/, []);
@@ -137,6 +167,45 @@ test("mis marcas permite limpiar el filtro y devuelve una lista vacia sin regist
     assert.equal(calls.at(-1).parameters.desde.value, null);
     assert.equal(calls.at(-1).parameters.hasta.value, null);
   }
+});
+
+test("permisos rechaza vencidos antes de filtrar pendientes y usa la fecha de Costa Rica", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-02T03:00:00Z") });
+  respond(/UPDATE dbo.PermisosLaborales/);
+  respond(/FROM dbo.PermisosLaborales p/, []);
+  assert.deepEqual(await permisos.listarMisPermisos(
+    { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" }, { estado: "PENDIENTE" },
+  ), []);
+  assert.equal(calls[0].parameters.fechaHoy.value, "2026-10-01");
+  assert.equal(calls[0].parameters.colaboradorId.value, 8);
+  assert.match(calls[0].query, /Estado = 'PENDIENTE' AND FechaSolicitada < @fechaHoy/);
+  assert.equal(calls[1].parameters.estado.value, "PENDIENTE");
+});
+
+test("detalle de permiso comprueba acceso antes de rechazar y devuelve el estado actualizado", async () => {
+  const usuario = { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" };
+  const permiso = { PermisoId: 7, ColaboradorId: 8, Estado: "PENDIENTE" };
+  respond(/FROM dbo.PermisosLaborales/, [{ ...permiso, ColaboradorId: 9 }]);
+  await assert.rejects(permisos.obtenerPermisoPorId(7, usuario), { status: 403 });
+  assert.equal(calls.length, 1);
+  respond(/FROM dbo.PermisosLaborales/, [permiso]);
+  respond(/UPDATE dbo.PermisosLaborales/);
+  respond(/FROM dbo.PermisosLaborales/, [{ ...permiso, Estado: "RECHAZADA" }]);
+  assert.equal((await permisos.obtenerPermisoPorId(7, usuario)).Estado, "RECHAZADA");
+  assert.equal(calls.at(-2).parameters.permisoId.value, 7);
+});
+
+test("permisos limita el rechazo automático al restaurante permitido", async () => {
+  const usuario = { UsuarioId: 1, Rol: "GERENTE" };
+  respond(/FROM Usuarios/, [{ RestauranteId: 2 }]);
+  await assert.rejects(permisos.listarPermisosPorRestaurante(usuario, 3), { status: 403 });
+  assert.equal(calls.length, 1);
+  respond(/FROM Usuarios/, [{ RestauranteId: 2 }]);
+  respond(/UPDATE dbo.PermisosLaborales/);
+  respond(/FROM dbo.PermisosLaborales AS p/, []);
+  await permisos.listarPermisosPorRestaurante(usuario, 2);
+  assert.equal(calls.at(-2).parameters.restauranteId.value, 2);
+  assert.doesNotMatch(calls.at(-1).query, /MinutosAutorizados/);
 });
 
 test("consulta marcas valida sesión, roles y fecha antes de consultar", async () => {
@@ -185,11 +254,13 @@ for (const minutosDetectados of [60, 120]) {
     respond(/SET MinutosAjustados = @Minutos/, [{ AsistenciaId: 1, MinutosCalculados: 660, MinutosAjustados: 600 }]);
     respond(/INSERT INTO dbo.Bitacora/);
     respond(/FROM dbo.HorasExtras/, [{ HoraExtraId: 9, AsistenciaId: 1, MinutosDetectados: minutosDetectados, MinutosAjustados: 60 }]);
+    respond(/SET MinutosAjustados = @Minutos/, [{ AsistenciaId: 1, MinutosCalculados: 660, MinutosAjustados: 480 }]);
+    respond(/INSERT INTO dbo.Bitacora/);
     respond(/MinutosAjustados = CASE WHEN @restablecerAjuste = 1 THEN NULL ELSE MinutosAjustados END/,
       [{ HoraExtraId: 9, AsistenciaId: 1, MinutosDetectados: 120, MinutosAjustados: null }]);
     respond(/INSERT INTO dbo.Bitacora/);
     const result = await asistencias.ajustarMinutosAsistencia(1, 600, "Correccion del total", { UsuarioId: 1, Rol: "GERENTE" });
-    assert.equal(result.MinutosEfectivos, 600);
+    assert.equal(result.MinutosEfectivos, 480);
     assert.equal(calls.at(-1).parameters.minutosDetectados.value, 120);
     assert.equal(calls.at(-1).parameters.restablecerAjuste.value, true);
   });
@@ -262,8 +333,12 @@ test("asistencias valida la fecha con un mensaje identificable", async () => {
   );
 });
 
-test("asistencias requiere filtros y restaurante explícito para administración", async () => {
-  await assert.rejects(asistencias.listarAsistenciasPorColaborador(1), { status: 400 });
+test("asistencias usa la semana actual y requiere restaurante para administración", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-29T18:00:00Z") });
+  respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1 }]);
+  assert.deepEqual(await asistencias.listarAsistenciasPorColaborador(1), [{ AsistenciaId: 1 }]);
+  assert.equal(calls[0].parameters.Desde.value.toISOString().slice(0, 10), "2026-09-28");
+  assert.equal(calls[0].parameters.Hasta.value.toISOString().slice(0, 10), "2026-09-29");
   await assert.rejects(
     asistencias.listarAsistenciasPorRestaurante(
       { UsuarioId: 1, Rol: "ADMINISTRADOR" }, null, { periodoId: 1 },
@@ -648,7 +723,7 @@ test("los servicios propagan errores de lectura sin transformarlos", async () =>
 });
 
 
-test("mis marcas admite limites independientes y el mismo dia", async () => {
+test("mis marcas admite desde y usa solo hasta como consulta de ese dia", async () => {
   const usuario = { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" };
   for (const filtros of [
     { desde: "2026-09-21" },
@@ -658,7 +733,8 @@ test("mis marcas admite limites independientes y el mismo dia", async () => {
     respond(/FROM dbo.MarcasAsistencia/, []);
     assert.deepEqual(await marcas.consultarMisMarcas(usuario, filtros), []);
     for (const campo of ["desde", "hasta"]) {
-      assert.equal(calls.at(-1).parameters[campo].value?.toISOString().slice(0, 10) ?? null, filtros[campo] ?? null);
+      const esperado = campo === "desde" ? filtros.desde ?? filtros.hasta : filtros.hasta;
+      assert.equal(calls.at(-1).parameters[campo].value?.toISOString().slice(0, 10) ?? null, esperado ?? null);
     }
   }
 });

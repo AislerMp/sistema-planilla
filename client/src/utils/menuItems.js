@@ -8,10 +8,19 @@ import {
   CalendarDays,
   ClipboardList,
   Clock3,
+  History,
 } from "lucide-react";
 
 
 export const menuItems = [
+  {
+    title: "Bitácoras",
+    path: "/bitacoras",
+    icon: History,
+    description: "Historial de acciones y cambios del sistema.",
+    showCount: false,
+    nonPermision: ["COLABORADOR", "GERENTE"],
+  },
   {
     title: "Solicitudes de horas extras",
     path: "/solicitudes-horas-extras",

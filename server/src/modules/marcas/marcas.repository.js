@@ -46,12 +46,13 @@ export async function getMarcasByFechaAndColaborador(
 
 export async function getMarcasByColaborador(
   colaboradorId,
-  { desde = null, hasta = null } = {},
+  { desde = null, hasta = null, restauranteId = null } = {},
   transaction = null,
 ) {
   const request = await createRequest(transaction);
   const result = await request
     .input("colaboradorId", sql.Int, colaboradorId)
+    .input("restauranteId", sql.Int, restauranteId)
     .input("desde", sql.Date, desde)
     .input("hasta", sql.Date, hasta).query(`
       SELECT
@@ -65,6 +66,12 @@ export async function getMarcasByColaborador(
       WHERE ColaboradorId = @colaboradorId
         AND (@desde IS NULL OR FechaAsignada >= @desde)
         AND (@hasta IS NULL OR FechaAsignada <= @hasta)
+        AND (@restauranteId IS NULL OR EXISTS (
+          SELECT 1 FROM dbo.AsistenciasDiarias AS a
+          WHERE a.ColaboradorId = dbo.MarcasAsistencia.ColaboradorId
+            AND a.FechaAsignada = dbo.MarcasAsistencia.FechaAsignada
+            AND a.RestauranteId = @restauranteId
+        ))
       ORDER BY FechaAsignada DESC, FechaHoraEntrada DESC, MarcaId DESC;
     `);
 

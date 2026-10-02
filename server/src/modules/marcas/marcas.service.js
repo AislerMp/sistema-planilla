@@ -48,22 +48,34 @@ export async function consultarMarcasColaborador(
   usuario,
   colaboradorId,
   fechaAsignada,
+  filtros = {},
 ) {
   if (!usuario) throw serviceError("Debe iniciar sesion", 401);
-  if (usuario.Rol !== "GERENTE") {
-    throw serviceError("Solo el gerente puede realizar esta consulta.", 403);
+  if (!["GERENTE", "ADMINISTRADOR", "RECURSOS_HUMANOS"].includes(usuario.Rol)) {
+    throw serviceError("No tenés permiso para consultar marcas de otros colaboradores.", 403);
   }
 
   const id = validateId(colaboradorId, "ColaboradorId");
-  const fecha = validateDate(fechaAsignada, "Fecha asignada");
+  const fecha = validateDate(fechaAsignada, "Fecha asignada", true);
+  let desde = validateDate(filtros.desde, "Fecha desde", true);
+  const hasta = validateDate(filtros.hasta, "Fecha hasta", true);
+  if (desde && hasta && desde > hasta) {
+    throw serviceError("La fecha desde no puede ser mayor que la fecha hasta", 400);
+  }
+  if (!desde && hasta) desde = hasta;
 
   const restaurantePermitido = await getRestaurantePermitido(usuario);
+  if (!fecha) {
+    return marcasRepository.getMarcasByColaborador(id, {
+      desde, hasta, restauranteId: restaurantePermitido,
+    });
+  }
   const asistencia =
     await asistenciasRepository.getAsistenciaByColaboradorYFecha(id, fecha);
 
   if (!asistencia) return [];
   // Se usa el restaurante de la jornada, incluso si hubo un traslado posterior.
-  if (asistencia.RestauranteId !== restaurantePermitido) {
+  if (restaurantePermitido !== null && asistencia.RestauranteId !== restaurantePermitido) {
     throw serviceError(
       "Solo podés consultar marcas de tu restaurante asignado.",
       403,

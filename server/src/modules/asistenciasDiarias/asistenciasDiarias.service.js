@@ -111,6 +111,10 @@ export async function listarAsistenciasPorRestaurante(
   restauranteId,
   filtros = {},
 ) {
+  if (!usuario) throw serviceError("Usuario no autenticado", 401);
+  if (!["GERENTE", "ADMINISTRADOR", "RECURSOS_HUMANOS"].includes(usuario.Rol)) {
+    throw serviceError("No tiene permisos para consultar asistencias del restaurante", 403);
+  }
   let fechaDesde = validateDate(filtros?.desde, "Fecha desde", true);
   let fechaHasta = validateDate(filtros?.hasta, "Fecha hasta", true);
   const periodoId = validateId(filtros?.periodoId, "periodoId", true);

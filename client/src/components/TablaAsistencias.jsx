@@ -1,4 +1,6 @@
 import { obtenerDiasDelRango } from "../utils/fechaUtils.js";
+import { Link } from "react-router-dom";
+import { ArrowUpRight } from "lucide-react";
 
 function agruparAsistencias(asistencias) {
   const colaboradores = {};
@@ -46,6 +48,7 @@ export default function TablaAsistencias({
   hasta,
   nombreColaborador = "Mis asistencias",
   onSeleccionarAsistencia,
+  puedeVerMarcas = false,
 }) {
   if (asistencias.length === 0) return null;
 
@@ -84,13 +87,13 @@ export default function TablaAsistencias({
 
         <tbody>
           {colaboradores.map((colaborador) => {
-            let totalMinutos = 0;
+            let totalNormales = 0;
             let totalExtras = 0;
 
             for (const fecha of dias) {
               const asistencia = colaborador.dias[fecha];
 
-              totalMinutos += asistencia?.MinutosEfectivos ?? 0;
+              totalNormales += asistencia?.MinutosEfectivos ?? 0;
               totalExtras += asistencia?.MinutosExtras ?? 0;
             }
 
@@ -104,7 +107,16 @@ export default function TablaAsistencias({
             return (
               <tr key={colaborador.colaboradorId}>
                 <th scope="row">
-                  {nombre}
+                  {puedeVerMarcas ? (
+                    <Link
+                      className="colaborador-marcas-link"
+                      to={`/asistencia/colaborador/${colaborador.colaboradorId}/marcas`}
+                      state={{ nombre }}
+                      aria-label={`Consultar marcas de ${nombre}`}
+                    >
+                      {nombre} <ArrowUpRight size={16} aria-hidden="true" />
+                    </Link>
+                  ) : nombre}
                   <small>{colaborador.identificacion}</small>
                 </th>
                 {dias.map((fecha) => {
@@ -117,7 +129,7 @@ export default function TablaAsistencias({
                   const contenido = (
                     <>
                       <span>
-                        {mostrarHoras(asistencia.MinutosEfectivos ?? 0)}
+                       {mostrarHoras(asistencia.MinutosEfectivos ?? 0)}
                       </span>
 
                       <small>
@@ -146,7 +158,7 @@ export default function TablaAsistencias({
                 })}
 
                 <td>
-                  <strong>{mostrarHoras(totalMinutos)}</strong>
+                  <strong>Total: {mostrarHoras(totalNormales)}</strong>
                   <small>Extras: {mostrarHoras(totalExtras)}</small>
                 </td>
               </tr>

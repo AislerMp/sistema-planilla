@@ -12,6 +12,7 @@ import periodosPlanillasRoutes from "./modules/periodoPlanilla/periodosPlanillas
 import asistenciasDiariasRoutes from "./modules/asistenciasDiarias/asistenciasDiarias.routes.js";
 import marcasRoutes from "./modules/marcas/marcas.routes.js";
 import horasExtrasRoutes from "./modules/extras/horasExtras.routes.js";
+import bitacoraRoutes from "./modules/bitacora/bitacora.routes.js";
 import { isAuthenticate } from "./shared/middlewares/auth.middleware.js";
 import { errorHandler } from "./shared/middlewares/error.middleware.js";
 
@@ -54,6 +55,7 @@ app.use("/api/periodos-planilla", periodosPlanillasRoutes);
 app.use("/api/AsistenciasDiarias", asistenciasDiariasRoutes);
 app.use("/api/marcas", marcasRoutes);
 app.use("/api/extras", horasExtrasRoutes);
+app.use("/api/bitacoras", bitacoraRoutes);
 
 app.use(errorHandler);
 

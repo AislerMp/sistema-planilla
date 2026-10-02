@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { ArrowLeft, Filter, RotateCcw } from "lucide-react";
 import AlertMessage from "../../components/AlertMessage.jsx";
 import LoadingState from "../../components/loadingState.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { getMisMarcas } from "../../services/marcas.Service.js";
+import { getMisMarcas, getMarcasColaborador } from "../../services/marcas.Service.js";
 import useAsyncRequest from "../../hooks/useAsyncRequest.js";
 
 const emptyFilters = { desde: "", hasta: "" };
@@ -26,7 +26,12 @@ function formatDate(value) {
 
 export default function MisMarcas() {
   const { user } = useAuth();
-  const canConsult = user?.Rol === "COLABORADOR";
+  const { colaboradorId } = useParams();
+  const location = useLocation();
+  const canConsult = colaboradorId
+    ? ["GERENTE", "ADMINISTRADOR", "RECURSOS_HUMANOS"].includes(user?.Rol)
+    : user?.Rol === "COLABORADOR";
+  const titulo = colaboradorId ? "Marcas del colaborador" : "Mis marcas";
 
   const [form, setForm] = useState(emptyFilters);
   const [filters, setFilters] = useState(emptyFilters);
@@ -34,8 +39,10 @@ export default function MisMarcas() {
   const [reloadKey, setReloadKey] = useState(0);
 
   const { data, isLoading, error } = useAsyncRequest(
-    () => getMisMarcas(filters),
-    [filters, reloadKey],
+    () => !canConsult ? Promise.resolve([]) : colaboradorId
+      ? getMarcasColaborador(colaboradorId, filters)
+      : getMisMarcas(filters),
+    [filters, reloadKey, colaboradorId, canConsult],
   );
 
   const marcas = data ?? [];
@@ -62,25 +69,26 @@ export default function MisMarcas() {
     <>
       <div className="breadcrumb">
         <Link to="/asistencia">Marcas y asistencias</Link> /{" "}
-        <span>Mis marcas</span>
+        <span>{titulo}</span>
       </div>
       <div className="page-header">
         <div>
-          <p className="eyebrow accent">MI JORNADA</p>
-          <h1>Mis marcas</h1>
+          <p className="eyebrow accent">{colaboradorId ? `COLABORADOR #${colaboradorId}` : "MI JORNADA"}</p>
+          <h1>{titulo}</h1>
+          {colaboradorId && location.state?.nombre && <p>{location.state.nombre}</p>}
           <p>
-            Consulta tu historial de entradas y salidas, de la más reciente a la
+            Consulta el historial de entradas y salidas, de la más reciente a la
             más antigua.
           </p>
         </div>
-        <Link className="button button-secondary" to="/asistencia">
-          <ArrowLeft size={17} aria-hidden="true" /> Volver al menú
+        <Link className="button button-secondary" to={colaboradorId ? "/asistencia/gestionar" : "/asistencia"}>
+          <ArrowLeft size={17} aria-hidden="true" /> {colaboradorId ? "Volver a asistencias" : "Volver al menú"}
         </Link>
       </div>
 
       {!canConsult ? (
         <AlertMessage title="Acceso restringido">
-          Esta consulta está disponible para colaboradores.
+          No tenés permiso para acceder a esta consulta.
         </AlertMessage>
       ) : (
         <>
@@ -145,7 +153,7 @@ export default function MisMarcas() {
 
           <section
             className="data-panel"
-            aria-label="Historial de mis marcas"
+            aria-label="Historial de marcas"
             aria-busy={isLoading}
           >
             <div className="table-toolbar">
@@ -154,7 +162,7 @@ export default function MisMarcas() {
                 <p className="muted">
                   {hasFilters
                     ? `Desde ${filters.desde ? formatDate(filters.desde) : "el inicio"} hasta ${filters.hasta ? formatDate(filters.hasta) : "la última marca"}.`
-                    : "Mostrando todo tu historial."}
+                    : "Mostrando todo el historial disponible."}
                 </p>
                 <p className="table-hint">
                   Entradas y salidas en hora de Costa Rica.
@@ -165,7 +173,7 @@ export default function MisMarcas() {
               <LoadingState entidad="marcas" />
             ) : error ? (
               <div className="catalog-message">
-                <AlertMessage title="No se pudieron cargar tus marcas">
+                <AlertMessage title="No se pudieron cargar las marcas">
                   {error}
                 </AlertMessage>
                 <button
@@ -181,12 +189,12 @@ export default function MisMarcas() {
                 <h2>
                   {hasFilters
                     ? "Sin marcas en este rango"
-                    : "Aún no tienes marcas"}
+                    : "No hay marcas disponibles"}
                 </h2>
                 <p>
                   {hasFilters
                     ? "Prueba otras fechas o limpia los filtros para ver todo el historial."
-                    : "Tus entradas y salidas aparecerán aquí cuando registres tu jornada."}
+                    : "Las entradas y salidas aparecerán aquí cuando se registren."}
                 </p>
               </div>
             ) : (
@@ -194,7 +202,7 @@ export default function MisMarcas() {
                 <div
                   className="table-scroll"
                   role="region"
-                  aria-label="Tabla de mis marcas"
+                  aria-label="Tabla de marcas"
                   tabIndex={0}
                 >
                   <table>

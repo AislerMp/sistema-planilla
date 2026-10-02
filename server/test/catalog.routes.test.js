@@ -70,6 +70,66 @@ async function request(method, path, body) {
   return { status: response.status, body: await response.json() };
 }
 
+test("marcas de otro colaborador exige sesión y rol de gestión", async () => {
+  assert.equal((await request("GET", "/marcas/colaborador/8")).status, 401);
+  identity = { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" };
+  assert.equal((await request("GET", "/marcas/colaborador/8")).status, 403);
+  assert.deepEqual(calls, []);
+});
+
+for (const Rol of ["GERENTE", "ADMINISTRADOR", "RECURSOS_HUMANOS"]) {
+  test(`historial de marcas por ID y rango para ${Rol}`, async () => {
+    identity = { UsuarioId: 1, Rol };
+    if (Rol === "GERENTE") expected.push({ pattern: /FROM Usuarios/, records: [{ RestauranteId: 2 }] });
+    expected.push({
+      pattern: /FROM dbo.MarcasAsistencia/,
+      parameters: { colaboradorId: 8, restauranteId: Rol === "GERENTE" ? 2 : null,
+        desde: new Date("2026-09-01T00:00:00Z"), hasta: new Date("2026-09-30T00:00:00Z") },
+      records: [{ MarcaId: 7, ColaboradorId: 8 }],
+    });
+    const response = await request("GET", "/marcas/colaborador/8?desde=2026-09-01&hasta=2026-09-30");
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body, [{ MarcaId: 7, ColaboradorId: 8 }]);
+    assert.match(calls.at(-1).query, /a.RestauranteId = @restauranteId/);
+    assert.match(calls.at(-1).query, /a.FechaAsignada = dbo.MarcasAsistencia.FechaAsignada/);
+  });
+}
+
+test("historial de marcas rechaza ID y fechas inválidas antes de consultar", async () => {
+  identity = { UsuarioId: 1, Rol: "ADMINISTRADOR" };
+  for (const path of ["/marcas/colaborador/abc", "/marcas/colaborador/8?desde=2026-02-30", "/marcas/colaborador/8?desde=2026-10-02&hasta=2026-10-01"]) {
+    assert.equal((await request("GET", path)).status, 400);
+  }
+  assert.deepEqual(calls, []);
+});
+
+test("historial de marcas no permite al gerente sin restaurante consultar", async () => {
+  identity = { UsuarioId: 1, Rol: "GERENTE" };
+  expected.push({ pattern: /FROM Usuarios/, records: [] });
+  assert.equal((await request("GET", "/marcas/colaborador/8")).status, 403);
+});
+
+test("bitácoras permite solo administración y recursos humanos", async () => {
+  for (const path of ["/bitacoras", "/bitacoras/1"]) {
+    identity = undefined;
+    assert.equal((await request("GET", path)).status, 401);
+    for (const Rol of ["COLABORADOR", "GERENTE"]) {
+      identity = { UsuarioId: 1, Rol };
+      assert.equal((await request("GET", path)).status, 403);
+    }
+  }
+  for (const Rol of ["ADMINISTRADOR", "RECURSOS_HUMANOS"]) {
+    identity = { UsuarioId: 1, Rol };
+    assert.equal((await request("GET", "/bitacoras?pagina=0")).status, 400);
+    expected.push({ pattern: /FROM dbo.Bitacora/, records: [{
+      BitacoraId: 1, DatosAnteriores: null, DatosNuevos: '{"nombre":"Ejemplo"}',
+    }] });
+    const respuesta = await request("GET", "/bitacoras/1");
+    assert.equal(respuesta.status, 200);
+    assert.deepEqual(respuesta.body.DatosNuevos, { nombre: "Ejemplo" });
+  }
+});
+
 test("ajuste de extras exige sesion y rol gerente", async () => {
   const path = "/extras/asistencias/7/minutos";
   assert.equal((await request("PATCH", path, {})).status, 401);
@@ -83,7 +143,7 @@ test("ajuste de extras exige sesion y rol gerente", async () => {
 });
 
 for (const existeRegistro of [true, false]) {
- for (const [totalAnterior, extras, totalEsperado] of [[720, 0, 480], [720, 120, 600], [360, 0, 360], [360, 60, 540]]) {
+ for (const [totalAnterior, extras, totalEsperado] of [[720, 0, 480], [720, 120, 480], [360, 0, 360], [360, 60, 480], [720, 240, 480], [480, 240, 480]]) {
   test(`ajuste de extras sincroniza ${totalAnterior} minutos con ${extras} extras (registro existente: ${existeRegistro})`, async () => {
     identity = { UsuarioId: 3, Rol: "GERENTE" };
     const registro = { HoraExtraId: 9, AsistenciaId: 7, MinutosDetectados: Math.max(0, totalAnterior - 480), MinutosAjustados: extras };
@@ -141,6 +201,31 @@ for (const rol of ["COLABORADOR", "GERENTE", "RECURSOS_HUMANOS", "ADMINISTRADOR"
       assert.equal(response.status, 200, path);
       assert.deepEqual(response.body, path === "/periodos-planilla" ? [periodo] : periodo);
     }
+  });
+}
+
+for (const rol of ["RECURSOS_HUMANOS", "ADMINISTRADOR"]) {
+  test(`periodos permite actualizar estado y registrar bitacora a ${rol}`, async () => {
+    identity = { UsuarioId: 3, Rol: rol };
+    const anterior = { PeriodoId: 7, Estado: "ABIERTO", FechaFin: new Date("2020-01-15T00:00:00Z") };
+    const actualizado = { ...anterior, Estado: "EN_REVISION" };
+    expected.push(
+      { pattern: /FROM dbo.PeriodosPlanilla/, records: [anterior] },
+      {
+        pattern: /UPDATE dbo.PeriodosPlanilla/,
+        parameters: { PeriodoId: 7, EstadoActual: "ABIERTO", NuevoEstado: "EN_REVISION" },
+        records: [actualizado],
+      },
+      { pattern: /INSERT INTO dbo.Bitacora/ },
+    );
+
+    const response = await request("PATCH", "/periodos-planilla/7/estado", { estado: "EN_REVISION" });
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.periodo, JSON.parse(JSON.stringify(actualizado)));
+    const auditoria = calls.at(-1).parameters;
+    assert.equal(auditoria.UsuarioId, 3);
+    assert.equal(auditoria.DatosAnteriores, JSON.stringify(anterior));
+    assert.equal(auditoria.DatosNuevos, JSON.stringify(actualizado));
   });
 }
 

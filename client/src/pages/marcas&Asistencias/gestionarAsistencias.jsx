@@ -438,6 +438,7 @@ export default function GestionarAsistencias() {
           desde={filters.desde || periodoAplicado?.FechaInicio?.slice(0, 10)}
           hasta={filters.hasta || periodoAplicado?.FechaFin?.slice(0, 10)}
           asistencias={asistenciasDiarias}
+          puedeVerMarcas={isGerente || puedeElegirRestaurante}
           onSeleccionarAsistencia={isGerente ? onSeleccionarAsistencia : undefined}
         />
       )}

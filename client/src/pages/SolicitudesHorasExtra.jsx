@@ -4,10 +4,9 @@ import { useAuth } from "../context/AuthContext.jsx";
 import useAsyncRequest from "../hooks/useAsyncRequest.js";
 import AlertMessage from "../components/AlertMessage.jsx";
 import LoadingState from "../components/loadingState.jsx";
-import { ArrowLeft, Filter, RotateCcw, PlusIcon } from "lucide-react";
+import { ArrowLeft, RotateCcw, PlusIcon } from "lucide-react";
 import { getRestaurantes } from "../services/restaurantes.Service.js";
 import {
-  getSolicitud,
   getMisSolicitudes,
   getSolicitudesPorRestaurante,
   createSolicitud,
@@ -15,6 +14,8 @@ import {
 } from "../services/horasExtras.Service.js";
 import { formatDate } from "../utils/fechaUtils.js";
 import Dialog from "../components/dialog.jsx";
+
+
 const emptyFilters = {
   restauranteId: null,
   desde: "",
@@ -53,6 +54,7 @@ const etiquetasEstado = {
   APROBADA: "Aprobada",
   RECHAZADA: "Rechazada",
 };
+
 const mostrarHoras = (minutos) =>
   minutos == null
     ? "—"
@@ -86,19 +88,12 @@ export default function SolicitudesHorasExtra() {
     error: solicitudesError,
   } = useAsyncRequest(() => {
     if (!puedeConsultar) return Promise.resolve([]);
-    
-    const filtrosConsulta = { ...filters, estado: null };
     return isColaborador
-      ? getMisSolicitudes(filtrosConsulta)
-      : getSolicitudesPorRestaurante(filtrosConsulta);
+      ? getMisSolicitudes(filters)
+      : getSolicitudesPorRestaurante(filters);
   }, [filters, isColaborador, puedeConsultar, reloadKey]);
 
-  const todasLasSolicitudes = data ?? [];
-  const solicitudes = filterForm.estado
-    ? todasLasSolicitudes.filter(
-        (solicitud) => solicitud.Estado === filterForm.estado,
-      )
-    : todasLasSolicitudes;
+  const solicitudes = data ?? [];
 
   const {
     data: restaurantesData,
@@ -114,6 +109,14 @@ export default function SolicitudesHorasExtra() {
 
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [dialog, setDialog] = useState(null);
+
+  const fechaHoy = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Costa_Rica",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 
   function limpiarFiltros() {
     setFilterForm({ ...emptyFilters });
@@ -146,15 +149,8 @@ export default function SolicitudesHorasExtra() {
     e.preventDefault();
     if (isBusy) return;
 
-    const fechaHoy = new Intl.DateTimeFormat("sv-SE", {
-      timeZone: "America/Costa_Rica",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
-
-    if (crearSolicitudForm.fechaSolicitada < fechaHoy) {
-      setError("La fecha solicitada debe ser igual o posterior al día de hoy.");
+    if (crearSolicitudForm.fechaSolicitada <= fechaHoy) {
+      setError("La fecha solicitada debe ser posterior al día de hoy.");
       return;
     }
 
@@ -236,7 +232,6 @@ export default function SolicitudesHorasExtra() {
     }
   }
 
-  const [dialog, setDialog] = useState(null);
   function cerrarDialog() {
     if (isBusy) return;
     setError(null);
@@ -267,13 +262,6 @@ export default function SolicitudesHorasExtra() {
       (restaurante) =>
         Number(restaurante.RestauranteId) === Number(solicitud.RestauranteId),
     )?.Nombre || `Restaurante #${solicitud.RestauranteId}`;
-
-  const fechaHoy = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "America/Costa_Rica",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
 
   return (
     <>
@@ -343,8 +331,8 @@ export default function SolicitudesHorasExtra() {
                 {isLoading || solicitudesError || !puedeConsultar
                   ? "—"
                   : valor === null
-                    ? todasLasSolicitudes.length
-                    : todasLasSolicitudes.filter(
+                    ? solicitudes.length
+                    : solicitudes.filter(
                         (solicitud) => solicitud.Estado === valor,
                       ).length}
               </span>

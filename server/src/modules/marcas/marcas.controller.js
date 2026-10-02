@@ -13,6 +13,7 @@ export async function getMarcasColaboradorByGerente(req, res) {
     req.user,
     req.params.id,
     req.query.fechaAsignada,
+    { desde: req.query.desde, hasta: req.query.hasta },
   );
   return res.status(200).json(marcas);
 }

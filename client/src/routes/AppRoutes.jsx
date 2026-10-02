@@ -21,6 +21,8 @@ import AsistenciaMenu from "../pages/marcas&Asistencias/asistenciaMenu.jsx";
 import MisMarcas from "../pages/marcas&Asistencias/misMarcas.jsx";
 import GestionarAsistencias from "../pages/marcas&Asistencias/gestionarAsistencias.jsx";
 import SolicitudesHorasExtra from "../pages/SolicitudesHorasExtra.jsx";
+import ConsultarBitacoras from "../pages/bitacoras/consultarBitacoras.jsx";
+import DetalleBitacora from "../pages/bitacoras/detalleBitacora.jsx";
 
 export default function AppRoutes({ theme, onToggleTheme }) {
   return (
@@ -65,6 +67,9 @@ export default function AppRoutes({ theme, onToggleTheme }) {
             <Route path="/periodos/crear" element={<CreatePeriodoPlanilla />} />
             <Route path="/asistencia" element={<AsistenciaMenu />} />
             <Route path="/asistencia/mis-marcas" element={<MisMarcas />} />
+            <Route element={<ProtectedRoute roles={["GERENTE", "ADMINISTRADOR", "RECURSOS_HUMANOS"]} />}>
+              <Route path="/asistencia/colaborador/:colaboradorId/marcas" element={<MisMarcas />} />
+            </Route>
             <Route path="/asistencia/gestionar" element={<GestionarAsistencias />} />
 
             <Route
@@ -72,6 +77,10 @@ export default function AppRoutes({ theme, onToggleTheme }) {
               element={<SolicitudesHorasExtra />}
             />
             
+            <Route element={<ProtectedRoute roles={["ADMINISTRADOR", "RECURSOS_HUMANOS"]} />}>
+              <Route path="/bitacoras" element={<ConsultarBitacoras />} />
+              <Route path="/bitacoras/:id" element={<DetalleBitacora />} />
+            </Route>
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Route>

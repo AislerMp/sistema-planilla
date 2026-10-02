@@ -21,6 +21,12 @@ export function formatDate(value) {
   return dateFormat.format(new Date(`${String(value).slice(0, 10)}T00:00:00Z`));
 }
 
+export const fechaHoraFormat = new Intl.DateTimeFormat("es-CR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Costa_Rica",
+  });
+
 export function obtenerSemanas(periodo) {
   if (!periodo) return [];
 

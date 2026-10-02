@@ -33,6 +33,7 @@ export default function ColaboradoresDashboard() {
 
   // Al principio useAsyncRequest devuelve null.
   const colaboradoresList = colaboradores ?? [];
+  
 
   const filteredColaboradores = colaboradoresList.filter((colaborador) => {
     const fullName =
@@ -57,6 +58,8 @@ export default function ColaboradoresDashboard() {
     );
   });
 
+  console.log(filteredColaboradores);
+  
   const isAdministrator = user?.Rol === "ADMINISTRADOR";
 
   function handleEdit(colaboradorId) {

@@ -92,6 +92,38 @@ export async function updateMinutosExtrasAjustados(
 
 /* Para las entidades de SolicitudesHorasExtras */
 
+export async function rechazarSolicitudesVencidas(fechaHoy, { colaboradorId = null, restauranteId = null, solicitudId = null }) {
+  const request = await createRequest();
+  await request
+    .input("fechaHoy", sql.Date, fechaHoy)
+    .input("colaboradorId", sql.Int, colaboradorId)
+    .input("restauranteId", sql.Int, restauranteId)
+    .input("solicitudId", sql.Int, solicitudId)
+    .query(`
+      UPDATE dbo.SolicitudesHorasExtras
+      SET Estado = 'RECHAZADA', MinutosAutorizados = 0,
+          RevisadoPorUsuarioId = NULL,
+          Observacion = N'Rechazada automáticamente por vencimiento'
+      WHERE Estado = 'PENDIENTE' AND FechaSolicitada < @fechaHoy
+        AND (@colaboradorId IS NULL OR ColaboradorId = @colaboradorId)
+        AND (@restauranteId IS NULL OR RestauranteId = @restauranteId)
+        AND (@solicitudId IS NULL OR SolicitudHoraExtraId = @solicitudId);
+    `);
+}
+
+export async function obtenerSolicitudesByFechaAndID(fecha, colaboradorId, transaction = null) {
+  const request = await createRequest(transaction);
+  const result = await request
+    .input("fecha", sql.Date, fecha)
+    .input("colaboradorId", sql.Int, colaboradorId)
+    .query(`
+      SELECT TOP (1) SolicitudHoraExtraId
+      FROM dbo.SolicitudesHorasExtras WITH (UPDLOCK, HOLDLOCK)
+      WHERE FechaSolicitada = @fecha AND ColaboradorId = @colaboradorId;
+    `);
+  return result.recordset[0] ?? null;
+}
+
 export async function getSolicitudById(solicitudId, transaction = null) {
   const request = await createRequest(transaction);
   const result = await request

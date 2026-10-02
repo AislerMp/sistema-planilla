@@ -5,6 +5,8 @@ import {
   serviceError,
 } from "../../shared/utils/serviceUtils.js";
 
+import { estadosSolicitud, validarAccesoSolicitud, validarFiltrosSolicitudes } from "../../shared/utils/solicitudUtils.js";
+
 import * as horasExtraRepository from "./horasExtras.repository.js";
 import * as asistenciasRepository from "../asistenciasDiarias/asistenciasDiarias.repository.js";
 import {
@@ -177,20 +179,20 @@ export async function actualizarHorasExtra(
       );
     }
 
-    // Las extras son la parte del total que supera las ocho horas.
+    // La asistencia guarda las horas normales; las extras se guardan aparte.
     // Quitar extras de una jornada corta no debe convertirla en ocho horas.
-    const totalMinutos = minutosAjustados > 0
-      ? 480 + minutosAjustados
+    const minutosNormales = minutosAjustados > 0
+      ? 480
       : Math.min(asistencia.MinutosEfectivos, 480);
-    validarMinutosDetectados(totalMinutos);
+    validarMinutosDetectados(minutosNormales);
 
-    if (totalMinutos !== asistencia.MinutosEfectivos) {
+    if (minutosNormales !== asistencia.MinutosEfectivos) {
       const asistenciaActualizada = await asistenciasRepository.updateMinutosAsistencia(
-        asistenciaId, totalMinutos, "Ajustados", transaction,
+        asistenciaId, minutosNormales, "Ajustados", transaction,
       );
 
       if (!asistenciaActualizada) {
-        throw serviceError("No se pudo ajustar el total trabajado", 500);
+        throw serviceError("No se pudieron ajustar las horas normales", 500);
       }
       
       await registrarBitacora({
@@ -204,7 +206,7 @@ export async function actualizarHorasExtra(
         },
         datosNuevos: {
           minutosCalculados: asistenciaActualizada.MinutosCalculados,
-          minutosAjustados: totalMinutos,
+          minutosAjustados: minutosNormales,
           motivo: motivoValidado,
         },
       }, transaction);
@@ -232,7 +234,7 @@ export async function actualizarHorasExtra(
       }
     }
 
-    // 5. Guardar el ajuste de extras en la misma transacción que el total.
+    // 5. Guardar el ajuste de extras en la misma transacción que las horas normales.
     const registroActualizado =
       await horasExtraRepository.updateMinutosExtrasAjustados(
         asistenciaId,
@@ -274,7 +276,7 @@ export async function actualizarHorasExtra(
 
     return {
       ...registroActualizado,
-      MinutosEfectivos: totalMinutos,
+      MinutosEfectivos: minutosNormales,
       MinutosExtras:
         registroActualizado.MinutosAjustados ??
         registroActualizado.MinutosDetectados,
@@ -315,17 +317,45 @@ export async function sincronizarHorasExtras(
 
   const actorId = validateId(usuarioActorId, "UsuarioId");
 
+  // En marcas usamos el total calculado; en un ajuste manual, el total ingresado.
+  // MinutosAjustados puede contener ya las ocho horas normales de otra sincronización.
   const minutosEfectivos = validarMinutosDetectados(
-    asistencia.MinutosAjustados ?? asistencia.MinutosCalculados,
+    restablecerAjuste
+      ? (asistencia.MinutosAjustados ?? asistencia.MinutosCalculados)
+      : asistencia.MinutosCalculados,
   );
 
   const minutosExtras = Math.max(0, minutosEfectivos - 480);
+  const minutosNormales = minutosEfectivos - minutosExtras;
 
   const registroAnterior =
     await horasExtraRepository.getHorasExtrasByAsistencia(
       asistenciaId,
       transaction,
     );
+
+  // Separar las horas normales incluso si las extras ya estaban guardadas.
+  if (minutosExtras > 0 && asistencia.MinutosAjustados !== minutosNormales) {
+    const asistenciaActualizada = await asistenciasRepository.updateMinutosAsistencia(
+      asistenciaId, minutosNormales, "Ajustados", transaction,
+    );
+    
+    if (!asistenciaActualizada) {
+      throw serviceError("No se pudieron guardar las horas normales", 500);
+    }
+
+    await registrarBitacora({
+      usuarioId: actorId,
+      entidad: entidades.ASISTENCIAS_DIARIAS,
+      registroId: asistenciaId,
+      accion: "ACTUALIZAR",
+      datosAnteriores: { minutosAjustados: asistencia.MinutosAjustados },
+      datosNuevos: { minutosAjustados: minutosNormales },
+    }, transaction);
+
+    // El llamador devuelve esta misma asistencia en su respuesta.
+    asistencia.MinutosAjustados = minutosNormales;
+  }
 
   // No necesitamos crear un registro sin horas extras.
   if (!registroAnterior && minutosExtras === 0) {
@@ -363,7 +393,7 @@ export async function sincronizarHorasExtras(
   if (!registroGuardado) {
     throw serviceError("No se pudieron guardar las horas extras", 500);
   }
-
+  
   await registrarBitacora(
     {
       usuarioId: actorId,
@@ -391,48 +421,14 @@ export async function sincronizarHorasExtras(
   return registroGuardado;
 }
 
+
+
+
 /* SERVICES DE SOLICITUDES DE HORAS EXTRAS */
 
-const estadosSolicitud = new Set(["PENDIENTE", "APROBADA", "RECHAZADA"]);
-
-function validarFiltrosSolicitudes(filtros = {}) {
-  let desde = validateDate(filtros?.desde, "Fecha desde", true);
-  const hasta = validateDate(filtros?.hasta, "Fecha hasta", true);
-  const estado =
-    filtros?.estado == null || filtros.estado === ""
-      ? null
-      : validateText(filtros.estado, "Estado", 15).toUpperCase();
-
-  if (estado && !estadosSolicitud.has(estado)) {
-    throw serviceError("El estado de la solicitud no es válido");
-  }
-
-  if (desde && hasta && desde > hasta) {
-    throw serviceError("La fecha desde no puede ser mayor que la fecha hasta");
-  }
-
-  if (!desde && hasta) desde = hasta;
-
-  return { desde, hasta, estado };
-}
-
-async function validarAccesoSolicitud(solicitud, usuario) {
-  if (usuario.Rol === "COLABORADOR") {
-    const colaboradorId = validateId(usuario.ColaboradorId, "ColaboradorId");
-    if (solicitud.ColaboradorId !== colaboradorId) {
-      throw serviceError("Solo podés consultar tus propias solicitudes.", 403);
-    }
-  }
-
-  if (usuario.Rol === "GERENTE") {
-    const restaurantePermitido = await getRestaurantePermitido(usuario);
-    if (solicitud.RestauranteId !== restaurantePermitido) {
-      throw serviceError(
-        "Solo podés consultar solicitudes de tu restaurante asignado.",
-        403,
-      );
-    }
-  }
+async function validarFechaPendiente(filtros) {
+  const { fechaHoy } = obtenerCalendarioActual();
+  await horasExtraRepository.rechazarSolicitudesVencidas(fechaHoy, filtros);
 }
 
 export async function getSolicitudById(id, usuario) {
@@ -443,7 +439,8 @@ export async function getSolicitudById(id, usuario) {
     throw serviceError("Solicitud de horas extras no encontrada", 404);
 
   await validarAccesoSolicitud(solicitud, usuario);
-  return solicitud;
+  await validarFechaPendiente({ solicitudId });
+  return horasExtraRepository.getSolicitudById(solicitudId);
 }
 
 export async function getSolicitudesByColaborador(
@@ -453,6 +450,7 @@ export async function getSolicitudesByColaborador(
 ) {
   const id = validateId(colaboradorId, "colaboradorId");
   const filtrosValidados = validarFiltrosSolicitudes(filtros);
+  let restaurantePermitido = null;
 
   if (usuario.Rol === "COLABORADOR") {
     const colaboradorActualId = validateId(
@@ -464,19 +462,14 @@ export async function getSolicitudesByColaborador(
       throw serviceError("Solo podés consultar tus propias solicitudes.", 403);
     }
   } else if (usuario.Rol === "GERENTE") {
-    const restaurantePermitido = await getRestaurantePermitido(usuario);
-
-    const solicitudes = await horasExtraRepository.getSolicitudesByColaborador(
-      id,
-      filtrosValidados,
-    );
-
-    return solicitudes.filter(
-      (solicitud) => solicitud.RestauranteId === restaurantePermitido,
-    );
+    restaurantePermitido = await getRestaurantePermitido(usuario);
   }
 
-  return horasExtraRepository.getSolicitudesByColaborador(id, filtrosValidados);
+  await validarFechaPendiente({ colaboradorId: id, restauranteId: restaurantePermitido });
+  const solicitudes = await horasExtraRepository.getSolicitudesByColaborador(id, filtrosValidados);
+  return restaurantePermitido === null ? solicitudes : solicitudes.filter(
+    (solicitud) => solicitud.RestauranteId === restaurantePermitido,
+  );
 }
 
 export async function getSolicitudesByRestaurante(
@@ -505,11 +498,15 @@ export async function getSolicitudesByRestaurante(
   const restauranteConsultaId = restaurantePermitido ?? restauranteSolicitado;
   if (restauranteConsultaId === null) {
     throw serviceError("Debe indicar el restaurante que desea consultar");
-  }
+  } 
+
+  const filtrosValidados = validarFiltrosSolicitudes(filtros);
+  await validarFechaPendiente({ restauranteId: restauranteConsultaId });
+
 
   return horasExtraRepository.getSolicitudesByRestaurante(
     restauranteConsultaId,
-    validarFiltrosSolicitudes(filtros),
+    filtrosValidados,
   );
 }
 
@@ -527,6 +524,10 @@ export async function crearSolicitudHorasExtras(
   const usuarioId = validateId(usuario.UsuarioId, "usuarioId");
   const colaboradorId = validateId(usuario.ColaboradorId, "ColaboradorId");
   const validFecha = validateDate(fechaSolicitada, "Fecha solicitada");
+  const { fechaHoy } = obtenerCalendarioActual();
+  if (fechaSQLComoTexto(validFecha) <= fechaHoy) {
+    throw serviceError("La fecha solicitada debe ser posterior al día de hoy.", 400);
+  }
   const validMinutosSolicitados = validarMinutosSolicitados(minutosSolicitados);
   const validMotivo = validateText(motivo, "El motivo", 500);
 
@@ -538,6 +539,15 @@ export async function crearSolicitudHorasExtras(
   const transaction = await beginTransaction();
 
   try {
+    // Consultar e insertar en la misma transacción evita duplicados simultáneos.
+    const existente = await horasExtraRepository.obtenerSolicitudesByFechaAndID(
+      validFecha, colaboradorId, transaction,
+    );
+
+    if (existente) {
+      throw serviceError("Ya tenés una solicitud de horas extras para esa fecha.", 409);
+    }
+
     const solicitudCreada = await horasExtraRepository.createSolicitud(
       {
         colaboradorId: colaboradorActual.ColaboradorId,

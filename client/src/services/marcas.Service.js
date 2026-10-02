@@ -27,9 +27,11 @@ export async function getMisMarcas({ desde, hasta } = {}) {
   return parseResponse(response);
 }
 
-export async function getMarcasColaborador(id, fechaAsignada) {
+export async function getMarcasColaborador(id, { desde, hasta } = {}) {
   ensureApiUrl();
-  const params = new URLSearchParams({ fechaAsignada });
+  const params = new URLSearchParams();
+  if (desde) params.set("desde", desde);
+  if (hasta) params.set("hasta", hasta);
   const response = await fetch(`${endpoint}/colaborador/${id}?${params}`, {
     method: "GET",
     credentials: "include",

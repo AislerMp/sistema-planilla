@@ -177,7 +177,7 @@ BEGIN TRY
         HoraExtraId INT IDENTITY(1,1) NOT NULL,
         AsistenciaId INT NOT NULL,
         MinutosDetectados INT NOT NULL,
-        MinutosAjustados INT NULL;
+        MinutosAjustados INT NULL,
 
         CONSTRAINT PK_HorasExtras
             PRIMARY KEY (HoraExtraId),
@@ -262,7 +262,6 @@ BEGIN TRY
                     Estado = 'RECHAZADA'
                     AND MinutosAutorizados IS NOT NULL
                     AND MinutosAutorizados = 0
-                    AND RevisadoPorUsuarioId IS NOT NULL
                 )
             )
     );

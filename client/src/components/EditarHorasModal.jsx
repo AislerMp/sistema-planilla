@@ -45,17 +45,21 @@ export default function EditarHorasModal({
       if (name === "motivo" || value === "") 
         return siguiente;
 
-      const total = Number(siguiente.horas) * 60 + Number(siguiente.minutos);
-      const extras = Number(siguiente.horasExtra) * 60 + Number(siguiente.minutosExtra);
-
       if (name === "horas" || name === "minutos") {
+        if (siguiente.horas === "" || siguiente.minutos === "") return siguiente;
+        const horas = Number(siguiente.horas);
+        const minutos = Number(siguiente.minutos);
+        if (!Number.isInteger(horas) || horas < 0 ||
+            !Number.isInteger(minutos) || minutos < 0 || minutos > 59) return siguiente;
+
+        const total = horas * 60 + minutos;
         const calculadas = Math.max(0, total - 480);
         siguiente.horasExtra = Math.floor(calculadas / 60);
         siguiente.minutosExtra = calculadas % 60;
-      } else {
-        const ajustado = extras > 0 ? 480 + extras : Math.min(total, 480);
-        siguiente.horas = Math.floor(ajustado / 60);
-        siguiente.minutos = ajustado % 60;
+        if (total > 480) {
+          siguiente.horas = 8;
+          siguiente.minutos = 0;
+        }
       }
 
       return siguiente;
@@ -72,11 +76,20 @@ export default function EditarHorasModal({
     const extras = Number(form.horasExtra) * 60 + Number(form.minutosExtra);
 
     if (
-      [minutos, extras].some(
+      [form.horas, form.minutos, form.horasExtra, form.minutosExtra].some(
+        (valor) => valor === "" || !Number.isInteger(Number(valor)) || Number(valor) < 0,
+      ) ||
+      Number(form.minutos) > 59 || Number(form.minutosExtra) > 59 ||
+      [minutos, extras, minutos + extras].some(
         (valor) => !Number.isInteger(valor) || valor < 0 || valor > 2147483647,
       )
     ) {
       setError("Revisá las horas y los minutos ingresados.");
+      return;
+    }
+
+    if (minutos > 480 || (extras > 0 && minutos !== 480)) {
+      setError("Las horas normales deben ser como máximo 8. Para registrar extras, deben ser 8 horas normales.");
       return;
     }
 
@@ -86,7 +99,8 @@ export default function EditarHorasModal({
       // Una sola petición guarda ambos valores dentro de una transacción.
       if (minutos !== guardados.current.minutos) {
         await ajustarMinutosAsistencia(asistencia.AsistenciaId, {
-          minutos,
+          // Este servicio recibe el total y separa las normales de las extras.
+          minutos: minutos + extras,
           motivo: form.motivo,
         });
         guardados.current.minutos = minutos;
@@ -149,8 +163,8 @@ export default function EditarHorasModal({
       <form onSubmit={handleSubmit}>
         <fieldset disabled={guardando} aria-busy={guardando}>
           <section aria-labelledby="editar-horas-total">
-            <h3 id="editar-horas-total">Total trabajado</h3>
-            <p className="muted">Incluye las horas extra de este día.</p>
+            <h3 id="editar-horas-total">Horas normales</h3>
+            <p className="muted">Al ingresar más de 8 horas, el excedente pasa a horas extra.</p>
             <div className="editar-horas-campos">
               <label htmlFor="total-horas">
                 Horas

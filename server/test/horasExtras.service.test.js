@@ -13,12 +13,19 @@ const {
 
 test("actualizar horas extras confirma o revierte junto con la bitacora", async () => {
   mock.method(pool, "connect", async () => pool);
-  mock.method(pool, "request", () => { throw new Error("Consulta fuera de la transaccion"); });
+  mock.method(pool, "request", () => ({
+    input() { return this; },
+    async query(query) {
+      assert.match(query, /FROM Usuarios/);
+      return { recordset: [{ RestauranteId: 2 }] };
+    },
+  }));
+  const gerente = { UsuarioId: 7, Rol: "GERENTE" };
   let events;
   let scenario;
   let activeTransaction;
-  const previous = { HoraExtraId: 9, AsistenciaId: 3, MinutosDetectados: 60 };
-  const updated = { ...previous, MinutosDetectados: 0 };
+  const previous = { HoraExtraId: 9, AsistenciaId: 3, MinutosDetectados: 60, MinutosAjustados: null };
+  const updated = { ...previous, MinutosAjustados: 0 };
   const auditError = new Error("Fallo al guardar bitacora");
   mock.method(sql.Transaction.prototype, "begin", async function () {
     activeTransaction = this;
@@ -32,15 +39,21 @@ test("actualizar horas extras confirma o revierte junto con la bitacora", async 
     return {
       input(name, type, value) { parameters[name] = value; return this; },
       async query(query) {
+        if (query.includes("FROM dbo.AsistenciasDiarias")) {
+          return { recordset: [{ AsistenciaId: 3, RestauranteId: 2, PeriodoId: 1, MinutosEfectivos: 480 }] };
+        }
+        if (query.includes("FROM dbo.PeriodosPlanilla")) {
+          return { recordset: [{ Estado: "ABIERTO", FechaLimiteAjustes: new Date("2099-12-31") }] };
+        }
         if (query.includes("SELECT")) {
           events.push("read");
-          return { recordset: scenario === "missing" ? [] : [previous] };
+          return { recordset: [previous] };
         }
         if (query.includes("UPDATE dbo.HorasExtras")) {
           events.push("update");
           assert.equal(parameters.asistenciaId, 3);
-          assert.equal(parameters.minutosDetectados, 0);
-          return { recordset: [updated] };
+          assert.equal(parameters.minutosAjustados, 0);
+          return { recordset: scenario === "missing" ? [] : [updated] };
         }
         assert.match(query, /INSERT INTO dbo.Bitacora/);
         events.push("audit");
@@ -48,8 +61,8 @@ test("actualizar horas extras confirma o revierte junto con la bitacora", async 
         assert.equal(parameters.Entidad, "HorasExtras");
         assert.equal(parameters.RegistroId, 9);
         assert.equal(parameters.Accion, "AJUSTAR_HORAS");
-        assert.deepEqual(JSON.parse(parameters.DatosAnteriores), { minutosDetectados: 60 });
-        assert.deepEqual(JSON.parse(parameters.DatosNuevos), { minutosDetectados: 0 });
+        assert.deepEqual(JSON.parse(parameters.DatosAnteriores), { asistenciaId: 3, minutosDetectados: 60, minutosAjustados: null });
+        assert.deepEqual(JSON.parse(parameters.DatosNuevos), { asistenciaId: 3, minutosDetectados: 60, minutosAjustados: 0, motivo: "Correccion" });
         if (scenario === "auditFailure") throw auditError;
         return { rowsAffected: [1] };
       },
@@ -57,21 +70,21 @@ test("actualizar horas extras confirma o revierte junto con la bitacora", async 
   });
   try {
     events = [];
-    await assert.rejects(actualizarHorasExtra(3, 0), { status: 400 });
+    await assert.rejects(actualizarHorasExtra(3, -1, "Correccion", gerente), { status: 400 });
     assert.deepEqual(events, []);
 
-    assert.deepEqual(await actualizarHorasExtra(3, 0, 7), updated);
+    assert.deepEqual(await actualizarHorasExtra(3, 0, "Correccion", gerente), { ...updated, MinutosEfectivos: 480, MinutosExtras: 0 });
     assert.deepEqual(events, ["begin", "read", "update", "audit", "commit"]);
 
     events = [];
     scenario = "auditFailure";
-    await assert.rejects(actualizarHorasExtra(3, 0, 7), error => error === auditError);
+    await assert.rejects(actualizarHorasExtra(3, 0, "Correccion", gerente), error => error === auditError);
     assert.deepEqual(events, ["begin", "read", "update", "audit", "rollback"]);
 
     events = [];
     scenario = "missing";
-    await assert.rejects(actualizarHorasExtra(3, 0, 7), { status: 404 });
-    assert.deepEqual(events, ["begin", "read", "rollback"]);
+    await assert.rejects(actualizarHorasExtra(3, 0, "Correccion", gerente), { status: 500 });
+    assert.deepEqual(events, ["begin", "read", "update", "rollback"]);
   } finally {
     mock.restoreAll();
   }

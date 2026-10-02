@@ -121,7 +121,7 @@ export async function updateEstadoPeriodo(
 ) {
   const request = await createRequest(transaction);
 
-  const result = request
+  const result = await request
     .input("PeriodoId", sql.Int, periodoId)
     .input("EstadoActual", sql.VarChar(15), estadoActual)
     .input("NuevoEstado", sql.VarChar(15), nuevoEstado).query(`
@@ -132,5 +132,5 @@ export async function updateEstadoPeriodo(
       AND Estado = @EstadoActual
     `);
 
-    return result.recordset[0];
+  return result.recordset[0];
 }
