@@ -15,3 +15,14 @@ export async function parseResponse(response) {
 
   return response.text();
 }
+
+export function crearQuery(filtros) {
+  const params = new URLSearchParams();
+  for (const [campo, valor] of Object.entries(filtros)) {
+    if (valor !== undefined && valor !== null && valor !== "") {
+      params.set(campo, valor);
+    }
+  }
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}

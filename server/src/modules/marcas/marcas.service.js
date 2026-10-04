@@ -22,6 +22,7 @@ import {
   getColaborador,
 } from "../colaboradores/colaboradores.service.js";
 import { sincronizarHorasExtras } from "../extras/horasExtras.service.js";
+import { validarDiaSinPermisoAprobado } from "../permisosLaborales/permisosLaborales.service.js";
 import { beginTransaction } from "../../shared/config/database.js";
 
 export async function consultarMisMarcas(usuario, filtros = {}) {
@@ -141,6 +142,8 @@ export async function registrarEntrada(usuario) {
       throw serviceError("Ya completaste los dos intervalos de este día", 409);
     }
 
+    await validarDiaSinPermisoAprobado(colaboradorId, fechaSQLComoTexto(fechaAsignada), transaction);
+
     const asistenciaDiariaExistente =
       await asistenciasRepository.getAsistenciaByColaboradorYFecha(
         colaboradorId,
@@ -238,6 +241,8 @@ export async function registrarSalida(usuario) {
     if (ahora.getTime() < marcaPendiente.FechaHoraEntrada.getTime()) {
       throw serviceError("La salida no puede ser anterior a la entrada", 409);
     }
+
+    await validarDiaSinPermisoAprobado(colaboradorId, fechaSQLComoTexto(fechaAsignada), transaction);
 
     // 6. Obtener y validar la asistencia diaria.
     const asistenciaDiariaExistente =

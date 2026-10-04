@@ -21,6 +21,7 @@ import AsistenciaMenu from "../pages/marcas&Asistencias/asistenciaMenu.jsx";
 import MisMarcas from "../pages/marcas&Asistencias/misMarcas.jsx";
 import GestionarAsistencias from "../pages/marcas&Asistencias/gestionarAsistencias.jsx";
 import SolicitudesHorasExtra from "../pages/SolicitudesHorasExtra.jsx";
+import PermisosLaborales from "../pages/PermisosLaborales.jsx";
 import ConsultarBitacoras from "../pages/bitacoras/consultarBitacoras.jsx";
 import DetalleBitacora from "../pages/bitacoras/detalleBitacora.jsx";
 
@@ -75,6 +76,10 @@ export default function AppRoutes({ theme, onToggleTheme }) {
             <Route
               path="/solicitudes-horas-extras"
               element={<SolicitudesHorasExtra />}
+            />
+            <Route
+              path="/permisos-laborales"
+              element={<PermisosLaborales />}
             />
             
             <Route element={<ProtectedRoute roles={["ADMINISTRADOR", "RECURSOS_HUMANOS"]} />}>

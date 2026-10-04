@@ -30,6 +30,14 @@ export const menuItems = [
     nonPermision: [],
   },
   {
+    title: "Permisos laborales",
+    path: "/permisos-laborales",
+    icon: CalendarDays,
+    description: "Solicita y consulta permisos laborales.",
+    showCount: false,
+    nonPermision: [],
+  },
+  {
     title: "Colaboradores",
     path: "/colaboradores",
     icon: Users,

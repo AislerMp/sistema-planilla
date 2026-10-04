@@ -1,4 +1,4 @@
-import { parseResponse } from "../utils/helper.js";
+import { parseResponse, crearQuery } from "../utils/helper.js";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const endpoint = `${API_URL}/bitacoras`;
@@ -31,12 +31,7 @@ export async function getBitacoras({
     accion,
   };
 
-  const params = new URLSearchParams();
-  for (const [campo, valor] of Object.entries(datos)) {
-    if (valor !== undefined && valor !== null && valor !== "") {
-      params.set(campo, valor);
-    }
-  }
+  const params = crearQuery(datos);
 
   const response = await fetch(`${endpoint}?${params}`, {
     method: "GET",

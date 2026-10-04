@@ -6,21 +6,23 @@ import {
   validateText,
   serviceError,
 } from "../../shared/utils/serviceUtils.js";
+
 import {
   validarAccesoSolicitud,
   validarFiltrosSolicitudes,
+  validarRestauranteSolicitudes,
+  validarEstadoResolucion,
+  validarSolicitudPendiente,
+  validarFechaSolicitudFutura,
+  validarFechaResolucion,
 } from "../../shared/utils/solicitudUtils.js";
 
 import {
-  getRestaurantePermitido,
   getColaborador,
+  getRestaurantePermitido,
 } from "../colaboradores/colaboradores.service.js";
-import * as periodoRepository from "../periodoPlanilla/periodosPlanillas.repository.js";
 
-import {
-  obtenerCalendarioActual,
-  fechaSQLComoTexto,
-} from "../../shared/utils/fechaUtils.js";
+import { obtenerCalendarioActual } from "../../shared/utils/fechaUtils.js";
 
 import { beginTransaction } from "../../shared/config/database.js";
 import { registrarBitacora, entidades } from "../bitacora/bitacora.service.js";
@@ -31,15 +33,15 @@ async function validarFechaPendiente(filtros) {
 }
 
 export async function obtenerPermisoPorId(permisoId, usuario) {
-  validateId(permisoId, "PermisoId");
-  const permiso = await permisosRepository.getPermisosById(permisoId);
+  const id = validateId(permisoId, "PermisoId");
+  const permiso = await permisosRepository.getPermisosById(id);
   if (!permiso) {
     throw serviceError("No se encontró el permiso laboral solicitado", 404);
   }
 
   await validarAccesoSolicitud(permiso, usuario);
-  await validarFechaPendiente({ permisoId });
-  return permisosRepository.getPermisosById(permisoId);
+  await validarFechaPendiente({ permisoId: id });
+  return permisosRepository.getPermisosById(id);
 }
 
 export async function listarMisPermisos(usuario, filtros = {}) {
@@ -60,23 +62,10 @@ export async function listarPermisosPorRestaurante(
 ) {
   const restauranteSolicitado = validateId(restauranteId, "RestauranteId");
   const filtrosValidados = validarFiltrosSolicitudes(filtros);
-  const restaurantePermitido = await getRestaurantePermitido(usuario);
-
-  if (
-    restaurantePermitido !== null &&
-    restauranteSolicitado !== null &&
-    restauranteSolicitado !== restaurantePermitido
-  ) {
-    throw serviceError(
-      "Solo podés consultar solicitudes de tu restaurante asignado.",
-      403,
-    );
-  }
-
-  const restauranteConsultaId = restaurantePermitido ?? restauranteSolicitado;
-  if (restauranteConsultaId === null) {
-    throw serviceError("Debe indicar el restaurante que desea consultar");
-  }
+  const restauranteConsultaId = await validarRestauranteSolicitudes(
+    restauranteSolicitado,
+    usuario,
+  );
 
   await validarFechaPendiente({ restauranteId: restauranteConsultaId });
   return await permisosRepository.getPermisosByRestaurante(
@@ -85,29 +74,53 @@ export async function listarPermisosPorRestaurante(
   );
 }
 
-export async function solicitarPermiso({ fechaSolicitada, motivo }, usuario) {
-  const colaboradorId = validateId(usuario.ColaboradorId, "ColaboradorId");
-  const fechaAsignada = validateDate(fechaSolicitada, "FechaSolicitada");
-  const { fechaHoy } = obtenerCalendarioActual();
-
-  if (fechaSQLComoTexto(fechaAsignada) <= fechaHoy) {
-    throw serviceError(
-      "La fecha solicitada debe ser posterior al día de hoy.",
-      400,
-    );
+export async function listarPermisosAdministracion(usuario, filtros = {}) {
+  if (!["ADMINISTRADOR", "RECURSOS_HUMANOS"].includes(usuario?.Rol)) {
+    throw serviceError("No tiene permisos para consultar estas solicitudes", 403);
   }
 
-  validateText(motivo, "Motivo", 500);
+  const restauranteId =
+    filtros.restauranteId == null || filtros.restauranteId === ""
+      ? null
+      : validateId(filtros.restauranteId, "RestauranteId");
+  const filtrosValidados = validarFiltrosSolicitudes(filtros);
+
+  await validarFechaPendiente({ restauranteId });
+  return permisosRepository.getPermisosByRestaurante(restauranteId, filtrosValidados);
+}
+
+export async function listarPermisosDeMiRestaurante(usuario, filtros = {}) {
+  const restauranteId = await getRestaurantePermitido(usuario);
+  if (restauranteId === null) {
+    throw serviceError("Debe indicar el restaurante que desea consultar");
+  }
+
+  const filtrosValidados = validarFiltrosSolicitudes(filtros);
+  await validarFechaPendiente({ restauranteId });
+  return permisosRepository.getPermisosByRestaurante(
+    restauranteId,
+    filtrosValidados,
+  );
+}
+
+export async function solicitarPermiso({ fechaSolicitada, motivo }, usuario) {
+  const colaboradorId = validateId(usuario.ColaboradorId, "ColaboradorId");
+  const fechaValidada = validarFechaSolicitudFutura(
+    fechaSolicitada,
+    "FechaSolicitada",
+  );
+
+  const motivoValidado = validateText(motivo, "Motivo", 500);
 
   const colaboradorActual = await getColaborador(colaboradorId);
   if (!colaboradorActual) {
     throw serviceError("Colaborador no encontrado", 404);
   }
-
+  
   const solicitudExistente =
     await permisosRepository.getPermisoByColaboradorYFecha(
       colaboradorId,
-      fechaAsignada,
+      fechaValidada,
     );
 
   if (solicitudExistente) {
@@ -120,8 +133,8 @@ export async function solicitarPermiso({ fechaSolicitada, motivo }, usuario) {
   const solicitudCreada = await permisosRepository.createPermiso({
     colaboradorId,
     restauranteId: colaboradorActual.RestauranteId,
-    fechaSolicitada: fechaAsignada,
-    motivo,
+    fechaSolicitada: fechaValidada,
+    motivo: motivoValidado,
   });
 
   if (!solicitudCreada) {
@@ -146,41 +159,27 @@ export async function resolverPermiso(
 
   const usuarioId = validateId(usuario.UsuarioId, "UsuarioId");
   const id = validateId(permisoId, "PermisoId");
-  const observacionValidada = validateText(observacion, "Observación", 500, true);
-  const estadoValidado = validateText(estado, "Estado", 15).toUpperCase();
-
-  if (estadoValidado !== "APROBADA" && estadoValidado !== "RECHAZADA") {
-    throw serviceError("El estado debe ser APROBADA o RECHAZADA");
-  }
+  const observacionValidada = validateText(
+    observacion,
+    "Observación",
+    500,
+    true,
+  );
+  const estadoValidado = validarEstadoResolucion(estado, "Estado");
 
   const solicitudActual = await permisosRepository.getPermisosById(id);
   if (!solicitudActual) {
     throw serviceError("No se encontró la solicitud de permiso laboral", 404);
   }
 
-  if (usuario.Rol === "GERENTE") {
-    const restaurantePermitido = await getRestaurantePermitido(usuario);
+  await validarAccesoSolicitud(
+    solicitudActual,
+    usuario,
+    "Solo podés resolver solicitudes de tu restaurante",
+  );
 
-    if (solicitudActual.RestauranteId !== restaurantePermitido) {
-      throw serviceError(
-        "Solo podés resolver solicitudes de tu restaurante",
-        403,
-      );
-    }
-  }
-
-  const { fechaHoy } = obtenerCalendarioActual();
-  const fechaSolicitada = fechaSQLComoTexto(solicitudActual.FechaSolicitada);
-
-  if (fechaHoy >= fechaSolicitada) {
-    throw serviceError(
-      "La solicitud solo puede resolverse antes de la fecha solicitada",
-    );
-  }
-
-  if (solicitudActual.Estado !== "PENDIENTE") {
-    throw serviceError("Esta solicitud ya fue resuelta", 409);
-  }
+  validarFechaResolucion(solicitudActual.FechaSolicitada);
+  validarSolicitudPendiente(solicitudActual);
 
   const accionBitacora =
     estadoValidado === "APROBADA"
@@ -204,14 +203,17 @@ export async function resolverPermiso(
       throw serviceError("La solicitud ya fue resuelta por otro usuario", 409);
     }
 
-    await registrarBitacora({
-      usuarioId,
-      entidad: entidades.SOLICITUDES_PERMISOS_LABORALES,
-      registroId: id,
-      accion: accionBitacora,
-      datosAnteriores: solicitudActual,
-      datosNuevos: permisoResuelto,
-    }, transaction);
+    await registrarBitacora(
+      {
+        usuarioId,
+        entidad: entidades.SOLICITUDES_PERMISOS_LABORALES,
+        registroId: id,
+        accion: accionBitacora,
+        datosAnteriores: solicitudActual,
+        datosNuevos: permisoResuelto,
+      },
+      transaction,
+    );
 
     await transaction.commit();
     return permisoResuelto;
@@ -219,7 +221,10 @@ export async function resolverPermiso(
     try {
       await transaction.rollback();
     } catch (rollbackError) {
-      console.error("No se pudo revertir la resolución del permiso laboral", rollbackError);
+      console.error(
+        "No se pudo revertir la resolución del permiso laboral",
+        rollbackError,
+      );
     }
     throw error;
   }
@@ -231,5 +236,26 @@ export async function validarDiaSinPermisoAprobado(
   fechaAsignada,
   transaction,
 ) {
-  // Implementación de la función
+  const idColaborador = validateId(colaboradorId, "ColaboradorId");
+  const fechaValida = validateDate(fechaAsignada, "FechaAsignada");
+
+  if (!transaction)
+    throw serviceError(
+      "Debe proporcionarse una transacción para validar el día sin permiso aprobado",
+      500,
+    );
+
+  const permisoConsultado =
+    await permisosRepository.getPermisoByColaboradorYFecha(
+      idColaborador,
+      fechaValida,
+      transaction,
+    );
+
+  if (permisoConsultado && permisoConsultado.Estado === "APROBADA") {
+    throw serviceError(
+      "El colaborador ya tiene un permiso laboral aprobado para la fecha indicada",
+      400,
+    );
+  }
 }

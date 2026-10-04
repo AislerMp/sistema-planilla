@@ -17,6 +17,7 @@ const puestos = await import("../src/modules/puestos/puestos.controller.js");
 const restaurantes = await import("../src/modules/restaurantes/restaurantes.controller.js");
 const roles = await import("../src/modules/roles/roles.controller.js");
 const ubicaciones = await import("../src/modules/ubicaciones/ubicaciones.controller.js");
+const permisosLaborales = await import("../src/modules/permisosLaborales/permisosLaborales.controller.js");
 
 let expected;
 let calls;
@@ -117,6 +118,34 @@ test("las listas responden 200, incluso cuando están vacías", async () => {
       assert.deepEqual(result.body, records);
     }
   }
+});
+
+test("gerente consulta permisos laborales de su restaurante con el usuario autenticado", async () => {
+  respond(/FROM Usuarios AS u/, [{ RestauranteId: 2 }]);
+  respond(/UPDATE dbo\.PermisosLaborales/);
+  respond(/FROM dbo\.PermisosLaborales AS p/, []);
+
+  const result = await invoke(
+    permisosLaborales.listarPermisosDeMiRestauranteController,
+    { user: { UsuarioId: 7, Rol: "GERENTE" } },
+  );
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, []);
+});
+
+test("administración consulta todos los permisos sin elegir restaurante", async () => {
+  respond(/UPDATE dbo\.PermisosLaborales/);
+  respond(/FROM dbo\.PermisosLaborales AS p/);
+
+  const result = await invoke(
+    permisosLaborales.listarPermisosAdministracionController,
+    { user: { UsuarioId: 3, Rol: "ADMINISTRADOR" } },
+  );
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, []);
+  assert.equal(calls.at(-1).parameters.restauranteId, null);
 });
 
 test("las consultas individuales distinguen éxito, ID inválido y registro ausente", async () => {

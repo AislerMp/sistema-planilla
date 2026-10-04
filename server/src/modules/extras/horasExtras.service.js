@@ -1,12 +1,20 @@
 import {
   validateId,
-  validateDate,
   validateText,
   serviceError,
 } from "../../shared/utils/serviceUtils.js";
 
-import { estadosSolicitud, validarAccesoSolicitud, validarFiltrosSolicitudes } from "../../shared/utils/solicitudUtils.js";
+import {
+  validarAccesoSolicitud,
+  validarFiltrosSolicitudes,
+  validarRestauranteSolicitudes,
+  validarEstadoResolucion,
+  validarSolicitudPendiente,
+  validarFechaSolicitudFutura,
+  validarFechaResolucion,
+} from "../../shared/utils/solicitudUtils.js";
 
+import { validarDiaSinPermisoAprobado } from "../permisosLaborales/permisosLaborales.service.js";
 import * as horasExtraRepository from "./horasExtras.repository.js";
 import * as asistenciasRepository from "../asistenciasDiarias/asistenciasDiarias.repository.js";
 import {
@@ -179,6 +187,7 @@ export async function actualizarHorasExtra(
       );
     }
 
+    await validarDiaSinPermisoAprobado(asistencia.ColaboradorId, fechaSQLComoTexto(asistencia.FechaAsignada), transaction);
     // La asistencia guarda las horas normales; las extras se guardan aparte.
     // Quitar extras de una jornada corta no debe convertirla en ocho horas.
     const minutosNormales = minutosAjustados > 0
@@ -482,23 +491,10 @@ export async function getSolicitudesByRestaurante(
     "restauranteId",
     true,
   );
-  const restaurantePermitido = await getRestaurantePermitido(usuario);
-
-  if (
-    restaurantePermitido !== null &&
-    restauranteSolicitado !== null &&
-    restauranteSolicitado !== restaurantePermitido
-  ) {
-    throw serviceError(
-      "Solo podés consultar solicitudes de tu restaurante asignado.",
-      403,
-    );
-  }
-
-  const restauranteConsultaId = restaurantePermitido ?? restauranteSolicitado;
-  if (restauranteConsultaId === null) {
-    throw serviceError("Debe indicar el restaurante que desea consultar");
-  } 
+  const restauranteConsultaId = await validarRestauranteSolicitudes(
+    restauranteSolicitado,
+    usuario,
+  );
 
   const filtrosValidados = validarFiltrosSolicitudes(filtros);
   await validarFechaPendiente({ restauranteId: restauranteConsultaId });
@@ -523,11 +519,7 @@ export async function crearSolicitudHorasExtras(
 
   const usuarioId = validateId(usuario.UsuarioId, "usuarioId");
   const colaboradorId = validateId(usuario.ColaboradorId, "ColaboradorId");
-  const validFecha = validateDate(fechaSolicitada, "Fecha solicitada");
-  const { fechaHoy } = obtenerCalendarioActual();
-  if (fechaSQLComoTexto(validFecha) <= fechaHoy) {
-    throw serviceError("La fecha solicitada debe ser posterior al día de hoy.", 400);
-  }
+  const validFecha = validarFechaSolicitudFutura(fechaSolicitada, "Fecha solicitada");
   const validMinutosSolicitados = validarMinutosSolicitados(minutosSolicitados);
   const validMotivo = validateText(motivo, "El motivo", 500);
 
@@ -611,11 +603,7 @@ export async function resolverSolicitudHorasExtras(
 
   const solicitudId = validateId(idSolicitud, "SolicitudId");
   const usuarioId = validateId(usuario.UsuarioId, "usuarioId");
-  const validEstado = validateText(estado, "El estado", 15).toUpperCase();
-
-  if (validEstado !== "APROBADA" && validEstado !== "RECHAZADA") {
-    throw serviceError("El estado debe ser APROBADA o RECHAZADA");
-  }
+  const validEstado = validarEstadoResolucion(estado, "El estado");
 
   let validMinutosAutorizados = 0;
   const validObservacion = validateText(
@@ -632,28 +620,14 @@ export async function resolverSolicitudHorasExtras(
     throw serviceError("Solicitud de horas extras no encontrada", 404);
   }
 
-  if (usuario.Rol === "GERENTE") {
-    const restaurantePermitido = await getRestaurantePermitido(usuario);
+  await validarAccesoSolicitud(
+    solicitudActual,
+    usuario,
+    "Solo podés resolver solicitudes de tu restaurante",
+  );
 
-    if (solicitudActual.RestauranteId !== restaurantePermitido) {
-      throw serviceError(
-        "Solo podés resolver solicitudes de tu restaurante",
-        403,
-      );
-    }
-  }
-
-  const { fechaHoy } = obtenerCalendarioActual();
-  const fechaSolicitada = fechaSQLComoTexto(solicitudActual.FechaSolicitada);
-  if (fechaHoy >= fechaSolicitada) {
-    throw serviceError(
-      "La solicitud solo puede resolverse antes de la fecha solicitada",
-    );
-  }
-
-  if (solicitudActual.Estado !== "PENDIENTE") {
-    throw serviceError("Esta solicitud ya fue resuelta", 409);
-  }
+  const fechaSolicitada = validarFechaResolucion(solicitudActual.FechaSolicitada);
+  validarSolicitudPendiente(solicitudActual);
 
   if (validEstado === "APROBADA") {
     validMinutosAutorizados = validarMinutosSolicitados(minutosAutorizados);

@@ -18,6 +18,7 @@ import { registrarBitacora, entidades } from "../bitacora/bitacora.service.js";
 
 import { getRestaurantePermitido } from "../colaboradores/colaboradores.service.js";
 import { sincronizarHorasExtras } from "../extras/horasExtras.service.js";
+import { validarDiaSinPermisoAprobado } from "../permisosLaborales/permisosLaborales.service.js";
 import { beginTransaction } from "../../shared/config/database.js";
 
 export async function obtenerAsistencia(id) {
@@ -80,9 +81,10 @@ export async function listarAsistenciasPorColaborador(
 
   // Una consulta por periodo completo no necesita limites de fecha.
   // Calcular la amplitud solo cuando ambos limites estan presentes.
-  const diasIncluidos = fechaDesde && fechaHasta
-    ? (fechaHasta.getTime() - fechaDesde.getTime()) / 86400000 + 1
-    : 0;
+  const diasIncluidos =
+    fechaDesde && fechaHasta
+      ? (fechaHasta.getTime() - fechaDesde.getTime()) / 86400000 + 1
+      : 0;
 
   if (diasIncluidos > 14) {
     throw serviceError("La consulta permite un máximo de 14 días", 400);
@@ -113,7 +115,10 @@ export async function listarAsistenciasPorRestaurante(
 ) {
   if (!usuario) throw serviceError("Usuario no autenticado", 401);
   if (!["GERENTE", "ADMINISTRADOR", "RECURSOS_HUMANOS"].includes(usuario.Rol)) {
-    throw serviceError("No tiene permisos para consultar asistencias del restaurante", 403);
+    throw serviceError(
+      "No tiene permisos para consultar asistencias del restaurante",
+      403,
+    );
   }
   let fechaDesde = validateDate(filtros?.desde, "Fecha desde", true);
   let fechaHasta = validateDate(filtros?.hasta, "Fecha hasta", true);
@@ -158,9 +163,10 @@ export async function listarAsistenciasPorRestaurante(
 
   // Una consulta por periodo completo no necesita limites de fecha.
   // Calcular la amplitud solo cuando ambos limites estan presentes.
-  const diasIncluidos = fechaDesde && fechaHasta
-    ? (fechaHasta.getTime() - fechaDesde.getTime()) / 86400000 + 1
-    : 0;
+  const diasIncluidos =
+    fechaDesde && fechaHasta
+      ? (fechaHasta.getTime() - fechaDesde.getTime()) / 86400000 + 1
+      : 0;
 
   if (diasIncluidos > 14) {
     throw serviceError("La consulta permite un máximo de 14 días", 400);
@@ -328,6 +334,12 @@ export async function ajustarMinutosAsistencia(
       );
     }
 
+    await validarDiaSinPermisoAprobado(
+      asistenciaAnterior.ColaboradorId,
+      fechaSQLComoTexto(asistenciaAnterior.FechaAsignada),
+      transaction,
+    );
+    
     const asistenciaActualizada =
       await asistenciasRepository.updateMinutosAsistencia(
         validAsistenciaId,
@@ -362,7 +374,12 @@ export async function ajustarMinutosAsistencia(
     );
 
     // Un nuevo total manual reemplaza la base del ajuste anterior de extras.
-    await sincronizarHorasExtras(asistenciaActualizada, actorId, transaction, true);
+    await sincronizarHorasExtras(
+      asistenciaActualizada,
+      actorId,
+      transaction,
+      true,
+    );
 
     await transaction.commit();
 

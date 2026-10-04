@@ -4,8 +4,9 @@ import { useAuth } from "../context/AuthContext.jsx";
 import useAsyncRequest from "../hooks/useAsyncRequest.js";
 import AlertMessage from "../components/AlertMessage.jsx";
 import LoadingState from "../components/loadingState.jsx";
-import { ArrowLeft, RotateCcw, PlusIcon } from "lucide-react";
+import { ArrowLeft, PlusIcon } from "lucide-react";
 import { getRestaurantes } from "../services/restaurantes.Service.js";
+import SolicitudesFiltros from "../components/SolicitudesFiltros.jsx";
 import {
   getMisSolicitudes,
   getSolicitudesPorRestaurante,
@@ -15,20 +16,6 @@ import {
 import { formatDate } from "../utils/fechaUtils.js";
 import Dialog from "../components/dialog.jsx";
 
-
-const emptyFilters = {
-  restauranteId: null,
-  desde: "",
-  hasta: "",
-  estado: null,
-};
-
-const estadosSolicitud = [
-  { valor: null, etiqueta: "Todas" },
-  { valor: "PENDIENTE", etiqueta: "Pendientes" },
-  { valor: "APROBADA", etiqueta: "Aprobadas" },
-  { valor: "RECHAZADA", etiqueta: "Rechazadas" },
-];
 
 const emptyCheckSolicitudForm = {
   id: null,
@@ -67,14 +54,16 @@ export default function SolicitudesHorasExtra() {
   const puedeElegirRestaurante = ["ADMINISTRADOR", "RECURSOS_HUMANOS"].includes(
     user?.Rol,
   );
-  const [filters, setFilters] = useState(emptyFilters);
+  const [filters, setFilters] = useState({
+    restauranteId: null,
+    desde: "",
+    hasta: "",
+    estado: null,
+  });
   const puedeConsultar =
     !puedeElegirRestaurante || Boolean(filters.restauranteId);
 
   const [reloadKey, setReloadKey] = useState(0);
-  const [filterError, setFilterError] = useState(null);
-
-  const [filterForm, setFilterForm] = useState(emptyFilters);
   const [checkSolicitudForm, setCheckSolicitudForm] = useState(
     emptyCheckSolicitudForm,
   );
@@ -117,33 +106,6 @@ export default function SolicitudesHorasExtra() {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
-
-  function limpiarFiltros() {
-    setFilterForm({ ...emptyFilters });
-    setFilters({ ...emptyFilters });
-    setFilterError(null);
-  }
-
-  function handleFilters(event) {
-    event.preventDefault();
-
-    if (isLoading) return;
-    if (
-      filterForm.desde &&
-      filterForm.hasta &&
-      filterForm.desde > filterForm.hasta
-    ) {
-      setFilterError("La fecha desde no puede ser mayor que la fecha hasta.");
-      return;
-    }
-
-    if (puedeElegirRestaurante && !filterForm.restauranteId) {
-      setFilterError("Selecciona un restaurante.");
-      return;
-    }
-    setFilterError(null);
-    setFilters({ ...filterForm });
-  }
 
   async function handleCrearSolicitud(e) {
     e.preventDefault();
@@ -304,123 +266,21 @@ export default function SolicitudesHorasExtra() {
         </div>
       )}
 
-      <AlertMessage>{error || filterError || solicitudesError}</AlertMessage>
+      <AlertMessage>{error || solicitudesError}</AlertMessage>
 
-      <form
-        className="solicitudes-filters data-panel"
-        onSubmit={handleFilters}
-        aria-label="Filtros de solicitudes"
-      >
-        <div
-          className="solicitudes-status-tabs"
-          role="group"
-          aria-label="Estado de las solicitudes"
-        >
-          {estadosSolicitud.map(({ valor, etiqueta }) => (
-            <button
-              key={valor ?? "todas"}
-              type="button"
-              className="solicitudes-status-tab"
-              aria-pressed={filterForm.estado === valor}
-              onClick={() =>
-                setFilterForm((current) => ({ ...current, estado: valor }))
-              }
-            >
-              {etiqueta}
-              <span className="solicitudes-status-count">
-                {isLoading || solicitudesError || !puedeConsultar
-                  ? "—"
-                  : valor === null
-                    ? solicitudes.length
-                    : solicitudes.filter(
-                        (solicitud) => solicitud.Estado === valor,
-                      ).length}
-              </span>
-            </button>
-          ))}
-        </div>
-        <fieldset
-          disabled={isLoading}
-          aria-label="Fechas y restaurante"
-          aria-busy={isLoading}
-        >
-          <label htmlFor="marks-desde">
-            Fecha solicitada desde
-            <input
-              id="marks-desde"
-              name="desde"
-              type="date"
-              value={filterForm.desde}
-              max={filterForm.hasta || undefined}
-              onChange={(event) => {
-                setFilterForm({ ...filterForm, desde: event.target.value });
-              }}
-            />
-          </label>
-          <label htmlFor="marks-hasta">
-            Hasta
-            <input
-              id="marks-hasta"
-              name="hasta"
-              type="date"
-              value={filterForm.hasta}
-              min={filterForm.desde || undefined}
-              onChange={(event) => {
-                setFilterForm({ ...filterForm, hasta: event.target.value });
-              }}
-            />
-          </label>
-          {puedeElegirRestaurante && (
-            <label className="solicitudes-restaurante" htmlFor="restauranteId">
-              Restaurante
-              <select
-                id="restauranteId"
-                value={filterForm.restauranteId ?? ""}
-                disabled={loadingRestaurantes}
-                onChange={(event) => {
-                  setFilterError("");
-                  setFilterForm({
-                    ...filterForm,
-                    restauranteId: event.target.value
-                      ? Number(event.target.value)
-                      : null,
-                  });
-                }}
-              >
-                <option value="">
-                  {loadingRestaurantes
-                    ? "Cargando restaurantes..."
-                    : errorRestaurantes
-                      ? "No se pudieron cargar"
-                      : restaurantes.length === 0
-                        ? "No hay restaurantes activos"
-                        : "Selecciona un restaurante"}
-                </option>
-                {restaurantes.map((restaurante) => (
-                  <option
-                    key={restaurante.RestauranteId}
-                    value={restaurante.RestauranteId}
-                  >
-                    {restaurante.Nombre}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <div className="solicitudes-filter-actions">
-          <button
-            className="button button-secondary"
-            type="submit"
-          >
-            Aplicar filtros
-          </button>
-          <button type="button" className="button button-secondary" onClick={limpiarFiltros}>
-            <RotateCcw size={16} aria-hidden="true" />
-            Limpiar filtros
-          </button>
-          </div>
-        </fieldset>
-      </form>
+      <SolicitudesFiltros
+        filtros={filters}
+        onAplicar={setFilters}
+        solicitudes={solicitudes}
+        isLoading={isLoading}
+        error={solicitudesError}
+        puedeConsultar={puedeConsultar}
+        mostrarRestaurante={puedeElegirRestaurante}
+        restauranteRequerido={puedeElegirRestaurante}
+        restaurantes={restaurantes}
+        cargandoRestaurantes={loadingRestaurantes}
+        errorRestaurantes={errorRestaurantes}
+      />
       <section className="data-panel" aria-label="Solicitudes de horas extras">
         {!puedeConsultar ? (
           <p className="catalog-message">

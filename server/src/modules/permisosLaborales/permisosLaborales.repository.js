@@ -118,7 +118,7 @@ export async function getPermisosByRestaurante(
       FROM dbo.PermisosLaborales AS p
       INNER JOIN dbo.Colaboradores AS c
         ON c.ColaboradorId = p.ColaboradorId
-      WHERE p.RestauranteId = @restauranteId
+      WHERE (@restauranteId IS NULL OR p.RestauranteId = @restauranteId)
         AND (@desde IS NULL OR p.FechaSolicitada >= @desde)
         AND (@hasta IS NULL OR p.FechaSolicitada <= @hasta)
         AND (@estado IS NULL OR p.Estado = @estado)

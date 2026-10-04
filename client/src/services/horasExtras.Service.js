@@ -1,4 +1,4 @@
-import { parseResponse } from "../utils/helper.js";
+import { parseResponse, crearQuery } from "../utils/helper.js";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const endpoint = `${API_URL}/extras/solicitudes`;
@@ -7,17 +7,6 @@ function ensureApiUrl() {
   if (!API_URL) {
     throw new Error("Falta configurar VITE_API_URL en client/.env");
   }
-}
-
-function crearQuery(filtros) {
-  const params = new URLSearchParams();
-  for (const [campo, valor] of Object.entries(filtros)) {
-    if (valor !== undefined && valor !== null && valor !== "") {
-      params.set(campo, valor);
-    }
-  }
-  const query = params.toString();
-  return query ? `?${query}` : "";
 }
 
 export async function getSolicitud(id) {
