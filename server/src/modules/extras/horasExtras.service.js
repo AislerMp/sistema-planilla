@@ -28,6 +28,7 @@ import {
   fechaSQLComoTexto,
 } from "../../shared/utils/fechaUtils.js";
 
+import { bloquearColaboradorSolicitudes } from "../solicitudes/solicitudes.repository.js";
 import { beginTransaction } from "../../shared/config/database.js";
 import { registrarBitacora, entidades } from "../bitacora/bitacora.service.js";
 
@@ -531,7 +532,8 @@ export async function crearSolicitudHorasExtras(
   const transaction = await beginTransaction();
 
   try {
-    // Consultar e insertar en la misma transacción evita duplicados simultáneos.
+    // Bloquear antes de consultar protege incluso cuando no hay solicitudes.
+    await bloquearColaboradorSolicitudes(colaboradorId, transaction);
     const existente = await horasExtraRepository.obtenerSolicitudesByFechaAndID(
       validFecha, colaboradorId, transaction,
     );
@@ -539,9 +541,10 @@ export async function crearSolicitudHorasExtras(
     if (existente) {
       throw serviceError("Ya tenés una solicitud de horas extras para esa fecha.", 409);
     }
-
+    
     const solicitudCreada = await horasExtraRepository.createSolicitud(
       {
+        registradoPorUsuarioId: usuarioId,
         colaboradorId: colaboradorActual.ColaboradorId,
         restauranteId: colaboradorActual.RestauranteId,
         fechaSolicitada: validFecha,
@@ -561,18 +564,11 @@ export async function crearSolicitudHorasExtras(
     await registrarBitacora(
       {
         usuarioId,
-        entidad: entidades.SOLICITUDES_HORAS_EXTRAS,
-        registroId: solicitudCreada.SolicitudHoraExtraId,
+        entidad: entidades.SOLICITUDES,
+        registroId: solicitudCreada.SolicitudId,
         accion: "CREAR",
         datosAnteriores: null,
-        datosNuevos: {
-          colaboradorId: solicitudCreada.ColaboradorId,
-          restauranteId: solicitudCreada.RestauranteId,
-          fechaSolicitada: fechaSQLComoTexto(solicitudCreada.FechaSolicitada),
-          minutosSolicitados: solicitudCreada.MinutosSolicitados,
-          motivo: solicitudCreada.Motivo,
-          estado: solicitudCreada.Estado,
-        },
+        datosNuevos: solicitudCreada,
       },
       transaction,
     );
@@ -594,7 +590,7 @@ export async function resolverSolicitudHorasExtras(
   { estado, minutosAutorizados, observacion },
   usuario,
 ) {
-  if (!["GERENTE", "RECURSOS_HUMANOS", "ADMINISTRADOR"].includes(usuario.Rol)) {
+  if (usuario?.Rol !== "GERENTE") {
     throw serviceError(
       "No tiene permisos para resolver solicitudes de horas extras",
       403,
@@ -626,7 +622,7 @@ export async function resolverSolicitudHorasExtras(
     "Solo podés resolver solicitudes de tu restaurante",
   );
 
-  const fechaSolicitada = validarFechaResolucion(solicitudActual.FechaSolicitada);
+  validarFechaResolucion(solicitudActual.FechaSolicitada);
   validarSolicitudPendiente(solicitudActual);
 
   if (validEstado === "APROBADA") {
@@ -652,7 +648,7 @@ export async function resolverSolicitudHorasExtras(
       {
         estado: validEstado,
         minutosAutorizados: validMinutosAutorizados,
-        revisadoPorUsuarioId: usuarioId,
+        revisadoPorGerenteId: usuarioId,
         observacion: validObservacion,
       },
       transaction,
@@ -665,31 +661,11 @@ export async function resolverSolicitudHorasExtras(
     await registrarBitacora(
       {
         usuarioId,
-        entidad: entidades.SOLICITUDES_HORAS_EXTRAS,
-        registroId: solicitudResuelta.SolicitudHoraExtraId,
+        entidad: entidades.SOLICITUDES,
+        registroId: solicitudResuelta.SolicitudId,
         accion: accionBitacora,
-        datosAnteriores: {
-          colaboradorId: solicitudActual.ColaboradorId,
-          restauranteId: solicitudActual.RestauranteId,
-          fechaSolicitada,
-          minutosSolicitados: solicitudActual.MinutosSolicitados,
-          motivo: solicitudActual.Motivo,
-          estado: solicitudActual.Estado,
-          minutosAutorizados: solicitudActual.MinutosAutorizados,
-          revisadoPorUsuarioId: solicitudActual.RevisadoPorUsuarioId,
-          observacion: solicitudActual.Observacion,
-        },
-        datosNuevos: {
-          colaboradorId: solicitudResuelta.ColaboradorId,
-          restauranteId: solicitudResuelta.RestauranteId,
-          fechaSolicitada: fechaSQLComoTexto(solicitudResuelta.FechaSolicitada),
-          minutosSolicitados: solicitudResuelta.MinutosSolicitados,
-          motivo: solicitudResuelta.Motivo,
-          estado: solicitudResuelta.Estado,
-          minutosAutorizados: solicitudResuelta.MinutosAutorizados,
-          revisadoPorUsuarioId: solicitudResuelta.RevisadoPorUsuarioId,
-          observacion: solicitudResuelta.Observacion,
-        },
+        datosAnteriores: solicitudActual,
+        datosNuevos: solicitudResuelta,
       },
       transaction,
     );

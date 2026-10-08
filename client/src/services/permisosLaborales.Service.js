@@ -39,41 +39,9 @@ export async function getPermisosPorRestaurante(
 ) {
   ensureApiUrl();
 
-  const query = crearQuery({ desde, hasta, estado });
-  const response = await fetch(
-    `${endpoint}/restaurante/${encodeURIComponent(restauranteId)}${query}`,
-    {
-      method: "GET",
-      credentials: "include",
-    },
-  );
-
-  return parseResponse(response);
-}
-
-export async function getPermisosAdministracion({
-  restauranteId,
-  desde,
-  hasta,
-  estado,
-} = {}) {
-  ensureApiUrl();
-
   const query = crearQuery({ restauranteId, desde, hasta, estado });
-  const response = await fetch(`${endpoint}/restaurante${query}`, {
-    method: "GET",
-    credentials: "include",
-  });
-
-  return parseResponse(response);
-}
-
-export async function getPermisosDeMiRestaurante({ desde, hasta, estado } = {}) {
-  ensureApiUrl();
-
-  const query = crearQuery({ desde, hasta, estado });
   const response = await fetch(
-    `${endpoint}/restaurante/mi-restaurante${query}`,
+    `${endpoint}/restaurante${query}`,
     {
       method: "GET",
       credentials: "include",

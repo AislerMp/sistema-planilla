@@ -2,7 +2,7 @@ import { validateId, validateDate, validateText, serviceError } from "./serviceU
 import { getRestaurantePermitido } from "../../modules/colaboradores/colaboradores.service.js";
 import { obtenerCalendarioActual, fechaSQLComoTexto } from "./fechaUtils.js";
 
-export const estadosSolicitud = new Set(["PENDIENTE", "APROBADA", "RECHAZADA"]);
+export const estadosSolicitud = new Set(["PENDIENTE", "EN_REVISION_RH", "APROBADA", "RECHAZADA"]);
 
 export function validarFiltrosSolicitudes(filtros = {}) {
   let desde = validateDate(filtros?.desde, "Fecha desde", true);

@@ -1,6 +1,6 @@
 /*
 Datos ficticios para revisar la interfaz. Ejecutar completo en SQL Server/SSMS.
-Requiere las migraciones 001, 002 y 003 y colaboradores ya existentes.
+Requiere las migraciones 001 a 005 y colaboradores ya existentes.
 No crea usuarios, no cambia colaboradores y no reemplaza registros existentes.
 Reejecutable: solo completa jornadas que aun no existen.
 Las horas se generan en Costa Rica (UTC-6) y se guardan en UTC.
@@ -35,7 +35,7 @@ DECLARE @AsistenciasNuevas TABLE (
     AsistenciaId INT PRIMARY KEY, ColaboradorId INT, FechaAsignada DATE
 );
 DECLARE @ExtrasNuevas TABLE (HoraExtraId INT PRIMARY KEY);
-DECLARE @SolicitudesNuevas TABLE (SolicitudHoraExtraId INT PRIMARY KEY);
+DECLARE @SolicitudesNuevas TABLE (SolicitudId INT PRIMARY KEY);
 DECLARE @MarcasInsertadas INT = 0;
 DECLARE @JornadasOmitidas INT = 0;
 
@@ -163,8 +163,10 @@ BEGIN TRY
         SELECT 1 FROM dbo.AsistenciasDiarias a
         WHERE a.ColaboradorId = j.ColaboradorId AND a.FechaAsignada = j.FechaAsignada
     ) OR EXISTS (
-        SELECT 1 FROM dbo.SolicitudesHorasExtras s
-        WHERE s.ColaboradorId = j.ColaboradorId AND s.FechaSolicitada = j.FechaAsignada
+        SELECT 1 FROM dbo.SolicitudesHorasExtras d
+        JOIN dbo.Solicitudes s ON s.SolicitudId = d.SolicitudId
+        WHERE s.TipoSolicitud = 'HORAS_EXTRAS'
+          AND s.ColaboradorId = j.ColaboradorId AND d.FechaSolicitada = j.FechaAsignada
     );
 
     INSERT INTO dbo.AsistenciasDiarias (
@@ -181,8 +183,10 @@ BEGIN TRY
         WHERE a.ColaboradorId = j.ColaboradorId AND a.FechaAsignada = j.FechaAsignada
     ) AND NOT EXISTS (
         -- No inventar una jornada que contradiga solicitudes ya registradas.
-        SELECT 1 FROM dbo.SolicitudesHorasExtras s WITH (UPDLOCK, HOLDLOCK)
-        WHERE s.ColaboradorId = j.ColaboradorId AND s.FechaSolicitada = j.FechaAsignada
+        SELECT 1 FROM dbo.SolicitudesHorasExtras d WITH (UPDLOCK, HOLDLOCK)
+        JOIN dbo.Solicitudes s WITH (UPDLOCK, HOLDLOCK) ON s.SolicitudId = d.SolicitudId
+        WHERE s.TipoSolicitud = 'HORAS_EXTRAS'
+          AND s.ColaboradorId = j.ColaboradorId AND d.FechaSolicitada = j.FechaAsignada
     );
 
     -- Dos intervalos separados por 30 min sin contabilizar; jornadas cortas: uno.
@@ -205,28 +209,68 @@ BEGIN TRY
     JOIN @AsistenciasNuevas a ON a.ColaboradorId = j.ColaboradorId AND a.FechaAsignada = j.FechaAsignada
     WHERE j.Minutos > 480;
 
-    -- Una solicitud aprobada por jornada con extras. Algunos dias sin extras
-    -- tienen una solicitud rechazada; no quedan pendientes en periodos pagados.
-    INSERT INTO dbo.SolicitudesHorasExtras (
-        ColaboradorId, RestauranteId, FechaSolicitada, MinutosSolicitados,
-        Motivo, Estado, MinutosAutorizados, RevisadoPorUsuarioId, Observacion
-    )
-    OUTPUT INSERTED.SolicitudHoraExtraId INTO @SolicitudesNuevas
+    -- La carga se coordina con el mismo bloqueo usado por las creaciones del backend.
+    DECLARE @ColaboradoresBloqueados TABLE (ColaboradorId INT PRIMARY KEY);
+    INSERT INTO @ColaboradoresBloqueados
+    SELECT c.ColaboradorId FROM dbo.Colaboradores c WITH (UPDLOCK, HOLDLOCK)
+    JOIN @Objetivos o ON o.ColaboradorId = c.ColaboradorId;
+
+    -- Cada cabecera obtiene su ID; luego se inserta su detalle en esta transaccion.
+    DECLARE @SolicitudesDemo TABLE (
+        Numero INT IDENTITY PRIMARY KEY, ColaboradorId INT, RestauranteId INT,
+        FechaSolicitada DATE, MinutosSolicitados INT, MinutosAutorizados INT,
+        Estado VARCHAR(20), GerenteId INT
+    );
+    INSERT INTO @SolicitudesDemo
     SELECT j.ColaboradorId, j.RestauranteId, j.FechaAsignada,
-           CASE WHEN j.Minutos > 480 THEN j.Minutos - 480 ELSE 60 END,
-           N'[DEMO HISTORIAL] Apoyo de cierre e inventario.',
-           CASE WHEN j.Minutos > 480 THEN 'APROBADA' ELSE 'RECHAZADA' END,
-           CASE WHEN j.Minutos > 480 THEN j.Minutos - 480 ELSE 0 END,
-           @UsuarioActorId,
-           CASE WHEN j.Minutos > 480 THEN N'[DEMO HISTORIAL] Apoyo autorizado y realizado.'
-                ELSE N'[DEMO HISTORIAL] Se cubrio la operacion dentro de la jornada.' END
+        CASE WHEN j.Minutos > 480 THEN j.Minutos - 480 ELSE 60 END,
+        CASE WHEN j.Minutos > 480 THEN j.Minutos - 480 ELSE 0 END,
+        CASE WHEN j.Minutos > 480 THEN 'APROBADA' ELSE 'RECHAZADA' END,
+        gerente.UsuarioId
     FROM #JornadasDemo j
     JOIN @AsistenciasNuevas a ON a.ColaboradorId = j.ColaboradorId AND a.FechaAsignada = j.FechaAsignada
+    OUTER APPLY (
+        SELECT TOP (1) u.UsuarioId
+        FROM dbo.Usuarios u JOIN dbo.Roles r ON r.RolId = u.RolId
+        JOIN dbo.Colaboradores c ON c.ColaboradorId = u.ColaboradorId
+        WHERE r.Codigo = 'GERENTE' AND u.Activo = 1 AND c.Activo = 1
+          AND c.RestauranteId = j.RestauranteId
+        ORDER BY u.UsuarioId
+    ) gerente
     WHERE (j.Minutos > 480 OR (DAY(j.FechaAsignada) + j.ColaboradorId) % 9 = 0)
       AND NOT EXISTS (
-          SELECT 1 FROM dbo.SolicitudesHorasExtras s WITH (UPDLOCK, HOLDLOCK)
-          WHERE s.ColaboradorId = j.ColaboradorId AND s.FechaSolicitada = j.FechaAsignada
+        SELECT 1 FROM dbo.SolicitudesHorasExtras d
+        JOIN dbo.Solicitudes s ON s.SolicitudId = d.SolicitudId
+        WHERE s.TipoSolicitud = 'HORAS_EXTRAS' AND s.ColaboradorId = j.ColaboradorId
+          AND d.FechaSolicitada = j.FechaAsignada
       );
+    IF EXISTS (SELECT 1 FROM @SolicitudesDemo WHERE GerenteId IS NULL)
+        THROW 50011, N'Se necesita un gerente activo por restaurante para las solicitudes demo resueltas.', 1;
+
+    DECLARE @Numero INT = 1;
+    DECLARE @CantidadSolicitudes INT = (SELECT COUNT(*) FROM @SolicitudesDemo);
+    DECLARE @SolicitudId INT;
+    WHILE @Numero <= @CantidadSolicitudes
+    BEGIN
+        INSERT INTO dbo.Solicitudes (
+            TipoSolicitud, ColaboradorId, RestauranteId, RegistradoPorUsuarioId,
+            Motivo, Estado, RevisadoPorGerenteId, Observacion
+        )
+        OUTPUT INSERTED.SolicitudId INTO @SolicitudesNuevas
+        SELECT 'HORAS_EXTRAS', ColaboradorId, RestauranteId, @UsuarioActorId,
+            N'[DEMO HISTORIAL] Apoyo de cierre e inventario.', Estado, GerenteId,
+            CASE WHEN Estado = 'APROBADA' THEN N'[DEMO HISTORIAL] Apoyo autorizado y realizado.'
+                 ELSE N'[DEMO HISTORIAL] Se cubrio la operacion dentro de la jornada.' END
+        FROM @SolicitudesDemo WHERE Numero = @Numero;
+        SET @SolicitudId = CONVERT(INT, SCOPE_IDENTITY());
+
+        INSERT INTO dbo.SolicitudesHorasExtras (
+            SolicitudId, FechaSolicitada, MinutosSolicitados, MinutosAutorizados
+        )
+        SELECT @SolicitudId, FechaSolicitada, MinutosSolicitados, MinutosAutorizados
+        FROM @SolicitudesDemo WHERE Numero = @Numero;
+        SET @Numero += 1;
+    END;
 
     -- Auditoria de la carga actual, identificada como demo (no simula eventos reales).
     INSERT INTO dbo.Bitacora (UsuarioId, Entidad, RegistroId, Accion, DatosAnteriores, DatosNuevos)
@@ -237,7 +281,7 @@ BEGIN TRY
         SELECT N'PeriodosPlanilla' AS Entidad, PeriodoId AS RegistroId FROM @PeriodosNuevos
         UNION ALL SELECT N'AsistenciasDiarias', AsistenciaId FROM @AsistenciasNuevas
         UNION ALL SELECT N'HorasExtras', HoraExtraId FROM @ExtrasNuevas
-        UNION ALL SELECT N'SolicitudesHorasExtras', SolicitudHoraExtraId FROM @SolicitudesNuevas
+        UNION ALL SELECT N'Solicitudes', SolicitudId FROM @SolicitudesNuevas
     ) x;
 
     -- Comprobar la coherencia antes de confirmar, solo sobre jornadas nuevas.

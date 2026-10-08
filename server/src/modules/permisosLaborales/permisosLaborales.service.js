@@ -17,13 +17,11 @@ import {
   validarFechaResolucion,
 } from "../../shared/utils/solicitudUtils.js";
 
-import {
-  getColaborador,
-  getRestaurantePermitido,
-} from "../colaboradores/colaboradores.service.js";
+import { getColaborador } from "../colaboradores/colaboradores.service.js";
 
 import { obtenerCalendarioActual } from "../../shared/utils/fechaUtils.js";
 
+import { bloquearColaboradorSolicitudes } from "../solicitudes/solicitudes.repository.js";
 import { beginTransaction } from "../../shared/config/database.js";
 import { registrarBitacora, entidades } from "../bitacora/bitacora.service.js";
 
@@ -32,15 +30,15 @@ async function validarFechaPendiente(filtros) {
   await permisosRepository.rechazarSolicitudesVencidas(fechaHoy, filtros);
 }
 
-export async function obtenerPermisoPorId(permisoId, usuario) {
-  const id = validateId(permisoId, "PermisoId");
+export async function obtenerPermisoPorId(solicitudId, usuario) {
+  const id = validateId(solicitudId, "SolicitudId");
   const permiso = await permisosRepository.getPermisosById(id);
   if (!permiso) {
     throw serviceError("No se encontró el permiso laboral solicitado", 404);
   }
 
   await validarAccesoSolicitud(permiso, usuario);
-  await validarFechaPendiente({ permisoId: id });
+  await validarFechaPendiente({ solicitudId: id });
   return permisosRepository.getPermisosById(id);
 }
 
@@ -60,12 +58,17 @@ export async function listarPermisosPorRestaurante(
   restauranteId,
   filtros = {},
 ) {
-  const restauranteSolicitado = validateId(restauranteId, "RestauranteId");
+  if (!["GERENTE", "ADMINISTRADOR", "RECURSOS_HUMANOS"].includes(usuario?.Rol)) {
+    throw serviceError("No tiene permisos para consultar estas solicitudes", 403);
+  }
+
+  const restauranteSolicitado = validateId(restauranteId, "RestauranteId", true);
   const filtrosValidados = validarFiltrosSolicitudes(filtros);
-  const restauranteConsultaId = await validarRestauranteSolicitudes(
-    restauranteSolicitado,
-    usuario,
-  );
+  
+  // Solo RH y administración pueden consultar todos los restaurantes.
+  const restauranteConsultaId = usuario.Rol !== "GERENTE" && restauranteSolicitado === null
+    ? null
+    : await validarRestauranteSolicitudes(restauranteSolicitado, usuario);
 
   await validarFechaPendiente({ restauranteId: restauranteConsultaId });
   return await permisosRepository.getPermisosByRestaurante(
@@ -74,36 +77,9 @@ export async function listarPermisosPorRestaurante(
   );
 }
 
-export async function listarPermisosAdministracion(usuario, filtros = {}) {
-  if (!["ADMINISTRADOR", "RECURSOS_HUMANOS"].includes(usuario?.Rol)) {
-    throw serviceError("No tiene permisos para consultar estas solicitudes", 403);
-  }
-
-  const restauranteId =
-    filtros.restauranteId == null || filtros.restauranteId === ""
-      ? null
-      : validateId(filtros.restauranteId, "RestauranteId");
-  const filtrosValidados = validarFiltrosSolicitudes(filtros);
-
-  await validarFechaPendiente({ restauranteId });
-  return permisosRepository.getPermisosByRestaurante(restauranteId, filtrosValidados);
-}
-
-export async function listarPermisosDeMiRestaurante(usuario, filtros = {}) {
-  const restauranteId = await getRestaurantePermitido(usuario);
-  if (restauranteId === null) {
-    throw serviceError("Debe indicar el restaurante que desea consultar");
-  }
-
-  const filtrosValidados = validarFiltrosSolicitudes(filtros);
-  await validarFechaPendiente({ restauranteId });
-  return permisosRepository.getPermisosByRestaurante(
-    restauranteId,
-    filtrosValidados,
-  );
-}
-
 export async function solicitarPermiso({ fechaSolicitada, motivo }, usuario) {
+
+  const usuarioId = validateId(usuario.UsuarioId, "UsuarioId");
   const colaboradorId = validateId(usuario.ColaboradorId, "ColaboradorId");
   const fechaValidada = validarFechaSolicitudFutura(
     fechaSolicitada,
@@ -112,45 +88,79 @@ export async function solicitarPermiso({ fechaSolicitada, motivo }, usuario) {
 
   const motivoValidado = validateText(motivo, "Motivo", 500);
 
-  const colaboradorActual = await getColaborador(colaboradorId);
+  const colaboradorActual = await getColaborador(colaboradorId, usuario);
   if (!colaboradorActual) {
     throw serviceError("Colaborador no encontrado", 404);
   }
-  
-  const solicitudExistente =
-    await permisosRepository.getPermisoByColaboradorYFecha(
-      colaboradorId,
-      fechaValidada,
+
+  const transaction = await beginTransaction();
+  try {
+    await bloquearColaboradorSolicitudes(colaboradorId, transaction);
+
+    const solicitudExistente =
+      await permisosRepository.getPermisoByColaboradorYFecha(
+        colaboradorId,
+        fechaValidada,
+        transaction,
+      );
+      
+    if (solicitudExistente) {
+      throw serviceError(
+        "Ya existe una solicitud de permiso laboral para la fecha indicada",
+        400,
+      );
+    }
+
+    const solicitudCreada = await permisosRepository.createPermiso(
+      {
+        colaboradorId,
+        restauranteId: colaboradorActual.RestauranteId,
+        registradoPorUsuarioId: usuarioId,
+        fechaSolicitada: fechaValidada,
+        motivo: motivoValidado,
+      },
+      transaction,
     );
+    if (!solicitudCreada) {
+      throw serviceError(
+        "No se pudo crear la solicitud de permiso laboral",
+        500,
+      );
+    }
 
-  if (solicitudExistente) {
-    throw serviceError(
-      "Ya existe una solicitud de permiso laboral para la fecha indicada",
-      400,
+    await registrarBitacora(
+      {
+        usuarioId,
+        entidad: entidades.SOLICITUDES,
+        registroId: solicitudCreada.SolicitudId,
+        accion: "CREAR",
+        datosAnteriores: null,
+        datosNuevos: solicitudCreada,
+      },
+      transaction,
     );
+    await transaction.commit();
+    return solicitudCreada;
+  } catch (error) {
+    try {
+      await transaction.rollback();
+    } catch (rollbackError) {
+      console.error(
+        "No se pudo revertir la creación del permiso laboral",
+        rollbackError,
+      );
+    }
+    throw error;
   }
-
-  const solicitudCreada = await permisosRepository.createPermiso({
-    colaboradorId,
-    restauranteId: colaboradorActual.RestauranteId,
-    fechaSolicitada: fechaValidada,
-    motivo: motivoValidado,
-  });
-
-  if (!solicitudCreada) {
-    throw serviceError("No se pudo crear la solicitud de permiso laboral", 500);
-  }
-
-  return solicitudCreada;
 }
 
 export async function resolverPermiso(
-  permisoId,
+  solicitudId,
   { estado, observacion } = {},
   usuario,
 ) {
   if (!usuario) throw serviceError("Debe iniciar sesión", 401);
-  if (!["GERENTE", "RECURSOS_HUMANOS", "ADMINISTRADOR"].includes(usuario.Rol)) {
+  if (usuario?.Rol !== "GERENTE") {
     throw serviceError(
       "No tiene permisos para resolver solicitudes de permisos laborales",
       403,
@@ -158,7 +168,7 @@ export async function resolverPermiso(
   }
 
   const usuarioId = validateId(usuario.UsuarioId, "UsuarioId");
-  const id = validateId(permisoId, "PermisoId");
+  const id = validateId(solicitudId, "SolicitudId");
   const observacionValidada = validateText(
     observacion,
     "Observación",
@@ -193,7 +203,7 @@ export async function resolverPermiso(
       id,
       {
         estado: estadoValidado,
-        revisadoPorUsuarioId: usuarioId,
+        revisadoPorGerenteId: usuarioId,
         observacion: observacionValidada,
       },
       transaction,
@@ -206,7 +216,7 @@ export async function resolverPermiso(
     await registrarBitacora(
       {
         usuarioId,
-        entidad: entidades.SOLICITUDES_PERMISOS_LABORALES,
+        entidad: entidades.SOLICITUDES,
         registroId: id,
         accion: accionBitacora,
         datosAnteriores: solicitudActual,

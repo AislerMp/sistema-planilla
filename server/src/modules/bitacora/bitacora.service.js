@@ -15,8 +15,11 @@ export const entidades = {
   PERIODOS_PLANILLA: "PeriodosPlanilla",
   ASISTENCIAS_DIARIAS: "AsistenciasDiarias",
   HORAS_EXTRAS: "HorasExtras",
+  SOLICITUDES: "Solicitudes",
+  // Se conservan para consultar bitácoras anteriores a la migración 005.
   SOLICITUDES_HORAS_EXTRAS: "SolicitudesHorasExtras",
   SOLICITUDES_PERMISOS_LABORALES: "SolicitudesPermisosLaborales",
+  SOLICITUDES_INCAPACIDADES: "SolicitudesIncapacidades",
 };
 
 export const accionesPermitidas = [
@@ -32,6 +35,9 @@ export const accionesPermitidas = [
   "RECHAZAR_HORAS_EXTRA",
   "APROBAR_PERMISO_LABORAL",
   "RECHAZAR_PERMISO_LABORAL",
+  "APROBAR_REVISION_INCAPACIDAD",
+  "APROBAR_INCAPACIDAD",
+  "RECHAZAR_INCAPACIDAD",
 ];
 
 function validarDatos(datos, nombreCampo) {

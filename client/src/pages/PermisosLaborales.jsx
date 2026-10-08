@@ -9,8 +9,6 @@ import { useAuth } from "../context/AuthContext.jsx";
 import useAsyncRequest from "../hooks/useAsyncRequest.js";
 
 import {
-  getPermisosDeMiRestaurante,
-  getPermisosAdministracion,
   getMisPermisos,
   getPermisosPorRestaurante,
   resolverPermisoLaboral,
@@ -77,9 +75,7 @@ export default function PermisosLaborales() {
     if (!puedeConsultar) return Promise.resolve([]);
     return esColaborador
       ? getMisPermisos(filters)
-      : esGerente
-        ? getPermisosDeMiRestaurante(filters)
-        : getPermisosAdministracion(filters);
+      : getPermisosPorRestaurante(filters.restauranteId, filters);
   }, [filters, reloadKey]);
 
   const permisos = permisosData ?? [];
@@ -153,7 +149,7 @@ export default function PermisosLaborales() {
     setError(null);
     setIsBusy(true);
     try {
-      await resolverPermisoLaboral(dialog.permiso.PermisoId, {
+      await resolverPermisoLaboral(dialog.permiso.SolicitudId, {
         estado: formRevision.estado,
         observacion,
       });
@@ -284,8 +280,8 @@ export default function PermisosLaborales() {
                     String(permiso.FechaSolicitada).slice(0, 10) > fechaHoy;
                     
                   return (
-                    <tr key={permiso.PermisoId}>
-                      <td>#{permiso.PermisoId}</td>
+                    <tr key={permiso.SolicitudId}>
+                      <td>#{permiso.SolicitudId}</td>
                       {!esColaborador && <td>{nombreColaborador(permiso)}</td>}
                       <td>{formatDate(permiso.FechaSolicitada)}</td>
                       <td>
@@ -341,7 +337,7 @@ export default function PermisosLaborales() {
           }
           subtitulo={
             permisoSeleccionado
-              ? `Solicitud #${permisoSeleccionado.PermisoId} · ${nombreRestaurante(permisoSeleccionado)}`
+              ? `Solicitud #${permisoSeleccionado.SolicitudId} · ${nombreRestaurante(permisoSeleccionado)}`
               : undefined
           }
           ocupado={isBusy}
@@ -447,8 +443,8 @@ export default function PermisosLaborales() {
                   <div>
                     <dt>Revisado por</dt>
                     <dd>
-                      {permisoSeleccionado.RevisadoPorUsuarioId
-                        ? `Usuario #${permisoSeleccionado.RevisadoPorUsuarioId}`
+                      {permisoSeleccionado.RevisadoPorGerenteId
+                        ? `Usuario #${permisoSeleccionado.RevisadoPorGerenteId}`
                         : "Sin información registrada"}
                     </dd>
                   </div>

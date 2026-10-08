@@ -122,11 +122,11 @@ test("las listas responden 200, incluso cuando están vacías", async () => {
 
 test("gerente consulta permisos laborales de su restaurante con el usuario autenticado", async () => {
   respond(/FROM Usuarios AS u/, [{ RestauranteId: 2 }]);
-  respond(/UPDATE dbo\.PermisosLaborales/);
-  respond(/FROM dbo\.PermisosLaborales AS p/, []);
+  respond(/UPDATE s/);
+  respond(/FROM dbo\.PermisosLaborales AS d/, []);
 
   const result = await invoke(
-    permisosLaborales.listarPermisosDeMiRestauranteController,
+    permisosLaborales.listarPermisosPorRestauranteController,
     { user: { UsuarioId: 7, Rol: "GERENTE" } },
   );
 
@@ -135,11 +135,11 @@ test("gerente consulta permisos laborales de su restaurante con el usuario auten
 });
 
 test("administración consulta todos los permisos sin elegir restaurante", async () => {
-  respond(/UPDATE dbo\.PermisosLaborales/);
-  respond(/FROM dbo\.PermisosLaborales AS p/);
+  respond(/UPDATE s/);
+  respond(/FROM dbo\.PermisosLaborales AS d/);
 
   const result = await invoke(
-    permisosLaborales.listarPermisosAdministracionController,
+    permisosLaborales.listarPermisosPorRestauranteController,
     { user: { UsuarioId: 3, Rol: "ADMINISTRADOR" } },
   );
 

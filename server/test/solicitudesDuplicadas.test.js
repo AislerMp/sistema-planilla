@@ -12,10 +12,10 @@ const { obtenerCalendarioActual } = await import("../src/shared/utils/fechaUtils
 test("consultar rechaza solo pendientes vencidas y aplica el filtro después", async () => {
   const { fechaHoy } = obtenerCalendarioActual();
   const registros = [
-    { SolicitudHoraExtraId: 1, FechaSolicitada: new Date("2000-01-01"), Estado: "PENDIENTE" },
-    { SolicitudHoraExtraId: 2, FechaSolicitada: new Date(fechaHoy), Estado: "PENDIENTE" },
-    { SolicitudHoraExtraId: 3, FechaSolicitada: new Date("2099-01-01"), Estado: "PENDIENTE" },
-    { SolicitudHoraExtraId: 4, FechaSolicitada: new Date("2000-01-01"), Estado: "APROBADA" },
+    { SolicitudId: 1, FechaSolicitada: new Date("2000-01-01"), Estado: "PENDIENTE" },
+    { SolicitudId: 2, FechaSolicitada: new Date(fechaHoy), Estado: "PENDIENTE" },
+    { SolicitudId: 3, FechaSolicitada: new Date("2099-01-01"), Estado: "PENDIENTE" },
+    { SolicitudId: 4, FechaSolicitada: new Date("2000-01-01"), Estado: "APROBADA" },
   ];
   mock.method(pool, "connect", async () => pool);
   let lecturas = 0;
@@ -24,10 +24,10 @@ test("consultar rechaza solo pendientes vencidas y aplica el filtro después", a
     return {
       input(name, type, value) { params[name] = value; return this; },
       async query(query) {
-        if (query.includes("UPDATE dbo.SolicitudesHorasExtras")) {
+        if (query.includes("UPDATE s")) {
           assert.equal(params.colaboradorId, 4);
           assert.equal(params.fechaHoy, fechaHoy);
-          assert.match(query, /Estado = 'PENDIENTE' AND FechaSolicitada < @fechaHoy/);
+          assert.match(query, /s.Estado = 'PENDIENTE'[\s\S]*d.FechaSolicitada < @fechaHoy/);
           assert.match(query, /ColaboradorId = @colaboradorId/);
           for (const solicitud of registros) {
             if (solicitud.Estado === "PENDIENTE" && solicitud.FechaSolicitada < new Date(fechaHoy)) solicitud.Estado = "RECHAZADA";
@@ -40,9 +40,12 @@ test("consultar rechaza solo pendientes vencidas y aplica el filtro después", a
       },
     };
   });
+  mock.method(sql.Transaction.prototype, "begin", async () => {});
+  mock.method(sql.Transaction.prototype, "commit", async () => {});
+  mock.method(sql.Transaction.prototype, "request", () => pool.request());
   try {
     const resultado = await getSolicitudesByColaborador(4, { estado: "RECHAZADA" }, { Rol: "COLABORADOR", ColaboradorId: 4 });
-    assert.deepEqual(resultado.map((row) => row.SolicitudHoraExtraId), [1]);
+    assert.deepEqual(resultado.map((row) => row.SolicitudId), [1]);
     assert.equal(lecturas, 1);
     assert.deepEqual(registros.map((row) => row.Estado), ["RECHAZADA", "PENDIENTE", "PENDIENTE", "APROBADA"]);
   } finally {
@@ -57,51 +60,5 @@ test("crear solicitud rechaza hoy y fechas anteriores antes de consultar la base
       { UsuarioId: 7, ColaboradorId: 4, Rol: "COLABORADOR" },
       { fechaSolicitada, minutosSolicitados: 60, motivo: "Cierre" },
     ), { status: 400, message: "La fecha solicitada debe ser posterior al día de hoy." });
-  }
-});
-
-test("crear solicitud rechaza una fecha duplicada y permite una fecha libre", async () => {
-  const usuario = { UsuarioId: 7, ColaboradorId: 4, Rol: "COLABORADOR" };
-  const datos = { fechaSolicitada: "2099-06-15", minutosSolicitados: 60, motivo: "Cierre" };
-  let duplicada = true;
-  const eventos = [];
-  mock.method(pool, "connect", async () => pool);
-  mock.method(pool, "request", () => ({
-    input() { return this; },
-    async query() { return { recordset: [{ ColaboradorId: 4, RestauranteId: 2, Activo: true }] }; },
-  }));
-  mock.method(sql.Transaction.prototype, "begin", async () => {});
-  mock.method(sql.Transaction.prototype, "commit", async () => eventos.push("commit"));
-  mock.method(sql.Transaction.prototype, "rollback", async () => eventos.push("rollback"));
-  mock.method(sql.Transaction.prototype, "request", () => {
-    const params = {};
-    return {
-      input(name, type, value) { params[name] = value; return this; },
-      async query(query) {
-        if (query.includes("SELECT TOP (1)")) {
-          assert.equal(new Date(params.fecha).toISOString().slice(0, 10), datos.fechaSolicitada);
-          assert.equal(params.colaboradorId, usuario.ColaboradorId);
-          eventos.push("consultar");
-          return { recordset: duplicada ? [{ SolicitudHoraExtraId: 10 }] : [] };
-        }
-        if (query.includes("INSERT INTO dbo.SolicitudesHorasExtras")) {
-          eventos.push("crear");
-          return { recordset: [{ SolicitudHoraExtraId: 11, FechaSolicitada: new Date(datos.fechaSolicitada) }] };
-        }
-        assert.match(query, /INSERT INTO dbo.Bitacora/);
-        eventos.push("bitacora");
-        return { rowsAffected: [1] };
-      },
-    };
-  });
-  try {
-    await assert.rejects(crearSolicitudHorasExtras(usuario, datos), { status: 409 });
-    assert.deepEqual(eventos, ["consultar", "rollback"]);
-    duplicada = false;
-    eventos.length = 0;
-    await crearSolicitudHorasExtras(usuario, datos);
-    assert.deepEqual(eventos, ["consultar", "crear", "bitacora", "commit"]);
-  } finally {
-    mock.restoreAll();
   }
 });

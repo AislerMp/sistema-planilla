@@ -79,6 +79,7 @@ for (const extrasExistentes of [false, true]) {
     respond(/FROM Colaboradores/, [{ ColaboradorId: 8, Activo: true }]);
     respond(/FROM dbo.PeriodosPlanilla/, [{ PeriodoId: 2, Estado: "ABIERTO" }]);
     respond(/FROM dbo.MarcasAsistencia/, [marca]);
+    respond(/FROM dbo.PermisosLaborales/, []);
     respond(/FROM dbo.AsistenciasDiarias/, [asistencia]);
     respond(/UPDATE dbo.MarcasAsistencia/, [{ ...marca, FechaHoraSalida: salida }]);
     respond(/FROM dbo.AsistenciasDiarias/, [asistencia]);
@@ -171,28 +172,28 @@ test("mis marcas permite limpiar el filtro y devuelve una lista vacia sin regist
 
 test("permisos rechaza vencidos antes de filtrar pendientes y usa la fecha de Costa Rica", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-02T03:00:00Z") });
-  respond(/UPDATE dbo.PermisosLaborales/);
-  respond(/FROM dbo.PermisosLaborales p/, []);
+  respond(/UPDATE s/);
+  respond(/FROM dbo.PermisosLaborales AS d/, []);
   assert.deepEqual(await permisos.listarMisPermisos(
     { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" }, { estado: "PENDIENTE" },
   ), []);
   assert.equal(calls[0].parameters.fechaHoy.value, "2026-10-01");
   assert.equal(calls[0].parameters.colaboradorId.value, 8);
-  assert.match(calls[0].query, /Estado = 'PENDIENTE' AND FechaSolicitada < @fechaHoy/);
+  assert.match(calls[0].query, /s.Estado = 'PENDIENTE'[\s\S]*d.FechaSolicitada < @fechaHoy/);
   assert.equal(calls[1].parameters.estado.value, "PENDIENTE");
 });
 
 test("detalle de permiso comprueba acceso antes de rechazar y devuelve el estado actualizado", async () => {
   const usuario = { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" };
-  const permiso = { PermisoId: 7, ColaboradorId: 8, Estado: "PENDIENTE" };
+  const permiso = { SolicitudId: 7, ColaboradorId: 8, Estado: "PENDIENTE" };
   respond(/FROM dbo.PermisosLaborales/, [{ ...permiso, ColaboradorId: 9 }]);
   await assert.rejects(permisos.obtenerPermisoPorId(7, usuario), { status: 403 });
   assert.equal(calls.length, 1);
   respond(/FROM dbo.PermisosLaborales/, [permiso]);
-  respond(/UPDATE dbo.PermisosLaborales/);
+  respond(/UPDATE s/);
   respond(/FROM dbo.PermisosLaborales/, [{ ...permiso, Estado: "RECHAZADA" }]);
   assert.equal((await permisos.obtenerPermisoPorId(7, usuario)).Estado, "RECHAZADA");
-  assert.equal(calls.at(-2).parameters.permisoId.value, 7);
+  assert.equal(calls.at(-2).parameters.solicitudId.value, 7);
 });
 
 test("permisos limita el rechazo automático al restaurante permitido", async () => {
@@ -201,8 +202,8 @@ test("permisos limita el rechazo automático al restaurante permitido", async ()
   await assert.rejects(permisos.listarPermisosPorRestaurante(usuario, 3), { status: 403 });
   assert.equal(calls.length, 1);
   respond(/FROM Usuarios/, [{ RestauranteId: 2 }]);
-  respond(/UPDATE dbo.PermisosLaborales/);
-  respond(/FROM dbo.PermisosLaborales AS p/, []);
+  respond(/UPDATE s/);
+  respond(/FROM dbo.PermisosLaborales AS d/, []);
   await permisos.listarPermisosPorRestaurante(usuario, 2);
   assert.equal(calls.at(-2).parameters.restauranteId.value, 2);
   assert.doesNotMatch(calls.at(-1).query, /MinutosAutorizados/);
@@ -249,8 +250,9 @@ test("actualizar minutos rechaza valores invalidos en ambos servicios", async ()
 for (const minutosDetectados of [60, 120]) {
   test(`ajustar total a diez horas restablece extras manuales (detectados: ${minutosDetectados})`, async () => {
     respond(/FROM Usuarios/, [{ RestauranteId: 3 }]);
-    respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, PeriodoId: 2, RestauranteId: 3, MinutosCalculados: 660, MinutosAjustados: null }]);
+    respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, ColaboradorId: 8, FechaAsignada: new Date("2026-10-01"), PeriodoId: 2, RestauranteId: 3, MinutosCalculados: 660, MinutosAjustados: null }]);
     respond(/FROM dbo.PeriodosPlanilla/, [{ Estado: "EN_REVISION", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") }]);
+    respond(/FROM dbo.PermisosLaborales/, []);
     respond(/SET MinutosAjustados = @Minutos/, [{ AsistenciaId: 1, MinutosCalculados: 660, MinutosAjustados: 600 }]);
     respond(/INSERT INTO dbo.Bitacora/);
     respond(/FROM dbo.HorasExtras/, [{ HoraExtraId: 9, AsistenciaId: 1, MinutosDetectados: minutosDetectados, MinutosAjustados: 60 }]);
@@ -268,8 +270,9 @@ for (const minutosDetectados of [60, 120]) {
 
 test("ajustar minutos permite cero y confirma la bitacora", async () => {
   respond(/FROM Usuarios/, [{ RestauranteId: 3 }]);
-  respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, PeriodoId: 2, RestauranteId: 3, MinutosCalculados: 60, MinutosAjustados: null }]);
+  respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, ColaboradorId: 8, FechaAsignada: new Date("2026-10-01"), PeriodoId: 2, RestauranteId: 3, MinutosCalculados: 60, MinutosAjustados: null }]);
   respond(/FROM dbo.PeriodosPlanilla/, [{ Estado: "EN_REVISION", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") }]);
+  respond(/FROM dbo.PermisosLaborales/, []);
   respond(/SET MinutosAjustados = @Minutos/, [{ AsistenciaId: 1, MinutosCalculados: 60, MinutosAjustados: 0 }]);
   respond(/INSERT INTO dbo.Bitacora/);
   respond(/FROM dbo.HorasExtras/, []);
@@ -282,8 +285,9 @@ test("ajustar minutos permite cero y confirma la bitacora", async () => {
 
 test("ajustar minutos revierte si falla la sincronizacion de horas extras", async () => {
   respond(/FROM Usuarios/, [{ RestauranteId: 3 }]);
-  respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, PeriodoId: 2, RestauranteId: 3, MinutosCalculados: 600, MinutosAjustados: null }]);
+  respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, ColaboradorId: 8, FechaAsignada: new Date("2026-10-01"), PeriodoId: 2, RestauranteId: 3, MinutosCalculados: 600, MinutosAjustados: null }]);
   respond(/FROM dbo.PeriodosPlanilla/, [{ Estado: "EN_REVISION", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") }]);
+  respond(/FROM dbo.PermisosLaborales/, []);
   respond(/SET MinutosAjustados = @Minutos/, [{ AsistenciaId: 1, MinutosCalculados: 600, MinutosAjustados: 0 }]);
   respond(/INSERT INTO dbo.Bitacora/);
   respond(/FROM dbo.HorasExtras/, [{ HoraExtraId: 9, AsistenciaId: 1, MinutosDetectados: 120 }]);
@@ -299,6 +303,7 @@ test("ajustar minutos revierte si falla la sincronizacion de horas extras", asyn
   assert.equal(sql.Transaction.prototype.commit.mock.callCount(), commits);
   assert.equal(sql.Transaction.prototype.rollback.mock.callCount(), rollbacks + 1);
 });
+
 
 test("minutos calculados permite cero y usa la transaccion del llamador", async () => {
   respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, PeriodoId: 2, ColaboradorId: 8, MinutosCalculados: 60, MinutosAjustados: null }]);

@@ -157,7 +157,9 @@ export default function ConsultarBitacoras() {
                   "PeriodosPlanilla",
                   "AsistenciasDiarias",
                   "HorasExtras",
+                  "Solicitudes",
                   "SolicitudesHorasExtras",
+                  "SolicitudesPermisosLaborales",
                 ].map((entidad) => (
                   <option key={entidad} value={entidad}>
                     {entidad}
@@ -189,6 +191,8 @@ export default function ConsultarBitacoras() {
                   "AJUSTAR_HORAS",
                   "APROBAR_HORAS_EXTRA",
                   "RECHAZAR_HORAS_EXTRA",
+                  "APROBAR_PERMISO_LABORAL",
+                  "RECHAZAR_PERMISO_LABORAL",
                 ].map((accion) => (
                   <option key={accion} value={accion}>
                     {accion.replaceAll("_", " ")}

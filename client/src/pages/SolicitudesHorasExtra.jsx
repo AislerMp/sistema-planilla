@@ -204,7 +204,7 @@ export default function SolicitudesHorasExtra() {
     setError(null);
     if (tipo === "resolver") {
       setCheckSolicitudForm({
-        id: solicitud.SolicitudHoraExtraId,
+        id: solicitud.SolicitudId,
         estado: "APROBADA",
         horas: solicitud.MinutosSolicitados / 60,
         observacion: "",
@@ -315,9 +315,9 @@ export default function SolicitudesHorasExtra() {
               </thead>
               <tbody>
                 {solicitudes.map((solicitud) => (
-                  <tr key={solicitud.SolicitudHoraExtraId}>
+                  <tr key={solicitud.SolicitudId}>
                     <td>
-                      #{solicitud.SolicitudHoraExtraId} ·{" "}
+                      #{solicitud.SolicitudId} ·{" "}
                       {nombreColaborador(solicitud)}
                     </td>
                     <td>{formatDate(solicitud.FechaSolicitada)}</td>
@@ -340,7 +340,7 @@ export default function SolicitudesHorasExtra() {
                         >
                           Ver detalle
                         </button>
-                        {(isGerente || puedeElegirRestaurante) &&
+                        {isGerente &&
                           solicitud.Estado === "PENDIENTE" &&
                           String(solicitud.FechaSolicitada).slice(0, 10) >
                             fechaHoy && (
@@ -369,7 +369,7 @@ export default function SolicitudesHorasExtra() {
           titulo={titulos[dialog.tipo]}
           subtitulo={
             seleccionada
-              ? `Solicitud #${seleccionada.SolicitudHoraExtraId} · ${nombreRestaurante(seleccionada)}`
+              ? `Solicitud #${seleccionada.SolicitudId} · ${nombreRestaurante(seleccionada)}`
               : undefined
           }
           ocupado={isBusy}
@@ -496,8 +496,8 @@ export default function SolicitudesHorasExtra() {
                   <div>
                     <dt>Revisado por</dt>
                     <dd>
-                      {seleccionada.RevisadoPorUsuarioId
-                        ? `Usuario #${seleccionada.RevisadoPorUsuarioId}`
+                      {seleccionada.RevisadoPorGerenteId
+                        ? `Usuario #${seleccionada.RevisadoPorGerenteId}`
                         : "Sin información registrada"}
                     </dd>
                   </div>

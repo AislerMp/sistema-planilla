@@ -1,45 +1,48 @@
 import { createRequest, sql } from "../../shared/config/database.js";
 
+import { crearCabeceraSolicitud } from "../solicitudes/solicitudes.repository.js";
+import { serviceError } from "../../shared/utils/serviceUtils.js";
+
 export async function rechazarSolicitudesVencidas(
   fechaHoy,
-  { colaboradorId = null, restauranteId = null, permisoId = null },
+  { colaboradorId = null, restauranteId = null, solicitudId = null },
 ) {
   const request = await createRequest();
   await request
     .input("fechaHoy", sql.Date, fechaHoy)
     .input("colaboradorId", sql.Int, colaboradorId)
     .input("restauranteId", sql.Int, restauranteId)
-    .input("permisoId", sql.Int, permisoId).query(`
-      UPDATE dbo.PermisosLaborales
-      SET Estado = 'RECHAZADA',
-          RevisadoPorUsuarioId = NULL,
+    .input("solicitudId", sql.Int, solicitudId).query(`
+      UPDATE s
+      SET Estado = 'RECHAZADA', RevisadoPorGerenteId = NULL, RevisadoPorRhId = NULL,
           Observacion = N'Rechazada automáticamente por vencimiento'
-      WHERE Estado = 'PENDIENTE' AND FechaSolicitada < @fechaHoy
-        AND (@colaboradorId IS NULL OR ColaboradorId = @colaboradorId)
-        AND (@restauranteId IS NULL OR RestauranteId = @restauranteId)
-        AND (@permisoId IS NULL OR PermisoId = @permisoId);
+      FROM dbo.Solicitudes AS s
+      INNER JOIN dbo.PermisosLaborales AS d ON d.SolicitudId = s.SolicitudId
+      WHERE s.TipoSolicitud = 'PERMISO_LABORAL' AND s.Estado = 'PENDIENTE'
+        AND d.FechaSolicitada < @fechaHoy
+        AND (@colaboradorId IS NULL OR s.ColaboradorId = @colaboradorId)
+        AND (@restauranteId IS NULL OR s.RestauranteId = @restauranteId)
+        AND (@solicitudId IS NULL OR s.SolicitudId = @solicitudId);
     `);
 }
 
-export async function getPermisosById(permisosId, transaction = null) {
+export async function getPermisosById(solicitudId, transaction = null) {
   const request = await createRequest(transaction);
-  const result = await request.input("permisosId", sql.Int, permisosId).query(`
-    SELECT
-        PermisoId,
-        ColaboradorId,
-        RestauranteId,
-        FechaSolicitada,
-        Motivo,
-        Estado,
-        RevisadoPorUsuarioId,
-        Observacion
-    FROM dbo.PermisosLaborales
-    WHERE PermisoId = @permisosId
-  `);
 
-  return result.recordset[0] || null;
+  const result = await request.input("solicitudId", sql.Int, solicitudId)
+    .query(`
+      SELECT s.SolicitudId, s.TipoSolicitud, s.ColaboradorId, s.RestauranteId,
+        s.RegistradoPorUsuarioId, s.Estado, s.Motivo,
+        s.RevisadoPorGerenteId, s.RevisadoPorRhId, s.Observacion, d.FechaSolicitada
+      FROM dbo.PermisosLaborales AS d
+      INNER JOIN dbo.Solicitudes AS s ON s.SolicitudId = d.SolicitudId
+      WHERE s.SolicitudId = @solicitudId AND s.TipoSolicitud = 'PERMISO_LABORAL';
+    `);
+    
+  return result.recordset[0] ?? null;
 }
 
+// Al crear, el servicio ya mantiene el bloqueo del colaborador.
 export async function getPermisoByColaboradorYFecha(
   colaboradorId,
   fecha,
@@ -49,11 +52,15 @@ export async function getPermisoByColaboradorYFecha(
   const result = await request
     .input("colaboradorId", sql.Int, colaboradorId)
     .input("fecha", sql.Date, fecha).query(`
-            SELECT TOP (1) *
-            FROM dbo.PermisosLaborales WITH (UPDLOCK, HOLDLOCK)
-            WHERE ColaboradorId = @colaboradorId AND FechaSolicitada = @fecha;
-        `);
-  return result.recordset[0] || null;
+      SELECT TOP (1) s.SolicitudId, s.TipoSolicitud, s.ColaboradorId, s.RestauranteId,
+        s.RegistradoPorUsuarioId, s.Estado, s.Motivo,
+        s.RevisadoPorGerenteId, s.RevisadoPorRhId, s.Observacion, d.FechaSolicitada
+      FROM dbo.PermisosLaborales AS d WITH (UPDLOCK, HOLDLOCK)
+      INNER JOIN dbo.Solicitudes AS s WITH (UPDLOCK, HOLDLOCK) ON s.SolicitudId = d.SolicitudId
+      WHERE s.TipoSolicitud = 'PERMISO_LABORAL' AND s.ColaboradorId = @colaboradorId
+        AND d.FechaSolicitada = @fecha;
+    `);
+  return result.recordset[0] ?? null;
 }
 
 export async function getPermisosByColaborador(
@@ -67,29 +74,21 @@ export async function getPermisosByColaborador(
     .input("colaboradorId", sql.Int, colaboradorId)
     .input("desde", sql.Date, desde ?? null)
     .input("hasta", sql.Date, hasta ?? null)
-    .input("estado", sql.VarChar(15), estado ?? null).query(`
-      SELECT 
-        p.PermisoId,
-        p.ColaboradorId,
-        p.RestauranteId,
-        p.FechaSolicitada,
-        p.Motivo,
-        p.Estado,
-        p.RevisadoPorUsuarioId,
-        p.Observacion,
-        c.Nombres,
-        c.Apellidos
-      FROM dbo.PermisosLaborales p
-      JOIN dbo.Colaboradores c 
-        ON p.ColaboradorId = c.ColaboradorId
-      WHERE p.ColaboradorId = @colaboradorId
-        AND (@desde IS NULL OR p.FechaSolicitada >= @desde)
-        AND (@hasta IS NULL OR p.FechaSolicitada <= @hasta)
-        AND (@estado IS NULL OR p.Estado = @estado)
-        ORDER BY p.FechaSolicitada DESC
+    .input("estado", sql.VarChar(20), estado ?? null).query(`
+      SELECT s.SolicitudId, s.TipoSolicitud, s.ColaboradorId, s.RestauranteId,
+        s.RegistradoPorUsuarioId, s.Estado, s.Motivo,
+        s.RevisadoPorGerenteId, s.RevisadoPorRhId, s.Observacion,
+        d.FechaSolicitada, c.Nombres, c.Apellidos
+      FROM dbo.PermisosLaborales AS d
+      INNER JOIN dbo.Solicitudes AS s ON s.SolicitudId = d.SolicitudId
+      INNER JOIN dbo.Colaboradores AS c ON c.ColaboradorId = s.ColaboradorId
+      WHERE s.TipoSolicitud = 'PERMISO_LABORAL' AND s.ColaboradorId = @colaboradorId
+        AND (@desde IS NULL OR d.FechaSolicitada >= @desde)
+        AND (@hasta IS NULL OR d.FechaSolicitada <= @hasta)
+        AND (@estado IS NULL OR s.Estado = @estado)
+      ORDER BY d.FechaSolicitada DESC, s.SolicitudId DESC;
     `);
-
-  return result.recordset || [];
+  return result.recordset;
 }
 
 export async function getPermisosByRestaurante(
@@ -103,67 +102,69 @@ export async function getPermisosByRestaurante(
     .input("restauranteId", sql.Int, restauranteId)
     .input("desde", sql.Date, desde ?? null)
     .input("hasta", sql.Date, hasta ?? null)
-    .input("estado", sql.VarChar(15), estado ?? null).query(`
-      SELECT
-        p.PermisoId,
-        p.ColaboradorId,
-        p.RestauranteId,
-        p.FechaSolicitada,
-        p.Motivo,
-        p.Estado,
-        p.RevisadoPorUsuarioId,
-        p.Observacion,
-        c.Nombres,
-        c.Apellidos
-      FROM dbo.PermisosLaborales AS p
-      INNER JOIN dbo.Colaboradores AS c
-        ON c.ColaboradorId = p.ColaboradorId
-      WHERE (@restauranteId IS NULL OR p.RestauranteId = @restauranteId)
-        AND (@desde IS NULL OR p.FechaSolicitada >= @desde)
-        AND (@hasta IS NULL OR p.FechaSolicitada <= @hasta)
-        AND (@estado IS NULL OR p.Estado = @estado)
-      ORDER BY p.FechaSolicitada DESC, p.PermisoId DESC;
+    .input("estado", sql.VarChar(20), estado ?? null).query(`
+      SELECT s.SolicitudId, s.TipoSolicitud, s.ColaboradorId, s.RestauranteId,
+        s.RegistradoPorUsuarioId, s.Estado, s.Motivo,
+        s.RevisadoPorGerenteId, s.RevisadoPorRhId, s.Observacion,
+        d.FechaSolicitada, c.Nombres, c.Apellidos
+      FROM dbo.PermisosLaborales AS d
+      INNER JOIN dbo.Solicitudes AS s ON s.SolicitudId = d.SolicitudId
+      INNER JOIN dbo.Colaboradores AS c ON c.ColaboradorId = s.ColaboradorId
+      WHERE s.TipoSolicitud = 'PERMISO_LABORAL'
+        AND (@restauranteId IS NULL OR s.RestauranteId = @restauranteId)
+        AND (@desde IS NULL OR d.FechaSolicitada >= @desde)
+        AND (@hasta IS NULL OR d.FechaSolicitada <= @hasta)
+        AND (@estado IS NULL OR s.Estado = @estado)
+      ORDER BY d.FechaSolicitada DESC, s.SolicitudId DESC;
     `);
   return result.recordset;
 }
 
-// datos: { colaboradorId, restauranteId, fechaSolicitada, motivo }
-// Devuelve el registro creado.
-export async function createPermiso(datos, transaction = null) {
+export async function createPermiso(datos, transaction) {
+  const solicitudId = await crearCabeceraSolicitud(
+    datos,
+    "PERMISO_LABORAL",
+    transaction,
+  );
+  
   const request = await createRequest(transaction);
   const result = await request
-    .input("colaboradorId", sql.Int, datos.colaboradorId)
-    .input("restauranteId", sql.Int, datos.restauranteId)
-    .input("fechaSolicitada", sql.Date, datos.fechaSolicitada)
-    .input("motivo", sql.VarChar(255), datos.motivo).query(`
-        INSERT INTO dbo.PermisosLaborales (ColaboradorId, RestauranteId, FechaSolicitada, Motivo)
-        OUTPUT INSERTED.*
-        VALUES (@colaboradorId, @restauranteId, @fechaSolicitada, @motivo);
-      `);
-
-  return result.recordset[0] || null;
+    .input("solicitudId", sql.Int, solicitudId)
+    .input("fechaSolicitada", sql.Date, datos.fechaSolicitada).query(`
+      INSERT INTO dbo.PermisosLaborales (SolicitudId, FechaSolicitada)
+      VALUES (@solicitudId, @fechaSolicitada);
+    `);
+  if (result.rowsAffected[0] !== 1)
+    throw serviceError("No se pudo crear el detalle de la solicitud", 500);
+  return getPermisosById(solicitudId, transaction);
 }
 
-// datosRevision: { estado, revisadoPorUsuarioId, observacion }
-// Devuelve el registro actualizado o null.
-export async function resolverPermiso(
-  permisoId,
-  datosRevision,
-  transaction = null,
-) {
+export async function resolverPermiso(solicitudId, datosRevision, transaction) {
+  if (!transaction)
+    throw serviceError(
+      "Se requiere una transacción para resolver solicitudes",
+      500,
+    );
+
   const request = await createRequest(transaction);
+  
   const result = await request
-    .input("permisoId", sql.Int, permisoId)
-    .input("estado", sql.VarChar(15), datosRevision.estado)
-    .input("revisadoPorUsuarioId", sql.Int, datosRevision.revisadoPorUsuarioId)
-    .input("observacion", sql.VarChar(500), datosRevision.observacion ?? null)
+    .input("solicitudId", sql.Int, solicitudId)
+    .input("estado", sql.VarChar(20), datosRevision.estado)
+    .input("revisadoPorGerenteId", sql.Int, datosRevision.revisadoPorGerenteId)
+    .input("observacion", sql.NVarChar(500), datosRevision.observacion ?? null)
     .query(`
-        UPDATE dbo.PermisosLaborales
-        SET Estado = @estado,
-            RevisadoPorUsuarioId = @revisadoPorUsuarioId,
-            Observacion = @observacion
-        OUTPUT INSERTED.*
-        WHERE PermisoId = @permisoId AND Estado = 'PENDIENTE'
-      `);
-  return result.recordset[0] || null;
+      UPDATE s
+      SET Estado = @estado, RevisadoPorGerenteId = @revisadoPorGerenteId,
+          RevisadoPorRhId = NULL, Observacion = @observacion
+      OUTPUT INSERTED.SolicitudId
+      FROM dbo.Solicitudes AS s
+      INNER JOIN dbo.PermisosLaborales AS d ON d.SolicitudId = s.SolicitudId
+      WHERE s.SolicitudId = @solicitudId AND s.TipoSolicitud = 'PERMISO_LABORAL'
+        AND s.Estado = 'PENDIENTE';
+    `);
+
+  if (!result.recordset[0]) return null;
+  
+  return getPermisosById(solicitudId, transaction);
 }

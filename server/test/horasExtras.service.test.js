@@ -40,11 +40,12 @@ test("actualizar horas extras confirma o revierte junto con la bitacora", async 
       input(name, type, value) { parameters[name] = value; return this; },
       async query(query) {
         if (query.includes("FROM dbo.AsistenciasDiarias")) {
-          return { recordset: [{ AsistenciaId: 3, RestauranteId: 2, PeriodoId: 1, MinutosEfectivos: 480 }] };
+          return { recordset: [{ AsistenciaId: 3, ColaboradorId: 4, FechaAsignada: new Date("2026-10-01"), RestauranteId: 2, PeriodoId: 1, MinutosEfectivos: 480 }] };
         }
         if (query.includes("FROM dbo.PeriodosPlanilla")) {
           return { recordset: [{ Estado: "ABIERTO", FechaLimiteAjustes: new Date("2099-12-31") }] };
         }
+        if (query.includes("FROM dbo.PermisosLaborales")) return { recordset: [] };
         if (query.includes("SELECT")) {
           events.push("read");
           return { recordset: [previous] };
@@ -93,7 +94,7 @@ test("actualizar horas extras confirma o revierte junto con la bitacora", async 
 test("resolver solicitud registra snapshots anterior y nuevo en la bitacora", async () => {
   mock.method(pool, "connect", async () => pool);
   const solicitudAnterior = {
-    SolicitudHoraExtraId: 12,
+    SolicitudId: 12,
     ColaboradorId: 4,
     RestauranteId: 2,
     FechaSolicitada: new Date("2099-06-15T00:00:00.000Z"),
@@ -101,14 +102,14 @@ test("resolver solicitud registra snapshots anterior y nuevo en la bitacora", as
     Motivo: "Cierre tardío",
     Estado: "PENDIENTE",
     MinutosAutorizados: null,
-    RevisadoPorUsuarioId: null,
+    RevisadoPorGerenteId: null,
     Observacion: null,
   };
   const solicitudActualizada = {
     ...solicitudAnterior,
     Estado: "APROBADA",
     MinutosAutorizados: 90,
-    RevisadoPorUsuarioId: 7,
+    RevisadoPorGerenteId: 7,
     Observacion: "Aprobado",
   };
   const events = [];
@@ -117,6 +118,7 @@ test("resolver solicitud registra snapshots anterior y nuevo en la bitacora", as
   mock.method(pool, "request", () => ({
     input() { return this; },
     async query(query) {
+      if (query.includes("FROM Usuarios")) return { recordset: [{ RestauranteId: 2 }] };
       assert.match(query, /FROM dbo\.SolicitudesHorasExtras/);
       events.push("read");
       return { recordset: [solicitudAnterior] };
@@ -134,38 +136,29 @@ test("resolver solicitud registra snapshots anterior y nuevo en la bitacora", as
     return {
       input(name, type, value) { parameters[name] = value; return this; },
       async query(query) {
-        if (query.includes("UPDATE dbo.SolicitudesHorasExtras")) {
+        if (query.includes("OUTPUT INSERTED.SolicitudId")) {
           events.push("update");
           assert.equal(parameters.estado, "APROBADA");
           return { recordset: [solicitudActualizada] };
         }
 
+        if (query.includes("UPDATE d")) {
+          events.push("detail");
+          assert.equal(parameters.minutosAutorizados, 90);
+          assert.match(query, /s.TipoSolicitud = 'HORAS_EXTRAS'/);
+          return { rowsAffected: [1] };
+        }
+        if (query.includes("SELECT")) {
+          events.push("readUpdated");
+          return { recordset: [solicitudActualizada] };
+        }
         assert.match(query, /INSERT INTO dbo\.Bitacora/);
         events.push("audit");
         assert.equal(parameters.RegistroId, 12);
         assert.equal(parameters.Accion, "APROBAR_HORAS_EXTRA");
-        assert.deepEqual(JSON.parse(parameters.DatosAnteriores), {
-          colaboradorId: 4,
-          restauranteId: 2,
-          fechaSolicitada: "2099-06-15",
-          minutosSolicitados: 120,
-          motivo: "Cierre tardío",
-          estado: "PENDIENTE",
-          minutosAutorizados: null,
-          revisadoPorUsuarioId: null,
-          observacion: null,
-        });
-        assert.deepEqual(JSON.parse(parameters.DatosNuevos), {
-          colaboradorId: 4,
-          restauranteId: 2,
-          fechaSolicitada: "2099-06-15",
-          minutosSolicitados: 120,
-          motivo: "Cierre tardío",
-          estado: "APROBADA",
-          minutosAutorizados: 90,
-          revisadoPorUsuarioId: 7,
-          observacion: "Aprobado",
-        });
+        assert.equal(parameters.Entidad, "Solicitudes");
+        assert.deepEqual(JSON.parse(parameters.DatosAnteriores), JSON.parse(JSON.stringify(solicitudAnterior)));
+        assert.deepEqual(JSON.parse(parameters.DatosNuevos), JSON.parse(JSON.stringify(solicitudActualizada)));
         return { rowsAffected: [1] };
       },
     };
@@ -175,11 +168,11 @@ test("resolver solicitud registra snapshots anterior y nuevo en la bitacora", as
     const resultado = await resolverSolicitudHorasExtras(
       12,
       { estado: "APROBADA", minutosAutorizados: 90, observacion: "Aprobado" },
-      { UsuarioId: 7, Rol: "ADMINISTRADOR" },
+      { UsuarioId: 7, Rol: "GERENTE" },
     );
 
     assert.deepEqual(resultado, solicitudActualizada);
-    assert.deepEqual(events, ["read", "begin", "update", "audit", "commit"]);
+    assert.deepEqual(events, ["read", "begin", "update", "detail", "readUpdated", "audit", "commit"]);
   } finally {
     mock.restoreAll();
   }

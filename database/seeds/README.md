@@ -1,7 +1,7 @@
 # Historial ficticio para la interfaz
 
 Ejecutar `001_historial_demo.sql` completo en SQL Server Management Studio contra
-una base de pruebas `SistemaPlanilla` con las migraciones 001–003 aplicadas.
+una base de pruebas `SistemaPlanilla` con las migraciones 001–005 aplicadas.
 El script confirma los cambios con `COMMIT` si todas las validaciones pasan;
 ante cualquier error revierte la carga completa.
 
@@ -11,6 +11,9 @@ ante cualquier error revierte la carga completa.
 - Colaboradores: **2018, 1, 2, 3, 4 y 5**. Son IDs existentes, no años.
 - `@UsuarioActorId = NULL`: selecciona un administrador o usuario de Recursos
   Humanos activo. Se puede indicar un ID explícito de uno de esos roles.
+- Se requiere un gerente activo vinculado a un colaborador de cada restaurante
+  con solicitudes demo; su usuario queda en `RevisadoPorGerenteId`. El actor de
+  la carga queda en `RegistradoPorUsuarioId`, y `RevisadoPorRhId` queda en NULL.
 - `@RespetarFechasLaborales = 1`: genera jornadas solo entre ingreso y salida.
   Si un colaborador ingresó después del rango, tendrá **cero jornadas nuevas**.
   Para generar historial ficticio anterior a su contratación en la base de

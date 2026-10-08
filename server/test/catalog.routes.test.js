@@ -70,6 +70,44 @@ async function request(method, path, body) {
   return { status: response.status, body: await response.json() };
 }
 
+for (const Rol of ["GERENTE", "ADMINISTRADOR", "RECURSOS_HUMANOS"]) {
+  test(`consulta unificada de permisos con y sin restaurante para ${Rol}`, async () => {
+    identity = { UsuarioId: 7, Rol };
+    for (const [path, restauranteSolicitado] of [
+      ["/permisos-laborales/restaurante", null],
+      ["/permisos-laborales/restaurante?restauranteId=2&estado=pendiente", 2],
+      ["/permisos-laborales/restaurante/2", 2],
+    ]) {
+      if (Rol === "GERENTE") expected.push({ pattern: /FROM Usuarios/, records: [{ RestauranteId: 2 }] });
+      expected.push({ pattern: /UPDATE s/ });
+      expected.push({ pattern: /FROM dbo.PermisosLaborales AS d/, records: [{ SolicitudId: 12 }] });
+      const result = await request("GET", path);
+      assert.equal(result.status, 200);
+      assert.deepEqual(result.body, [{ SolicitudId: 12 }]);
+      const restauranteEsperado = Rol === "GERENTE" ? 2 : restauranteSolicitado;
+      assert.equal(calls.at(-2).parameters.restauranteId, restauranteEsperado);
+      assert.equal(calls.at(-1).parameters.restauranteId, restauranteEsperado);
+      assert.equal(calls.at(-1).parameters.estado, path.includes("estado=") ? "PENDIENTE" : null);
+    }
+  });
+}
+
+test("consulta unificada de permisos rechaza acceso y filtros inválidos antes de escribir", async () => {
+  const path = "/permisos-laborales/restaurante";
+  assert.equal((await request("GET", path)).status, 401);
+  identity = { UsuarioId: 7, ColaboradorId: 4, Rol: "COLABORADOR" };
+  assert.equal((await request("GET", path)).status, 403);
+  identity = { UsuarioId: 7, Rol: "GERENTE" };
+  expected.push({ pattern: /FROM Usuarios/, records: [{ RestauranteId: 2 }] });
+  assert.equal((await request("GET", `${path}?restauranteId=3`)).status, 403);
+  expected.push({ pattern: /FROM Usuarios/, records: [] });
+  assert.equal((await request("GET", path)).status, 403);
+  for (const filtro of ["restauranteId=abc", "desde=2026-02-30", "estado=OTRO"]) {
+    assert.equal((await request("GET", `${path}?${filtro}`)).status, 400);
+  }
+  assert.equal(calls.some(({ query }) => query.includes("UPDATE")), false);
+});
+
 test("marcas de otro colaborador exige sesión y rol de gestión", async () => {
   assert.equal((await request("GET", "/marcas/colaborador/8")).status, 401);
   identity = { UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" };
@@ -142,6 +180,20 @@ test("ajuste de extras exige sesion y rol gerente", async () => {
   assert.deepEqual(calls, []);
 });
 
+test("solo el gerente puede resolver extras y permisos por HTTP", async () => {
+  for (const path of ["/extras/solicitudes/7/resolver", "/permisos-laborales/7/resolver"]) {
+    identity = undefined;
+    assert.equal((await request("PATCH", path, { estado: "APROBADA" })).status, 401);
+    for (const Rol of ["COLABORADOR", "ADMINISTRADOR", "RECURSOS_HUMANOS"]) {
+      identity = { UsuarioId: 3, Rol };
+      assert.equal((await request("PATCH", path, { estado: "APROBADA" })).status, 403);
+    }
+    identity = { UsuarioId: 3, Rol: "GERENTE" };
+    assert.equal((await request("PATCH", path, { estado: "EN_REVISION_RH" })).status, 400);
+  }
+  assert.deepEqual(calls, []);
+});
+
 for (const existeRegistro of [true, false]) {
  for (const [totalAnterior, extras, totalEsperado] of [[720, 0, 480], [720, 120, 480], [360, 0, 360], [360, 60, 480], [720, 240, 480], [480, 240, 480]]) {
   test(`ajuste de extras sincroniza ${totalAnterior} minutos con ${extras} extras (registro existente: ${existeRegistro})`, async () => {
@@ -149,9 +201,10 @@ for (const existeRegistro of [true, false]) {
     const registro = { HoraExtraId: 9, AsistenciaId: 7, MinutosDetectados: Math.max(0, totalAnterior - 480), MinutosAjustados: extras };
     expected.push(
       { pattern: /FROM Usuarios AS u/, records: [{ RestauranteId: 2 }] },
-      { pattern: /FROM dbo.AsistenciasDiarias/, parameters: { AsistenciaId: 7 }, records: [{ AsistenciaId: 7, RestauranteId: 2, PeriodoId: 4, MinutosCalculados: totalAnterior, MinutosEfectivos: totalAnterior }] },
+      { pattern: /FROM dbo.AsistenciasDiarias/, parameters: { AsistenciaId: 7 }, records: [{ AsistenciaId: 7, ColaboradorId: 4, FechaAsignada: new Date("2026-10-01"), RestauranteId: 2, PeriodoId: 4, MinutosCalculados: totalAnterior, MinutosEfectivos: totalAnterior }] },
       { pattern: /FROM dbo.PeriodosPlanilla/, records: [{ Estado: "ABIERTO", FechaLimiteAjustes: new Date("2099-12-31T00:00:00Z") }] },
     );
+    expected.push({ pattern: /FROM dbo.PermisosLaborales/, records: [] });
     if (totalAnterior !== totalEsperado) expected.push(
       { pattern: /SET MinutosAjustados = @Minutos/, parameters: { AsistenciaId: 7, Minutos: totalEsperado }, records: [{ AsistenciaId: 7, MinutosCalculados: totalAnterior, MinutosAjustados: totalEsperado }] },
       { pattern: /INSERT INTO dbo.Bitacora/ },

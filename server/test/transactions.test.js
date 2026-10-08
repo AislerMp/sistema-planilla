@@ -68,19 +68,21 @@ const puesto = { PuestoId: 7, Nombre: "Cajero", TarifaHora: 1000, Activo: true }
 
 for (const escenario of ["APROBADA", "RECHAZADA", "conflicto", "bitacora"]) {
   test(`resolver permiso laboral: ${escenario}`, async () => {
-    const anterior = { PermisoId: 7, ColaboradorId: 8, RestauranteId: 2,
+    const anterior = { SolicitudId: 7, ColaboradorId: 8, RestauranteId: 2,
       FechaSolicitada: new Date("9999-12-31T00:00:00Z"), Estado: "PENDIENTE",
-      RevisadoPorUsuarioId: null, Observacion: null };
+      RevisadoPorGerenteId: null, Observacion: null };
     const estado = escenario === "RECHAZADA" ? escenario : "APROBADA";
-    const actualizado = { ...anterior, Estado: estado, RevisadoPorUsuarioId: 3, Observacion: "Revisado" };
+    const actualizado = { ...anterior, Estado: estado, RevisadoPorGerenteId: 3, Observacion: "Revisado" };
     expected.push({ pattern: /FROM dbo.PermisosLaborales/, records: [anterior], transactional: false });
-    expected.push({ pattern: /WHERE PermisoId = @permisoId AND Estado = 'PENDIENTE'/,
+    expected.push({ pattern: /FROM Usuarios/, records: [{ RestauranteId: 2 }], transactional: false });
+    expected.push({ pattern: /s.TipoSolicitud = 'PERMISO_LABORAL'[\s\S]*s.Estado = 'PENDIENTE'/,
       records: escenario === "conflicto" ? [] : [actualizado] });
     const error = new Error("Fallo de bitacora");
+    if (escenario !== "conflicto") expected.push({ pattern: /FROM dbo.PermisosLaborales/, records: [actualizado] });
     if (escenario !== "conflicto") expected.push({ pattern: /INSERT INTO dbo.Bitacora/,
       ...(escenario === "bitacora" ? { error } : {}) });
     const ejecutar = () => permisos.resolverPermiso("7", { estado: estado.toLowerCase(), observacion: " Revisado " },
-      { UsuarioId: 3, Rol: "ADMINISTRADOR" });
+      { UsuarioId: 3, Rol: "GERENTE" });
     if (["conflicto", "bitacora"].includes(escenario)) {
       await assert.rejects(ejecutar(), escenario === "conflicto" ? { status: 409 } : error);
       assert.equal(events.at(-1).type, "rollback");
@@ -88,8 +90,8 @@ for (const escenario of ["APROBADA", "RECHAZADA", "conflicto", "bitacora"]) {
     } else {
       assert.deepEqual(await ejecutar(), actualizado);
       assert.equal(events.at(-1).type, "commit");
-      const escritura = events.find(event => event.query?.includes("UPDATE dbo.PermisosLaborales"));
-      assert.deepEqual(escritura.parameters, { permisoId: 7, estado, revisadoPorUsuarioId: 3, observacion: "Revisado" });
+      const escritura = events.find(event => event.query?.includes("UPDATE s"));
+      assert.deepEqual(escritura.parameters, { solicitudId: 7, estado, revisadoPorGerenteId: 3, observacion: "Revisado" });
       const auditoria = events.at(-2).parameters;
       assert.equal(auditoria.Accion, estado === "APROBADA" ? "APROBAR_PERMISO_LABORAL" : "RECHAZAR_PERMISO_LABORAL");
       assert.deepEqual(JSON.parse(auditoria.DatosAnteriores), JSON.parse(JSON.stringify(anterior)));
@@ -102,7 +104,7 @@ test("resolver permiso valida sesión, rol y estado antes de consultar", async (
   await assert.rejects(permisos.resolverPermiso(7, { estado: "APROBADA" }, null), { status: 401 });
   await assert.rejects(permisos.resolverPermiso(7, { estado: "APROBADA" }, { UsuarioId: 3, Rol: "COLABORADOR" }), { status: 403 });
   for (const estado of ["PENDIENTE", "INVALIDO"]) {
-    await assert.rejects(permisos.resolverPermiso(7, { estado }, { UsuarioId: 3, Rol: "RECURSOS_HUMANOS" }), { status: 400 });
+    await assert.rejects(permisos.resolverPermiso(7, { estado }, { UsuarioId: 3, Rol: "GERENTE" }), { status: 400 });
   }
   assert.deepEqual(events, []);
 });
@@ -111,12 +113,12 @@ for (const caso of ["ausente", "resuelta", "hoy", "vencida", "otro restaurante"]
   test(`resolver permiso impide resolver: ${caso}`, async (t) => {
     t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-02T18:00:00Z") });
     expected.push({ pattern: /FROM dbo.PermisosLaborales/, transactional: false,
-      records: caso === "ausente" ? [] : [{ PermisoId: 7, RestauranteId: 2,
+      records: caso === "ausente" ? [] : [{ SolicitudId: 7, RestauranteId: 2,
         Estado: caso === "resuelta" ? "APROBADA" : "PENDIENTE",
         FechaSolicitada: new Date(caso === "hoy" ? "2026-10-02T00:00:00Z" : caso === "vencida" ? "2026-10-01T00:00:00Z" : "2026-10-03T00:00:00Z") }] });
-    if (caso === "otro restaurante") expected.push({ pattern: /FROM Usuarios/, transactional: false, records: [{ RestauranteId: 9 }] });
+    if (caso !== "ausente") expected.push({ pattern: /FROM Usuarios/, transactional: false, records: [{ RestauranteId: caso === "otro restaurante" ? 9 : 2 }] });
     await assert.rejects(permisos.resolverPermiso(7, { estado: "APROBADA" },
-      { UsuarioId: 3, Rol: caso === "otro restaurante" ? "GERENTE" : "RECURSOS_HUMANOS" }),
+      { UsuarioId: 3, Rol: "GERENTE" }),
       { status: caso === "ausente" ? 404 : caso === "resuelta" ? 409 : caso === "otro restaurante" ? 403 : 400 });
     assert.equal(events.some(event => event.type === "begin"), false);
   });

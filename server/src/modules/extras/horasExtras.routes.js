@@ -48,7 +48,7 @@ router.post(
 
 router.patch(
   "/solicitudes/:id/resolver",
-  permitirRoles("GERENTE", "RECURSOS_HUMANOS", "ADMINISTRADOR"),
+  permitirRoles("GERENTE"),
   resolverSolicitudController,
 );
 

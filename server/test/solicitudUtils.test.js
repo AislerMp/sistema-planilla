@@ -72,8 +72,6 @@ test("acceso propio y restaurante asignado conservan permisos y mensajes", async
   await utils.validarAccesoSolicitud(solicitud, admin);
   assert.equal(await utils.validarRestauranteSolicitudes(3, admin), 3);
   await assert.rejects(utils.validarRestauranteSolicitudes(null, admin), { status: 400 });
-  // Se conserva que solo horas extras permite omitir el restaurante solicitado.
-  await assert.rejects(permisos.listarPermisosPorRestaurante(gerente, undefined), { status: 400 });
 });
 
 for (const modulo of [extras, permisos]) {
@@ -99,22 +97,27 @@ for (const modulo of [extras, permisos]) {
           return { rowsAffected: [0] };
         }
         assert.match(query, /SELECT/);
-        return { recordset: query.includes("FROM Usuarios") ? [{ RestauranteId: 3 }] : [solicitud] };
+        return { recordset: query.includes("FROM Usuarios") ? [{ RestauranteId: 2 }] : [solicitud] };
       },
     }));
-    const resolver = (estado, usuario = { Rol: "ADMINISTRADOR", UsuarioId: 7 }) => esExtras
+    const resolver = (estado, usuario = { Rol: "GERENTE", UsuarioId: 7 }) => esExtras
       ? extras.resolverSolicitudHorasExtras(1, { estado }, usuario)
       : permisos.resolverPermiso(1, { estado }, usuario);
     await assert.rejects(resolver("PENDIENTE"), { status: 400, message: "El estado debe ser APROBADA o RECHAZADA" });
     await assert.rejects(resolver("RECHAZADA"), { status: 409, message: "Esta solicitud ya fue resuelta" });
+    solicitud.RestauranteId = 3;
     await assert.rejects(resolver("RECHAZADA", { Rol: "GERENTE", UsuarioId: 7 }),
       { status: 403, message: "Solo podés resolver solicitudes de tu restaurante" });
-    solicitud = { ...solicitud, Estado: "PENDIENTE", FechaSolicitada: new Date("2026-10-03") };
+    solicitud = { ...solicitud, RestauranteId: 2, Estado: "PENDIENTE", FechaSolicitada: new Date("2026-10-03") };
     await assert.rejects(resolver("RECHAZADA"),
       { status: 400, message: "La solicitud solo puede resolverse antes de la fecha solicitada" });
     const consultar = esExtras ? extras.getSolicitudById : permisos.obtenerPermisoPorId;
     await assert.rejects(consultar(1, { ...colaborador, ColaboradorId: 5 }), { status: 403 });
     assert.equal(vencimientos, 0);
+    // El rechazo de extras vencidas ahora coordina cabecera y minutos.
+    t.mock.method(sql.Transaction.prototype, "begin", async () => {});
+    t.mock.method(sql.Transaction.prototype, "commit", async () => {});
+    t.mock.method(sql.Transaction.prototype, "request", () => pool.request());
     assert.deepEqual(await consultar("1", colaborador), solicitud);
     assert.equal(vencimientos, 1);
   });

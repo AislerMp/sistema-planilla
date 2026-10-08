@@ -97,6 +97,9 @@ export default function DetalleBitacora() {
             <span><dt>Registro afectado</dt><dd>#{bitacora.RegistroId}</dd></span>
           </div>
         </dl>
+        {["SolicitudesHorasExtras", "SolicitudesPermisosLaborales"].includes(bitacora.Entidad) && (
+          <p>Referencia histórica anterior a la nueva estructura de solicitudes. El número identifica el registro original y no una solicitud actual.</p>
+        )}
       </section>
       <section className="data-panel bitacora-cambios" aria-labelledby="bitacora-cambios-titulo">
         <div className="table-toolbar">
