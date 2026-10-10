@@ -205,6 +205,7 @@ for (const existeRegistro of [true, false]) {
       { pattern: /FROM dbo.PeriodosPlanilla/, records: [{ Estado: "ABIERTO", FechaLimiteAjustes: new Date("2099-12-31T00:00:00Z") }] },
     );
     expected.push({ pattern: /FROM dbo.PermisosLaborales/, records: [] });
+    expected.push({ pattern: /FROM dbo.Incapacidades/, records: [] });
     if (totalAnterior !== totalEsperado) expected.push(
       { pattern: /SET MinutosAjustados = @Minutos/, parameters: { AsistenciaId: 7, Minutos: totalEsperado }, records: [{ AsistenciaId: 7, MinutosCalculados: totalAnterior, MinutosAjustados: totalEsperado }] },
       { pattern: /INSERT INTO dbo.Bitacora/ },

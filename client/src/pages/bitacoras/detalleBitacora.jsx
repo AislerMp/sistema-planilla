@@ -12,6 +12,7 @@ import AlertMessage from "../../components/AlertMessage.jsx";
 import LoadingState from "../../components/loadingState.jsx";
 import { getBitacora } from "../../services/bitacora.Service.js";
 import { fechaHoraFormat } from "../../utils/fechaUtils.js";
+import { obtenerComparacionBitacora } from "../../utils/bitacoraUtils.js";
 
 function nombreCampo(campo) {
   return campo
@@ -36,10 +37,11 @@ export default function DetalleBitacora() {
     error,
   } = useAsyncRequest(() => getBitacora(id), [id]);
 
+  const { anteriores, nuevos, calculo } = obtenerComparacionBitacora(bitacora);
   const campos = Array.from(
     new Set([
-      ...Object.keys(bitacora?.DatosAnteriores ?? {}),
-      ...Object.keys(bitacora?.DatosNuevos ?? {}),
+      ...Object.keys(anteriores),
+      ...Object.keys(nuevos),
     ]),
   );
 
@@ -128,8 +130,8 @@ export default function DetalleBitacora() {
                 (campo) => (
                   <tr key={campo}>
                     <th scope="row">{nombreCampo(campo)}</th>
-                    <td className="bitacora-value-before">{mostrarValor(bitacora.DatosAnteriores?.[campo])}</td>
-                    <td className="bitacora-value-after">{mostrarValor(bitacora.DatosNuevos?.[campo])}</td>
+                    <td className="bitacora-value-before">{mostrarValor(anteriores[campo])}</td>
+                    <td className="bitacora-value-after">{mostrarValor(nuevos[campo])}</td>
                   </tr>
                 ),
               )}
@@ -137,6 +139,29 @@ export default function DetalleBitacora() {
           </table>
         </div>
       </section>
+      {calculo && (
+        <section className="data-panel bitacora-cambios" aria-labelledby="bitacora-calculo-titulo">
+          <div className="table-toolbar">
+            <div>
+              <h2 id="bitacora-calculo-titulo">Cálculo de incapacidad registrado</h2>
+              <p>Reconocimiento generado al aprobar esta solicitud.</p>
+            </div>
+          </div>
+          <div className="table-scroll" role="region" aria-label="Cálculo registrado" tabIndex={0}>
+            <table>
+              <thead><tr><th scope="col">Campo</th><th scope="col">Valor registrado</th></tr></thead>
+              <tbody>
+                {Object.entries(calculo).map(([campo, valor]) => (
+                  <tr key={campo}>
+                    <th scope="row">{nombreCampo(campo)}</th>
+                    <td>{mostrarValor(valor)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       </div>
       )}
     </>

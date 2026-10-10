@@ -1,7 +1,11 @@
 ﻿import * as restaurantesRepository from "./restaurantes.repository.js";
 import { validateId, validateText, validateStatus, serviceError } from "../../shared/utils/serviceUtils.js";
 import { beginTransaction } from "../../shared/config/database.js";
-import { registrarBitacora, entidades } from "../bitacora/bitacora.service.js";
+import {
+  registrarBitacora,
+  entidades,
+  acciones,
+} from "../bitacora/bitacora.service.js";
 
 async function validateRestaurante(restaurante) {
   const data = {
@@ -40,7 +44,7 @@ export async function createNewRestaurante(restaurante, usuarioActorId) {
       usuarioId: actorId,
       entidad: entidades.RESTAURANTE,
       registroId: restauranteId,
-      accion: "CREAR",
+      accion: acciones.CREAR,
       datosAnteriores: null,
       datosNuevos: data,
     }, transaction);
@@ -74,7 +78,7 @@ export async function updateExistingRestaurante(id, restaurante, usuarioActorId)
       usuarioId: actorId,
       entidad: entidades.RESTAURANTE,
       registroId: restauranteId,
-      accion: "ACTUALIZAR",
+      accion: acciones.ACTUALIZAR,
       datosAnteriores: {
         nombre: existente.Nombre,
         distritoId: existente.DistritoId,
@@ -111,7 +115,7 @@ async function actualizarEstadoRestaurante(id, activo, usuarioActorId) {
       usuarioId: actorId,
       entidad: entidades.RESTAURANTE,
       registroId: restauranteId,
-      accion: status ? "ACTIVAR" : "DESACTIVAR",
+      accion: status ? acciones.ACTIVAR : acciones.DESACTIVAR,
       datosAnteriores: { activo: existente.Activo },
       datosNuevos: { activo: status },
     }, transaction);

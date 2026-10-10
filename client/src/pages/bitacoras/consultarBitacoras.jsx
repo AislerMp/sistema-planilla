@@ -13,6 +13,10 @@ import AlertMessage from "../../components/AlertMessage.jsx";
 import LoadingState from "../../components/loadingState.jsx";
 import { getBitacoras } from "../../services/bitacora.Service.js";
 import { getUsers } from "../../services/auth.Service.js";
+import {
+  accionesBitacora,
+  entidadesBitacora,
+} from "../../constants/bitacora.js";
 
 const emptyFilters = {
   usuarioId: "",
@@ -149,18 +153,7 @@ export default function ConsultarBitacoras() {
                 }}
               >
                 <option value="">Todas las entidades</option>
-                {[
-                  "Restaurantes",
-                  "Usuarios",
-                  "Puestos",
-                  "Colaboradores",
-                  "PeriodosPlanilla",
-                  "AsistenciasDiarias",
-                  "HorasExtras",
-                  "Solicitudes",
-                  "SolicitudesHorasExtras",
-                  "SolicitudesPermisosLaborales",
-                ].map((entidad) => (
+                {Object.values(entidadesBitacora).map((entidad) => (
                   <option key={entidad} value={entidad}>
                     {entidad}
                   </option>
@@ -180,20 +173,7 @@ export default function ConsultarBitacoras() {
                 }}
               >
                 <option value="">Todas las acciones</option>
-                {[
-                  "CREAR",
-                  "ACTUALIZAR",
-                  "ACTIVAR",
-                  "DESACTIVAR",
-                  "CAMBIAR_TARIFA",
-                  "CAMBIAR_CONTRASENA",
-                  "CAMBIAR_ESTADO",
-                  "AJUSTAR_HORAS",
-                  "APROBAR_HORAS_EXTRA",
-                  "RECHAZAR_HORAS_EXTRA",
-                  "APROBAR_PERMISO_LABORAL",
-                  "RECHAZAR_PERMISO_LABORAL",
-                ].map((accion) => (
+                {Object.values(accionesBitacora).map((accion) => (
                   <option key={accion} value={accion}>
                     {accion.replaceAll("_", " ")}
                   </option>

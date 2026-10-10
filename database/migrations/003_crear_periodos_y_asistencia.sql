@@ -41,7 +41,7 @@ BEGIN TRY
 
         Estado VARCHAR(15) NOT NULL
             CONSTRAINT DF_PeriodosPlanilla_Estado
-            DEFAULT ('ABIERTO'),
+            DEFAULT ('PROGRAMADO'),
 
         CreadoPorUsuarioId INT NOT NULL,
 
@@ -65,12 +65,13 @@ BEGIN TRY
         CONSTRAINT CK_PeriodosPlanilla_Estado
             CHECK (
                 Estado IN (
+                    'PROGRAMADO',
                     'ABIERTO',
                     'EN_REVISION',
                     'CERRADO',
                     'PAGADO'
                 )
-            )
+            );
     );
 
     ------------------------------------------------------------

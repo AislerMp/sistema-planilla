@@ -12,6 +12,7 @@ const emptyFilters = {
 const estadosSolicitud = [
   { valor: null, etiqueta: "Todas" },
   { valor: "PENDIENTE", etiqueta: "Pendientes" },
+  { valor: "EN_REVISION_RH", etiqueta: "En Revision"},
   { valor: "APROBADA", etiqueta: "Aprobadas" },
   { valor: "RECHAZADA", etiqueta: "Rechazadas" },
 ];
@@ -37,6 +38,7 @@ export default function SolicitudesFiltros({
     ...emptyFilters,
     ...filtros,
   });
+  
   const [errorFiltro, setErrorFiltro] = useState(null);
 
   function aplicarFiltros(event) {

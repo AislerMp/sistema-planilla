@@ -25,6 +25,10 @@ import PermisosLaborales from "../pages/PermisosLaborales.jsx";
 import ConsultarBitacoras from "../pages/bitacoras/consultarBitacoras.jsx";
 import DetalleBitacora from "../pages/bitacoras/detalleBitacora.jsx";
 
+import ConsultarIncapacidades from "../pages/incapacidades/consultarIncapacidades.jsx";
+import DetalleIncapacidad from "../pages/incapacidades/detalleIncapacidad.jsx";
+import RegistrarIncapacidad from "../pages/incapacidades/registrarIncapacidad.jsx";
+
 export default function AppRoutes({ theme, onToggleTheme }) {
   return (
     <BrowserRouter>
@@ -43,49 +47,70 @@ export default function AppRoutes({ theme, onToggleTheme }) {
           >
             <Route path="/inicio" element={<HomePage />} />
             <Route path="/usuarios/registrar" element={<CreateUsuario />} />
-            <Route path="/usuarios/:usuarioId/editar" element={<UpdateUsuario />} />
+            <Route
+              path="/usuarios/:usuarioId/editar"
+              element={<UpdateUsuario />}
+            />
 
             <Route path="/colaboradores" element={<ColaboradoresDashboard />} />
-            <Route path="/colaboradores/registrar" element={<CreateColaborador />} />
+            <Route
+              path="/colaboradores/registrar"
+              element={<CreateColaborador />}
+            />
             <Route
               path="/colaboradores/:colaboradorId/editar"
               element={<UpdateColaborador />}
             />
-            <Route
-              path="/restaurantes"
-              element={<RestaurantesDashboard />}
-            />
-            <Route
-              path="/puestos"
-              element={<PuestosDashboard />}
-            />
-            <Route
-              path="/usuarios"
-              element={<UsuariosDashboard />}
-            />
+            <Route path="/restaurantes" element={<RestaurantesDashboard />} />
+            <Route path="/puestos" element={<PuestosDashboard />} />
+            <Route path="/usuarios" element={<UsuariosDashboard />} />
             <Route path="/periodos" element={<PeriodosPlanillaMenu />} />
-            <Route path="/periodos/listado" element={<PeriodosPlanillaList />} />
+            <Route
+              path="/periodos/listado"
+              element={<PeriodosPlanillaList />}
+            />
             <Route path="/periodos/crear" element={<CreatePeriodoPlanilla />} />
             <Route path="/asistencia" element={<AsistenciaMenu />} />
             <Route path="/asistencia/mis-marcas" element={<MisMarcas />} />
-            <Route element={<ProtectedRoute roles={["GERENTE", "ADMINISTRADOR", "RECURSOS_HUMANOS"]} />}>
-              <Route path="/asistencia/colaborador/:colaboradorId/marcas" element={<MisMarcas />} />
+            <Route
+              element={
+                <ProtectedRoute
+                  roles={["GERENTE", "ADMINISTRADOR", "RECURSOS_HUMANOS"]}
+                />
+              }
+            >
+              <Route
+                path="/asistencia/colaborador/:colaboradorId/marcas"
+                element={<MisMarcas />}
+              />
             </Route>
-            <Route path="/asistencia/gestionar" element={<GestionarAsistencias />} />
+            <Route
+              path="/asistencia/gestionar"
+              element={<GestionarAsistencias />}
+            />
 
             <Route
               path="/solicitudes-horas-extras"
               element={<SolicitudesHorasExtra />}
             />
+            <Route path="/permisos-laborales" element={<PermisosLaborales />} />
+
             <Route
-              path="/permisos-laborales"
-              element={<PermisosLaborales />}
-            />
-            
-            <Route element={<ProtectedRoute roles={["ADMINISTRADOR", "RECURSOS_HUMANOS"]} />}>
+              element={
+                <ProtectedRoute roles={["ADMINISTRADOR", "RECURSOS_HUMANOS"]} />
+              }
+            >
               <Route path="/bitacoras" element={<ConsultarBitacoras />} />
               <Route path="/bitacoras/:id" element={<DetalleBitacora />} />
             </Route>
+
+            <Route path="/incapacidades" element={<ConsultarIncapacidades />} />
+            <Route path="/incapacidades/:id" element={<DetalleIncapacidad />} />
+            <Route
+              path="/incapacidades/registrar"
+              element={<RegistrarIncapacidad />}
+            />
+
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Route>

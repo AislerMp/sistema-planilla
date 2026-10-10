@@ -542,7 +542,10 @@ label {
   color: #98939d;
   letter-spacing: 0.15em;
   margin: 31px 14px 12px;
+  text-transform: uppercase;
 }
+
+.sidebar-group:last-child { margin-bottom: 24px; }
 
 .sidebar-links {
   display: grid;
@@ -902,6 +905,29 @@ label {
   gap: 17px;
 }
 
+.module-groups { display: grid; gap: 32px; }
+.module-group { min-width: 0; }
+.module-group + .module-group { border-top: 1px solid var(--color-border); padding-top: 28px; }
+.module-group-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.module-group-icon { display: grid; place-items: center; flex: 0 0 40px; height: 40px; border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-accent); background: var(--color-surface); }
+.module-group-heading h3 { font-size: 18px; margin: 0; }
+.module-group-heading p { margin-top: 4px; font-size: 12px; color: var(--color-text-muted); }
+.module-group-count { flex-shrink: 0; margin-left: auto; padding: 4px 9px; border: 1px solid var(--color-border); border-radius: 20px; font-size: 11px; color: var(--color-text-muted); }
+.module-group .module-card { display: flex; flex-direction: column; min-width: 0; }
+.module-group .module-card > p { flex: 1; }
+.module-group .module-card h4 { font-size: 18px; margin-bottom: 8px; }
+
+@media (min-width: 1280px) {
+  .module-group .module-grid { grid-template-columns: repeat(var(--module-columns, 3), minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .module-group-heading { flex-wrap: wrap; }
+  .module-group-heading > div { flex: 1; min-width: 0; }
+  .module-group-count { display: none; }
+  .module-group-heading h3, .module-group .module-card h4 { font-size: 16px; }
+}
+
 .module-card {
   display: block;
   background: var(--color-surface);
@@ -1227,6 +1253,7 @@ label {
   color: var(--color-text);
 }
 .solicitud-state[data-estado="PENDIENTE"] { background: var(--color-warning-background); color: var(--color-warning); }
+.solicitud-state[data-estado="EN_REVISION_RH"] { background: var(--color-info-background); color: var(--color-info); }
 .solicitud-state[data-estado="APROBADA"] { background: var(--color-success-background); color: var(--color-success); }
 .solicitud-state[data-estado="RECHAZADA"] { background: var(--color-error-background); color: var(--color-error); }
 .solicitud-details {
@@ -1239,6 +1266,41 @@ label {
   border-radius: 9px;
 }
 .solicitud-details-wide { grid-column: 1 / -1; }
+.solicitud-detail-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 20px; }
+.solicitud-etapas { display: flex; flex-wrap: wrap; gap: 12px; padding: 0; margin: 0 0 24px; list-style: none; }
+.solicitud-etapas li { padding: 9px 12px; border-radius: 7px; color: var(--color-text-muted); font-size: 13px; }
+.solicitud-etapas [aria-current="step"] { background: var(--color-hover); color: var(--color-accent); font-weight: 600; }
+
+/* Detalle de incapacidad: reutiliza paneles, formularios y estados compartidos. */
+.incapacidad-resumen-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+.incapacidad-resumen-heading h2 { margin: 8px 0 0; font-size: 20px; }
+.incapacidad-resumen-heading .solicitud-state { padding: 8px 12px; font-size: 12px; }
+.incapacidad-periodo { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.incapacidad-periodo dd { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-weight: 600; }
+.incapacidad-detail .solicitud-etapas { margin: 20px 0 0; gap: 8px; }
+.incapacidad-detail .solicitud-etapas li { display: flex; align-items: center; gap: 9px; flex: 1 1 160px; }
+.incapacidad-etapa-numero { display: grid; place-items: center; flex: 0 0 26px; height: 26px; border: 1px solid currentColor; border-radius: 50%; font-size: 11px; }
+.incapacidad-contenido { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; }
+.incapacidad-contenido .catalog-form { margin-bottom: 0; min-width: 0; }
+.incapacidad-contenido h2 { display: flex; align-items: center; gap: 10px; font-size: 18px; }
+.incapacidad-contenido .solicitud-create-form > p { margin-bottom: 18px; color: var(--color-text-muted); font-size: 13px; }
+.incapacidad-lateral { min-width: 0; margin-bottom: 0; }
+.incapacidad-calculo { margin-top: 20px; }
+.incapacidad-comprobante { display: flex; align-items: center; gap: 14px; padding: 18px; margin-bottom: 18px; border: 1px dashed var(--color-border); border-radius: 9px; background: var(--color-field); }
+.incapacidad-comprobante > svg { flex-shrink: 0; color: var(--color-info); }
+.incapacidad-comprobante > div { min-width: 0; }
+.incapacidad-comprobante strong { display: block; overflow-wrap: anywhere; font-size: 14px; }
+.incapacidad-comprobante p { margin-top: 5px; }
+@media (max-width: 1000px) {
+  .incapacidad-contenido { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 540px) {
+  .incapacidad-detail .catalog-form { padding: 18px; }
+  .incapacidad-periodo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .incapacidad-periodo > div:last-child { grid-column: 1 / -1; }
+  .incapacidad-contenido .solicitud-details { grid-template-columns: minmax(0, 1fr); }
+  .incapacidad-detail .solicitud-create-actions .button { flex: 1 1 140px; }
+}
 .solicitud-details dt,
 .solicitud-review-details dt { margin-bottom: 4px; color: var(--color-text-muted); font-size: 12px; }
 .solicitud-details dd,

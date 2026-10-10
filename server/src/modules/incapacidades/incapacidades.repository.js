@@ -47,6 +47,9 @@ export async function getSolicitudById(solicitudId, transaction = null) {
         s.RevisadoPorGerenteId,
         s.RevisadoPorRhId,
         s.Observacion,
+        c.Nombres,
+        c.Apellidos,
+        r.Nombre AS Restaurante,
 
         i.TipoIncapacidadId,
         i.NumeroDocumento,
@@ -58,8 +61,9 @@ export async function getSolicitudById(solicitudId, transaction = null) {
         t.Codigo AS CodigoTipoIncapacidad,
         t.Nombre AS TipoIncapacidad,
         t.EntidadEmisora,
-        t.PorcentajePatronal
-
+        t.PorcentajePatronal,
+        t.Activo
+        
       FROM dbo.Solicitudes AS s
 
       INNER JOIN dbo.Incapacidades AS i
@@ -67,6 +71,10 @@ export async function getSolicitudById(solicitudId, transaction = null) {
 
       INNER JOIN dbo.TiposIncapacidad AS t
         ON t.TipoIncapacidadId = i.TipoIncapacidadId
+      INNER JOIN dbo.Colaboradores AS c
+        ON c.ColaboradorId = s.ColaboradorId
+      INNER JOIN dbo.Restaurantes AS r
+        ON r.RestauranteId = s.RestauranteId
 
       WHERE s.SolicitudId = @solicitudId
         AND s.TipoSolicitud = 'INCAPACIDAD';
@@ -115,9 +123,11 @@ export async function getIncapacidadesByColaborador(
       SELECT s.SolicitudId, s.TipoSolicitud, s.ColaboradorId, s.RestauranteId,
         s.RegistradoPorUsuarioId, s.Estado, s.Motivo,
         s.RevisadoPorGerenteId, s.RevisadoPorRhId, s.Observacion,
-        i.NumeroDocumento, i.FechaInicio, i.FechaFin
+        i.NumeroDocumento, i.FechaInicio, i.FechaFin,
+        t.Nombre AS TipoIncapacidad, t.EntidadEmisora
       FROM dbo.Incapacidades AS i
       INNER JOIN dbo.Solicitudes AS s ON s.SolicitudId = i.SolicitudId
+      INNER JOIN dbo.TiposIncapacidad AS t ON t.TipoIncapacidadId = i.TipoIncapacidadId
       WHERE s.TipoSolicitud = 'INCAPACIDAD' AND s.ColaboradorId = @colaboradorId
         AND (@desde IS NULL OR i.FechaFin >= @desde)
         AND (@hasta IS NULL OR i.FechaInicio <= @hasta)
@@ -145,8 +155,10 @@ export async function getIncapacidadesByRestaurante(
        SELECT s.SolicitudId, s.TipoSolicitud, s.ColaboradorId, s.RestauranteId,
         s.RegistradoPorUsuarioId, s.Estado, s.Motivo,
         s.RevisadoPorGerenteId, s.RevisadoPorRhId, s.Observacion,
-        i.NumeroDocumento, i.FechaInicio, i.FechaFin, c.Nombres, c.Apellidos
+        i.NumeroDocumento, i.FechaInicio, i.FechaFin, c.Nombres, c.Apellidos,
+        t.Nombre AS TipoIncapacidad, t.EntidadEmisora
       FROM dbo.Incapacidades AS i
+      INNER JOIN dbo.TiposIncapacidad AS t ON t.TipoIncapacidadId = i.TipoIncapacidadId
       INNER JOIN dbo.Solicitudes AS s ON s.SolicitudId = i.SolicitudId
       INNER JOIN dbo.Colaboradores AS c ON c.ColaboradorId = s.ColaboradorId
       WHERE s.TipoSolicitud = 'INCAPACIDAD' AND s.RestauranteId = @restauranteId
@@ -196,7 +208,7 @@ export async function getIncapacidadesSuperpuestas(
   return result.recordset;
 }
 
-export async function getIncapacidadAprobadaByFecha(
+export async function getIncapacidadVigenteByFecha(
   colaboradorId,
   fechaAsignada,
   transaction = null,
@@ -222,8 +234,12 @@ export async function getIncapacidadAprobadaByFecha(
 
       WHERE s.ColaboradorId = @colaboradorId
         AND s.TipoSolicitud = 'INCAPACIDAD'
-        AND s.Estado = 'APROBADA'
         AND @fechaAsignada BETWEEN i.FechaInicio AND i.FechaFin
+        AND s.Estado IN (
+            'PENDIENTE',
+            'EN_REVISION_RH',
+            'APROBADA'
+        )
 
       ORDER BY i.FechaInicio DESC, s.SolicitudId DESC;
     `);

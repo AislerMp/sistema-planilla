@@ -1,7 +1,11 @@
 ﻿import * as puestosRepository from "./puestos.repository.js";
 import { validateId, validateText, validateStatus, serviceError } from "../../shared/utils/serviceUtils.js";
 import { beginTransaction } from "../../shared/config/database.js";
-import { registrarBitacora, entidades } from "../bitacora/bitacora.service.js";
+import {
+  registrarBitacora,
+  entidades,
+  acciones,
+} from "../bitacora/bitacora.service.js";
 
 function validateTarifa(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -41,7 +45,7 @@ export async function createNewPuesto(puesto, usuarioActorId) {
       usuarioId: actorId,
       entidad: entidades.PUESTOS,
       registroId: puestoId,
-      accion: "CREAR",
+      accion: acciones.CREAR,
       datosAnteriores: null,
       datosNuevos: data,
     }, transaction);
@@ -75,7 +79,7 @@ export async function updateTarifaPuesto(id, tarifaHora, usuarioActorId) {
       usuarioId: actorId,
       entidad: entidades.PUESTOS,
       registroId: puestoId,
-      accion: "CAMBIAR_TARIFA",
+      accion: acciones.CAMBIAR_TARIFA,
       datosAnteriores: { tarifaHora: puesto.TarifaHora },
       datosNuevos: { tarifaHora: tarifa },
     }, transaction);
@@ -108,7 +112,7 @@ async function actualizarEstadoPuesto(id, activo, usuarioActorId) {
       usuarioId: actorId,
       entidad: entidades.PUESTOS,
       registroId: puestoId,
-      accion: status ? "ACTIVAR" : "DESACTIVAR",
+      accion: status ? acciones.ACTIVAR : acciones.DESACTIVAR,
       datosAnteriores: { activo: puesto.Activo },
       datosNuevos: { activo: status },
     }, transaction);

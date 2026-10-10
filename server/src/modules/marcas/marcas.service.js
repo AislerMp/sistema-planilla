@@ -23,6 +23,7 @@ import {
 } from "../colaboradores/colaboradores.service.js";
 import { sincronizarHorasExtras } from "../extras/horasExtras.service.js";
 import { validarDiaSinPermisoAprobado } from "../permisosLaborales/permisosLaborales.service.js";
+import { validarDiaSinIncapacidad } from "../incapacidades/incapacidades.services.js";
 import { beginTransaction } from "../../shared/config/database.js";
 
 export async function consultarMisMarcas(usuario, filtros = {}) {
@@ -143,6 +144,7 @@ export async function registrarEntrada(usuario) {
     }
 
     await validarDiaSinPermisoAprobado(colaboradorId, fechaSQLComoTexto(fechaAsignada), transaction);
+    await validarDiaSinIncapacidad(colaboradorId, fechaAsignada, transaction);
 
     const asistenciaDiariaExistente =
       await asistenciasRepository.getAsistenciaByColaboradorYFecha(
@@ -243,6 +245,7 @@ export async function registrarSalida(usuario) {
     }
 
     await validarDiaSinPermisoAprobado(colaboradorId, fechaSQLComoTexto(fechaAsignada), transaction);
+    await validarDiaSinIncapacidad(colaboradorId, fechaAsignada, transaction);
 
     // 6. Obtener y validar la asistencia diaria.
     const asistenciaDiariaExistente =

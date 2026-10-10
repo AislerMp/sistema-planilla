@@ -14,6 +14,7 @@ import marcasRoutes from "./modules/marcas/marcas.routes.js";
 import horasExtrasRoutes from "./modules/extras/horasExtras.routes.js";
 import bitacoraRoutes from "./modules/bitacora/bitacora.routes.js";
 import permisosLaboralesRoutes from "./modules/permisosLaborales/permisosLaborales.routes.js";
+import incapacidadesRoutes from "./modules/incapacidades/incapacidades.routes.js";
 
 import { isAuthenticate } from "./shared/middlewares/auth.middleware.js";
 import { errorHandler } from "./shared/middlewares/error.middleware.js";
@@ -59,6 +60,7 @@ app.use("/api/marcas", marcasRoutes);
 app.use("/api/extras", horasExtrasRoutes);
 app.use("/api/bitacoras", bitacoraRoutes);
 app.use("/api/permisos-laborales", permisosLaboralesRoutes);
+app.use("/api/incapacidades", incapacidadesRoutes);
 
 app.use(errorHandler);
 

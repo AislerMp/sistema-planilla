@@ -14,11 +14,16 @@ import {
   obtenerRangoSemanaActual,
 } from "../../shared/utils/fechaUtils.js";
 
-import { registrarBitacora, entidades } from "../bitacora/bitacora.service.js";
+import {
+  registrarBitacora,
+  entidades,
+  acciones,
+} from "../bitacora/bitacora.service.js";
 
 import { getRestaurantePermitido } from "../colaboradores/colaboradores.service.js";
 import { sincronizarHorasExtras } from "../extras/horasExtras.service.js";
 import { validarDiaSinPermisoAprobado } from "../permisosLaborales/permisosLaborales.service.js";
+import { validarDiaSinIncapacidad } from "../incapacidades/incapacidades.services.js";
 import { beginTransaction } from "../../shared/config/database.js";
 
 export async function obtenerAsistencia(id) {
@@ -339,6 +344,11 @@ export async function ajustarMinutosAsistencia(
       fechaSQLComoTexto(asistenciaAnterior.FechaAsignada),
       transaction,
     );
+    await validarDiaSinIncapacidad(
+      asistenciaAnterior.ColaboradorId,
+      asistenciaAnterior.FechaAsignada,
+      transaction,
+    );
     
     const asistenciaActualizada =
       await asistenciasRepository.updateMinutosAsistencia(
@@ -357,7 +367,7 @@ export async function ajustarMinutosAsistencia(
         usuarioId: actorId,
         entidad: entidades.ASISTENCIAS_DIARIAS,
         registroId: validAsistenciaId,
-        accion: "AJUSTAR_HORAS",
+        accion: acciones.AJUSTAR_HORAS,
 
         datosAnteriores: {
           minutosCalculados: asistenciaAnterior.MinutosCalculados,
@@ -477,7 +487,7 @@ export async function actualizarMinutosCalculados(
       usuarioId: actorId,
       entidad: entidades.ASISTENCIAS_DIARIAS,
       registroId: asistenciaId,
-      accion: "ACTUALIZAR",
+      accion: acciones.ACTUALIZAR,
 
       datosAnteriores: {
         minutosCalculados: asistenciaDiaria.MinutosCalculados,

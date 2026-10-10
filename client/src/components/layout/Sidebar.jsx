@@ -1,7 +1,7 @@
 import { NavLink, Link } from "react-router-dom";
 import { House, MapPin } from "lucide-react";
 
-import { menuItems } from "../../utils/menuItems.js";
+import { menuItems, groupMenuItems } from "../../utils/menuItems.js";
 
 import Brand from "../Brand.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -34,13 +34,13 @@ export default function Sidebar({ isOpen, onNavigate }) {
           Inicio
         </NavLink>
 
-        {visibleItems.length > 0 && (
-          <>
-            <p className="sidebar-section">
-              {user?.Rol === "COLABORADOR" ? "MI JORNADA" : user?.Rol === "GERENTE" ? "MI RESTAURANTE" : "ADMINISTRACIÓN"}
+        {groupMenuItems(visibleItems).map((group) => (
+          <div className="sidebar-group" key={group.id}>
+            <p className="sidebar-section" id={`nav-${group.id}`}>
+              {user?.Rol === "COLABORADOR" && group.id === "administracion" ? "Mi jornada" : group.title}
             </p>
-            <div className="sidebar-links">
-              {visibleItems.map((item) => {
+            <div className="sidebar-links" role="group" aria-labelledby={`nav-${group.id}`}>
+              {group.items.map((item) => {
                 const Icon = item.icon;
                 return (
                   <NavLink
@@ -55,8 +55,8 @@ export default function Sidebar({ isOpen, onNavigate }) {
                 );
               })}
             </div>
-          </>
-        )}
+          </div>
+        ))}
       </nav>
       <div className="sidebar-footer">
         <p>

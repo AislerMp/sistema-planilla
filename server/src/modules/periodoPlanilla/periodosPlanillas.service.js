@@ -12,22 +12,33 @@ import {
 } from "../../shared/utils/fechaUtils.js";
 
 import { beginTransaction } from "../../shared/config/database.js";
-import { registrarBitacora, entidades } from "../bitacora/bitacora.service.js";
+import {
+  registrarBitacora,
+  entidades,
+  acciones,
+} from "../bitacora/bitacora.service.js";
 
 export async function listarPeriodos() {
-  return await periodoRepository.getPeriodos();
+  await actualizarEstadosPeriodos(process.env.USUARIO_SISTEMA_ID);
+
+  return periodoRepository.getPeriodos();
 }
 
 export async function obtenerPeriodo(idPeriodo) {
   const periodoId = validateId(idPeriodo);
-  const periodo = await periodoRepository.getPeriodoById(periodoId);
+  await actualizarEstadosPeriodos(process.env.USUARIO_SISTEMA_ID);
 
-  if (!periodo) throw serviceError("El periodo seleccionado no existe", 404);
+  const periodo = await periodoRepository.getPeriodoById(periodoId);
+  if (!periodo) {
+    throw serviceError("El período seleccionado no existe.", 404);
+  }
+
   return periodo;
 }
 
 export async function obtenerPeriodoPorFecha(fechaAsignada) {
   const fecha = validateDate(fechaAsignada, "La fecha asignada");
+  await actualizarEstadosPeriodos(process.env.USUARIO_SISTEMA_ID);
   const periodo = await periodoRepository.getPeriodoByFecha(fecha);
 
   if (!periodo) {
@@ -40,7 +51,6 @@ export async function obtenerPeriodoPorFecha(fechaAsignada) {
 // Respetando las horas de las marcas y el corte a las 4am
 export async function obtenerPeriodoActual() {
   const { fechaAsignada } = obtenerCalendarioActual();
-
   return await obtenerPeriodoPorFecha(fechaAsignada);
 }
 
@@ -105,7 +115,7 @@ export async function crearPeriodo(periodo, usuarioActorId) {
         usuarioId: actorId,
         entidad: entidades.PERIODOS_PLANILLA,
         registroId: createdPeriodo.PeriodoId,
-        accion: "CREAR",
+        accion: acciones.CREAR,
         datosNuevos: periodoValidado,
         datosAnteriores: null,
       },
@@ -203,7 +213,7 @@ export async function cambiarEstadoPeriodo(
         usuarioId: actorId,
         entidad: entidades.PERIODOS_PLANILLA,
         registroId: periodoId,
-        accion: "ACTUALIZAR",
+        accion: acciones.ACTUALIZAR,
         datosNuevos: updatedPeriodo,
         datosAnteriores: periodoActual,
       },
@@ -218,6 +228,116 @@ export async function cambiarEstadoPeriodo(
     } catch (error) {
       console.error(`Error al hacer RollBack ${error}`);
     }
+    throw error;
+  }
+}
+
+
+/* FUNCIONES PARA AUTOMATIZAR LOS ESTADOS */
+function determinarEstadoPeriodo(periodo, calendario) {
+  const fechaInicio = fechaSQLComoTexto(periodo.FechaInicio);
+  const fechaFin = fechaSQLComoTexto(periodo.FechaFin);
+  const fechaLimite = fechaSQLComoTexto(periodo.FechaLimiteAjustes);
+
+  if (calendario.fechaAsignada < fechaInicio) {
+    return "PROGRAMADO";
+  }
+
+  if (calendario.fechaAsignada <= fechaFin) {
+    return "ABIERTO";
+  }
+
+  if (calendario.fechaHoy <= fechaLimite) {
+    return "EN_REVISION";
+  }
+
+  return "CERRADO";
+}
+
+export async function actualizarEstadosPeriodos(usuarioSistemaId) {
+  const usuarioId = validateId(
+    usuarioSistemaId,
+    "Usuario del sistema",
+  );
+
+  const calendario = obtenerCalendarioActual();
+  const transaction = await beginTransaction();
+
+  try {
+    const periodos = await periodoRepository.getPeriodos(transaction);
+    let cantidadActualizados = 0;
+
+    const ordenEstados = {
+      PROGRAMADO: 0,
+      ABIERTO: 1,
+      EN_REVISION: 2,
+      CERRADO: 3,
+      PAGADO: 4,
+    };
+
+    for (const periodo of periodos) {
+      // La tarea nunca reabre períodos cerrados ni pagados.
+      if (["CERRADO", "PAGADO"].includes(periodo.Estado)) {
+        continue;
+      }
+
+      const nuevoEstado = determinarEstadoPeriodo(
+        periodo,
+        calendario,
+      );
+
+      // Solo avanzar; nunca retroceder ni repetir un cambio.
+      if (
+        ordenEstados[nuevoEstado] <= ordenEstados[periodo.Estado]
+      ) {
+        continue;
+      }
+
+      const periodoActualizado =
+        await periodoRepository.updateEstadoPeriodo(
+          periodo.PeriodoId,
+          periodo.Estado,
+          nuevoEstado,
+          transaction,
+        );
+
+      // Otro proceso pudo cambiar el estado mientras tanto.
+      if (!periodoActualizado) {
+        continue;
+      }
+
+      await registrarBitacora(
+        {
+          usuarioId,
+          entidad: entidades.PERIODOS_PLANILLA,
+          registroId: periodo.PeriodoId,
+          accion: acciones.ACTUALIZAR,
+          datosAnteriores: {
+            estado: periodo.Estado,
+          },
+          datosNuevos: {
+            estado: periodoActualizado.Estado,
+            origen: "AUTOMATICO",
+          },
+        },
+        transaction,
+      );
+
+      cantidadActualizados++;
+    }
+
+    await transaction.commit();
+    return cantidadActualizados;
+  } catch (error) {
+    try {
+      await transaction.rollback();
+    } catch (rollbackError) {
+      console.error(
+        "No se pudo revertir la actualización de períodos:",
+        rollbackError,
+      );
+    }
+
     throw error;
   }
 }

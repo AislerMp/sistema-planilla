@@ -15,6 +15,7 @@ import {
 } from "../../shared/utils/solicitudUtils.js";
 
 import { validarDiaSinPermisoAprobado } from "../permisosLaborales/permisosLaborales.service.js";
+import { validarDiaSinIncapacidad } from "../incapacidades/incapacidades.services.js";
 import * as horasExtraRepository from "./horasExtras.repository.js";
 import * as asistenciasRepository from "../asistenciasDiarias/asistenciasDiarias.repository.js";
 import {
@@ -30,7 +31,11 @@ import {
 
 import { bloquearColaboradorSolicitudes } from "../solicitudes/solicitudes.repository.js";
 import { beginTransaction } from "../../shared/config/database.js";
-import { registrarBitacora, entidades } from "../bitacora/bitacora.service.js";
+import {
+  registrarBitacora,
+  entidades,
+  acciones,
+} from "../bitacora/bitacora.service.js";
 
 /* SERVICIOS DE HORAS EXTRAS */
 
@@ -189,6 +194,11 @@ export async function actualizarHorasExtra(
     }
 
     await validarDiaSinPermisoAprobado(asistencia.ColaboradorId, fechaSQLComoTexto(asistencia.FechaAsignada), transaction);
+    await validarDiaSinIncapacidad(
+      asistencia.ColaboradorId,
+      asistencia.FechaAsignada,
+      transaction,
+    );
     // La asistencia guarda las horas normales; las extras se guardan aparte.
     // Quitar extras de una jornada corta no debe convertirla en ocho horas.
     const minutosNormales = minutosAjustados > 0
@@ -209,7 +219,7 @@ export async function actualizarHorasExtra(
         usuarioId: actorId,
         entidad: entidades.ASISTENCIAS_DIARIAS,
         registroId: asistenciaId,
-        accion: "AJUSTAR_HORAS",
+        accion: acciones.AJUSTAR_HORAS,
         datosAnteriores: {
           minutosCalculados: asistencia.MinutosCalculados,
           minutosAjustados: asistencia.MinutosAjustados,
@@ -262,7 +272,7 @@ export async function actualizarHorasExtra(
         usuarioId: actorId,
         entidad: entidades.HORAS_EXTRAS,
         registroId: registroActualizado.HoraExtraId,
-        accion: registroAnterior ? "AJUSTAR_HORAS" : "CREAR",
+        accion: registroAnterior ? acciones.AJUSTAR_HORAS : acciones.CREAR,
 
         datosAnteriores: registroAnterior
           ? {
@@ -358,7 +368,7 @@ export async function sincronizarHorasExtras(
       usuarioId: actorId,
       entidad: entidades.ASISTENCIAS_DIARIAS,
       registroId: asistenciaId,
-      accion: "ACTUALIZAR",
+      accion: acciones.ACTUALIZAR,
       datosAnteriores: { minutosAjustados: asistencia.MinutosAjustados },
       datosNuevos: { minutosAjustados: minutosNormales },
     }, transaction);
@@ -409,7 +419,7 @@ export async function sincronizarHorasExtras(
       usuarioId: actorId,
       entidad: entidades.HORAS_EXTRAS,
       registroId: registroGuardado.HoraExtraId,
-      accion: registroAnterior ? "ACTUALIZAR" : "CREAR",
+      accion: registroAnterior ? acciones.ACTUALIZAR : acciones.CREAR,
 
       datosAnteriores: registroAnterior
         ? {
@@ -566,7 +576,7 @@ export async function crearSolicitudHorasExtras(
         usuarioId,
         entidad: entidades.SOLICITUDES,
         registroId: solicitudCreada.SolicitudId,
-        accion: "CREAR",
+        accion: acciones.CREAR,
         datosAnteriores: null,
         datosNuevos: solicitudCreada,
       },
@@ -638,7 +648,9 @@ export async function resolverSolicitudHorasExtras(
   }
 
   const accionBitacora =
-    validEstado === "APROBADA" ? "APROBAR_HORAS_EXTRA" : "RECHAZAR_HORAS_EXTRA";
+    validEstado === "APROBADA"
+      ? acciones.APROBAR_HORAS_EXTRA
+      : acciones.RECHAZAR_HORAS_EXTRA;
 
   const transaction = await beginTransaction();
 

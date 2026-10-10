@@ -23,7 +23,11 @@ import { obtenerCalendarioActual } from "../../shared/utils/fechaUtils.js";
 
 import { bloquearColaboradorSolicitudes } from "../solicitudes/solicitudes.repository.js";
 import { beginTransaction } from "../../shared/config/database.js";
-import { registrarBitacora, entidades } from "../bitacora/bitacora.service.js";
+import {
+  registrarBitacora,
+  entidades,
+  acciones,
+} from "../bitacora/bitacora.service.js";
 
 async function validarFechaPendiente(filtros) {
   const { fechaHoy } = obtenerCalendarioActual();
@@ -133,7 +137,7 @@ export async function solicitarPermiso({ fechaSolicitada, motivo }, usuario) {
         usuarioId,
         entidad: entidades.SOLICITUDES,
         registroId: solicitudCreada.SolicitudId,
-        accion: "CREAR",
+        accion: acciones.CREAR,
         datosAnteriores: null,
         datosNuevos: solicitudCreada,
       },
@@ -193,8 +197,8 @@ export async function resolverPermiso(
 
   const accionBitacora =
     estadoValidado === "APROBADA"
-      ? "APROBAR_PERMISO_LABORAL"
-      : "RECHAZAR_PERMISO_LABORAL";
+      ? acciones.APROBAR_PERMISO_LABORAL
+      : acciones.RECHAZAR_PERMISO_LABORAL;
 
   const transaction = await beginTransaction();
 

@@ -80,6 +80,7 @@ for (const extrasExistentes of [false, true]) {
     respond(/FROM dbo.PeriodosPlanilla/, [{ PeriodoId: 2, Estado: "ABIERTO" }]);
     respond(/FROM dbo.MarcasAsistencia/, [marca]);
     respond(/FROM dbo.PermisosLaborales/, []);
+    respond(/FROM dbo.Incapacidades/, []);
     respond(/FROM dbo.AsistenciasDiarias/, [asistencia]);
     respond(/UPDATE dbo.MarcasAsistencia/, [{ ...marca, FechaHoraSalida: salida }]);
     respond(/FROM dbo.AsistenciasDiarias/, [asistencia]);
@@ -253,6 +254,7 @@ for (const minutosDetectados of [60, 120]) {
     respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, ColaboradorId: 8, FechaAsignada: new Date("2026-10-01"), PeriodoId: 2, RestauranteId: 3, MinutosCalculados: 660, MinutosAjustados: null }]);
     respond(/FROM dbo.PeriodosPlanilla/, [{ Estado: "EN_REVISION", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") }]);
     respond(/FROM dbo.PermisosLaborales/, []);
+    respond(/FROM dbo.Incapacidades/, []);
     respond(/SET MinutosAjustados = @Minutos/, [{ AsistenciaId: 1, MinutosCalculados: 660, MinutosAjustados: 600 }]);
     respond(/INSERT INTO dbo.Bitacora/);
     respond(/FROM dbo.HorasExtras/, [{ HoraExtraId: 9, AsistenciaId: 1, MinutosDetectados: minutosDetectados, MinutosAjustados: 60 }]);
@@ -273,6 +275,7 @@ test("ajustar minutos permite cero y confirma la bitacora", async () => {
   respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, ColaboradorId: 8, FechaAsignada: new Date("2026-10-01"), PeriodoId: 2, RestauranteId: 3, MinutosCalculados: 60, MinutosAjustados: null }]);
   respond(/FROM dbo.PeriodosPlanilla/, [{ Estado: "EN_REVISION", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") }]);
   respond(/FROM dbo.PermisosLaborales/, []);
+  respond(/FROM dbo.Incapacidades/, []);
   respond(/SET MinutosAjustados = @Minutos/, [{ AsistenciaId: 1, MinutosCalculados: 60, MinutosAjustados: 0 }]);
   respond(/INSERT INTO dbo.Bitacora/);
   respond(/FROM dbo.HorasExtras/, []);
@@ -288,6 +291,7 @@ test("ajustar minutos revierte si falla la sincronizacion de horas extras", asyn
   respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, ColaboradorId: 8, FechaAsignada: new Date("2026-10-01"), PeriodoId: 2, RestauranteId: 3, MinutosCalculados: 600, MinutosAjustados: null }]);
   respond(/FROM dbo.PeriodosPlanilla/, [{ Estado: "EN_REVISION", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") }]);
   respond(/FROM dbo.PermisosLaborales/, []);
+  respond(/FROM dbo.Incapacidades/, []);
   respond(/SET MinutosAjustados = @Minutos/, [{ AsistenciaId: 1, MinutosCalculados: 600, MinutosAjustados: 0 }]);
   respond(/INSERT INTO dbo.Bitacora/);
   respond(/FROM dbo.HorasExtras/, [{ HoraExtraId: 9, AsistenciaId: 1, MinutosDetectados: 120 }]);

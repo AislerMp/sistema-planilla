@@ -8,7 +8,7 @@ import {
   serviceError,
 } from "../../shared/utils/serviceUtils.js";
 import { getRol } from "../roles/roles.service.js";
-import { registrarBitacora } from "../bitacora/bitacora.service.js";
+import { registrarBitacora, acciones } from "../bitacora/bitacora.service.js";
 import { beginTransaction } from "../../shared/config/database.js";
 
 function validatePassword(password) {
@@ -95,7 +95,7 @@ export async function registerUser(user, usuarioActorId) {
         usuarioId: actorId,
         entidad: "Usuarios",
         registroId: newUserId,
-        accion: "CREAR",
+        accion: acciones.CREAR,
         datosAnteriores: null,
         datosNuevos: {
           nombreUsuario,
@@ -173,7 +173,7 @@ export async function changePassword(
       usuarioId: usuarioId,
       entidad: "Usuarios",
       registroId: usuarioId,
-      accion: "CAMBIAR_CONTRASENA",
+      accion: acciones.CAMBIAR_CONTRASENA,
       datosAnteriores: { nombreUsuario: user.NombreUsuario },
       datosNuevos: { nombreUsuario: user.NombreUsuario, passwordActualizada: true },
     }, transaction);
@@ -221,7 +221,7 @@ async function actualizarEstadoUsuario(id, activo, usuarioActorId) {
         usuarioId: actorId,
         entidad: "Usuarios",
         registroId: usuarioId,
-        accion: status ? "ACTIVAR" : "DESACTIVAR",
+        accion: status ? acciones.ACTIVAR : acciones.DESACTIVAR,
         datosAnteriores: { activo: usuarioAnterior.Activo },
         datosNuevos: { activo: status },
       },
@@ -275,7 +275,7 @@ export async function updateUser(id, user, usuarioActorId) {
       usuarioId: actorId,
       entidad: "Usuarios",
       registroId: usuarioId,
-      accion: "ACTUALIZAR",
+      accion: acciones.ACTUALIZAR,
       datosAnteriores: {
         nombreUsuario: previous.NombreUsuario,
         rolId: previous.RolId,

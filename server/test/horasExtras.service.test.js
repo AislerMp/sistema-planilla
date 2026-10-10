@@ -46,6 +46,7 @@ test("actualizar horas extras confirma o revierte junto con la bitacora", async 
           return { recordset: [{ Estado: "ABIERTO", FechaLimiteAjustes: new Date("2099-12-31") }] };
         }
         if (query.includes("FROM dbo.PermisosLaborales")) return { recordset: [] };
+        if (query.includes("FROM dbo.Incapacidades")) return { recordset: [] };
         if (query.includes("SELECT")) {
           events.push("read");
           return { recordset: [previous] };

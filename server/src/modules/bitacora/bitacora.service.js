@@ -22,23 +22,23 @@ export const entidades = {
   SOLICITUDES_INCAPACIDADES: "SolicitudesIncapacidades",
 };
 
-export const accionesPermitidas = [
-  "CREAR",
-  "ACTUALIZAR",
-  "ACTIVAR",
-  "DESACTIVAR",
-  "CAMBIAR_TARIFA",
-  "CAMBIAR_CONTRASENA",
-  "CAMBIAR_ESTADO",
-  "AJUSTAR_HORAS",
-  "APROBAR_HORAS_EXTRA",
-  "RECHAZAR_HORAS_EXTRA",
-  "APROBAR_PERMISO_LABORAL",
-  "RECHAZAR_PERMISO_LABORAL",
-  "APROBAR_REVISION_INCAPACIDAD",
-  "APROBAR_INCAPACIDAD",
-  "RECHAZAR_INCAPACIDAD",
-];
+export const acciones = {
+  CREAR: "CREAR",
+  ACTUALIZAR: "ACTUALIZAR",
+  ACTIVAR: "ACTIVAR",
+  DESACTIVAR: "DESACTIVAR",
+  CAMBIAR_TARIFA: "CAMBIAR_TARIFA",
+  CAMBIAR_CONTRASENA: "CAMBIAR_CONTRASENA",
+  CAMBIAR_ESTADO: "CAMBIAR_ESTADO",
+  AJUSTAR_HORAS: "AJUSTAR_HORAS",
+  APROBAR_HORAS_EXTRA: "APROBAR_HORAS_EXTRA",
+  RECHAZAR_HORAS_EXTRA: "RECHAZAR_HORAS_EXTRA",
+  APROBAR_PERMISO_LABORAL: "APROBAR_PERMISO_LABORAL",
+  RECHAZAR_PERMISO_LABORAL: "RECHAZAR_PERMISO_LABORAL",
+  APROBAR_REVISION_INCAPACIDAD: "APROBAR_REVISION_INCAPACIDAD",
+  APROBAR_INCAPACIDAD: "APROBAR_INCAPACIDAD",
+  RECHAZAR_INCAPACIDAD: "RECHAZAR_INCAPACIDAD",
+};
 
 function validarDatos(datos, nombreCampo) {
   if (datos === null || typeof datos !== "object" || Array.isArray(datos)) {
@@ -62,7 +62,7 @@ export async function listarBitacoras(filtros = {}) {
   if (entidad && !Object.values(entidades).includes(entidad)) {
     throw serviceError("La entidad no es válida.");
   }
-  if (accion && !accionesPermitidas.includes(accion)) {
+  if (accion && !Object.values(acciones).includes(accion)) {
     throw serviceError("La acción no es válida.");
   }
   if (desde && hasta && desde > hasta) {
@@ -136,9 +136,9 @@ export async function registrarBitacora(bitacora, transaction = null) {
   const registroId = validateId(bitacora.registroId, "RegistroId");
   const accion = validateText(bitacora.accion, "Accion", 30);
 
-  if (!accionesPermitidas.includes(accion)) {
+  if (!Object.values(acciones).includes(accion)) {
     throw serviceError(
-      `La acción ${accion} no es válida. Las acciones permitidas son: ${accionesPermitidas.join(", ")}`,
+      `La acción ${accion} no es válida. Las acciones permitidas son: ${Object.values(acciones).join(", ")}`,
       400,
     );
   }
@@ -153,7 +153,7 @@ export async function registrarBitacora(bitacora, transaction = null) {
 
   let datosAnteriores = null;
 
-  if (accion === "CREAR") {
+  if (accion === acciones.CREAR) {
     if (bitacora.datosAnteriores != null) {
       throw serviceError("Una creación no debe incluir datos anteriores", 400);
     }

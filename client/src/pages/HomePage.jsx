@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import LoadingState from "../components/loadingState.jsx";
 import AlertMessage from "../components/AlertMessage.jsx";
-import { menuItems } from "../utils/menuItems.js";
+import { menuItems, groupMenuItems } from "../utils/menuItems.js";
 import { ArrowRight, ArrowUpRight, Clock3, ClipboardList } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -37,6 +37,7 @@ const collaboratorCards = [
   {
     title: "Registrar mi jornada",
     path: "/asistencia",
+    group: "administracion",
     icon: Clock3,
     description: "Marcá tu entrada o salida para registrar tu jornada de trabajo.",
     showCount: false,
@@ -44,6 +45,7 @@ const collaboratorCards = [
   {
     title: "Consultar mis marcas",
     path: "/asistencia/mis-marcas",
+    group: "administracion",
     icon: ClipboardList,
     description: "Revisá tus entradas y salidas y buscá registros por fecha.",
     showCount: false,
@@ -59,7 +61,11 @@ export default function HomePage() {
   const displayName = user?.NombreUsuario ?? "Usuario";
   const isCollaborator = user?.Rol === "COLABORADOR";
   const sectionLabel = isCollaborator ? "MI JORNADA" : user?.Rol === "GERENTE" ? "MI RESTAURANTE" : "ADMINISTRACIÓN";
-  const cards = isCollaborator ? collaboratorCards : menuItems.filter((item) => !item.nonPermision.includes(user?.Rol));
+  const visibleItems = menuItems.filter((item) => !item.nonPermision.includes(user?.Rol));
+  const cards = isCollaborator
+    ? [...visibleItems.filter((item) => item.path !== "/asistencia"), ...collaboratorCards]
+    : visibleItems;
+  const groups = groupMenuItems(cards);
   const hasCounters = cards.some((card) => card.showCount !== false);
   const hasCountErrors = !isLoading && cards.some((card) => card.showCount !== false && counts?.[card.path] === null);
 
@@ -77,7 +83,7 @@ export default function HomePage() {
           </h1>
           <p>
             {isCollaborator ? (
-              <>Este es tu espacio para registrar tu jornada y consultar tus marcas.</>
+              <>Este es tu espacio para registrar tu jornada, consultar tus marcas y dar seguimiento a tus solicitudes.</>
             ) : (
               <>
             Un equipo conectado empieza con todo en su lugar.
@@ -105,38 +111,56 @@ export default function HomePage() {
       <section className="module-section" aria-labelledby="modules-title">
         <div className="section-heading">
           <div>
-            <h2 id="modules-title">{isCollaborator ? "Tu jornada, en un solo lugar" : "Todo empieza aquí"}</h2>
-            <p>{isCollaborator ? "Accedé a tus marcas y a tu historial de trabajo." : "Elegí el módulo con el que querés trabajar."}</p>
+            <h2 id="modules-title">Tus herramientas de trabajo</h2>
+            <p>Encontrá cada módulo organizado por su función.</p>
           </div>
           <span className="subtle-tag">{sectionLabel}</span>
         </div>
-        <div className="module-grid">
-          {cards.map((card) => {
-            const Icon = card.icon;
-              return (
-                <Link to={card.path} className="module-card" key={card.path}>
-                  <div className="module-card-top">
-                    <span className="module-icon">
-                      <Icon size={23} />
-                    </span>
-                    <ArrowUpRight className="card-arrow" size={20} />
+        <div className="module-groups">
+          {groups.map((group) => {
+            const GroupIcon = group.icon;
+            const isJornada = isCollaborator && group.id === "administracion";
+            return (
+              <section className="module-group" key={group.id} aria-labelledby={`modules-${group.id}`}>
+                <div className="module-group-heading">
+                  <span className="module-group-icon" aria-hidden="true"><GroupIcon size={20} /></span>
+                  <div>
+                    <h3 id={`modules-${group.id}`}>{isJornada ? "Mi jornada" : group.title}</h3>
+                    <p>{isJornada ? "Registrá tu jornada y consultá tus entradas y salidas." : group.description}</p>
                   </div>
-                  <h3>{card.title}</h3>
-                  <p>{card.description}</p>
-                  <div className="module-card-bottom">
-                    {card.showCount === false ? (
-                      <span>Abrir módulo</span>
-                    ) : (
-                      <>
-                        <strong>
-                          {isLoading || !counts ? "…" : (counts[card.path] ?? "—")}
-                        </strong>
-                        <span>{card.label}</span>
-                      </>
-                    )}
-                  </div>
-                </Link>
-              );
+                  <span className="module-group-count">{group.items.length} {group.items.length === 1 ? "módulo" : "módulos"}</span>
+                </div>
+                <div className="module-grid" style={{ "--module-columns": Math.min(group.items.length, 4) }}>
+                  {group.items.map((card) => {
+                    const Icon = card.icon;
+                    return (
+                      <Link to={card.path} className="module-card" key={card.path}>
+                        <div className="module-card-top">
+                          <span className="module-icon">
+                            <Icon size={23} aria-hidden="true" />
+                          </span>
+                          <ArrowUpRight className="card-arrow" size={20} aria-hidden="true" />
+                        </div>
+                        <h4>{card.title}</h4>
+                        <p>{card.description}</p>
+                        <div className="module-card-bottom">
+                          {card.showCount === false ? (
+                            <span>Abrir módulo</span>
+                          ) : (
+                            <>
+                              <strong>
+                                {isLoading || !counts ? "…" : (counts[card.path] ?? "—")}
+                              </strong>
+                              <span>{card.label}</span>
+                            </>
+                          )}
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
+            );
           })}
         </div>
         {hasCounters && (isLoading || !counts) && (

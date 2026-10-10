@@ -10,7 +10,11 @@ import {
   serviceError,
 } from "../../shared/utils/serviceUtils.js";
 import { beginTransaction } from "../../shared/config/database.js";
-import { registrarBitacora, entidades } from "../bitacora/bitacora.service.js";
+import {
+  registrarBitacora,
+  entidades,
+  acciones,
+} from "../bitacora/bitacora.service.js";
 
 async function validateColaboradorData(colaborador) {
   const data = {
@@ -123,7 +127,7 @@ export async function createNewColaborador(colaborador, usuarioActorId) {
         usuarioId: actorId,
         entidad: entidades.COLABORADORES,
         registroId: colaboradorCreadoId,
-        accion: "CREAR",
+        accion: acciones.CREAR,
         datosNuevos: data,
         datosAnteriores: null,
       },
@@ -177,7 +181,7 @@ export async function updateExistingColaborador(
         usuarioId: actorId,
         entidad: entidades.COLABORADORES,
         registroId: colaboradorId,
-        accion: "ACTUALIZAR",
+        accion: acciones.ACTUALIZAR,
         datosNuevos: data,
         datosAnteriores: colaboradorAnterior,
       },
@@ -227,7 +231,7 @@ async function actualizarEstadoColaborador(id, activo, usuarioActorId) {
         usuarioId: actorId,
         entidad: entidades.COLABORADORES,
         registroId: colaboradorId,
-        accion: status ? "ACTIVAR" : "DESACTIVAR",
+        accion: status ? acciones.ACTIVAR : acciones.DESACTIVAR,
         datosNuevos: { activo: status },
         datosAnteriores: { activo: colaboradorAnterior.Activo },
       },

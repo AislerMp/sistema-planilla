@@ -2,10 +2,9 @@ import { createServer } from "node:http";
 import { once } from "node:events";
 
 import app from "./app.js";
-import {
-  getConnection,
-  closeConnection,
-} from "./shared/config/database.js";
+import { getConnection, closeConnection } from "./shared/config/database.js";
+
+import { iniciarTareaPeriodos } from "./modules/periodoPlanilla/periodosPlanillas.tarea.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
 
@@ -20,6 +19,7 @@ async function startServer() {
 
     console.log("Conexión con SQL Server establecida.");
 
+    await iniciarTareaPeriodos(process.env.USUARIO_SISTEMA_ID);
     // Luego iniciamos el servidor HTTP.
     const server = createServer(app);
 
