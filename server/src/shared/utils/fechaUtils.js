@@ -44,6 +44,22 @@ export function fechaSQLComoTexto(fecha) {
   return fecha.toISOString().slice(0, 10);
 }
 
+// Último día que vacaciones puede procesar; su corte es a las 5 a. m.
+// Se usa fechaHoy, no FechaAsignada y su corte de marcas a las 4 a. m.
+export function obtenerFechaCorteVacaciones(instante = new Date()) {
+  const { fechaHoy } = obtenerCalendarioActual(instante);
+  const horaCostaRica = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Costa_Rica",
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(instante),
+  );
+  const corte = new Date(`${fechaHoy}T00:00:00.000Z`);
+  corte.setUTCDate(corte.getUTCDate() - (horaCostaRica >= 5 ? 1 : 2));
+  return fechaSQLComoTexto(corte);
+}
+
 export function obtenerRangoSemanaActual() {
   const { fechaAsignada } = obtenerCalendarioActual();
   const hasta = validateDate(fechaAsignada, "Fecha hasta");

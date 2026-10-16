@@ -17,6 +17,9 @@ const incapacidades = await import(
 for (const caso of [
   { estado: "APROBADA", accion: "APROBAR_INCAPACIDAD", calcular: true },
   { estado: "RECHAZADA", accion: "RECHAZAR_INCAPACIDAD", calcular: false },
+  ...["PROGRAMADO", "EN_REVISION", "CERRADO", "PAGADO"].map((estadoPeriodo) => ({
+    estado: "APROBADA", accion: "APROBAR_INCAPACIDAD", calcular: true, estadoPeriodo,
+  })),
   {
     estado: "APROBADA",
     accion: "APROBAR_INCAPACIDAD",
@@ -25,8 +28,9 @@ for (const caso of [
   },
 ]) {
   test(
-    `resolver incapacidad RH ${caso.fallaBitacora ? "revierte la bitácora fallida" : `registra ${caso.estado.toLowerCase()}`}`,
+    `resolver incapacidad RH ${caso.estadoPeriodo ? `rechaza cálculo en período ${caso.estadoPeriodo}` : caso.fallaBitacora ? "revierte la bitácora fallida" : `registra ${caso.estado.toLowerCase()}`}`,
     async (t) => {
+      t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-12T09:59:59Z") });
       const eventos = [];
       const errorBitacora = new Error("Error de bitácora");
       const usuario = { UsuarioId: 7, Rol: "RECURSOS_HUMANOS" };
@@ -76,6 +80,9 @@ for (const caso of [
           return this;
         },
         async query(query) {
+          // Estos escenarios previos no tienen vacaciones superpuestas.
+          if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
+          if (query.includes("FROM dbo.Colaboradores") && query.includes("WITH (UPDLOCK, HOLDLOCK)")) return { recordset: [{ ColaboradorId: 4 }] };
           const parametros = this.parametros;
           if (query.includes("FROM dbo.Solicitudes AS s")) {
             eventos.push("leer-incapacidad");
@@ -102,7 +109,8 @@ for (const caso of [
           }
           if (query.includes("@FechaAsignada BETWEEN FechaInicio AND FechaFin")) {
             eventos.push("leer-periodo");
-            return { recordset: [{ PeriodoId: 5, Estado: "ABIERTO" }] };
+            assert.equal(parametros.FechaAsignada.toISOString().slice(0, 10), "2026-10-11");
+            return { recordset: [{ PeriodoId: 5, Estado: caso.estadoPeriodo ?? "ABIERTO" }] };
           }
           if (query.includes("FROM dbo.CalculosIncapacidad")) {
             eventos.push("buscar-calculo");
@@ -155,7 +163,13 @@ for (const caso of [
         usuario,
       );
 
-      if (caso.fallaBitacora) {
+      if (caso.estadoPeriodo) {
+        await assert.rejects(resolver, { status: 409 });
+        assert.equal(eventos.at(-1), "rollback");
+        assert.equal(eventos.includes("crear-calculo"), false);
+        assert.equal(eventos.includes("bitacora"), false);
+        assert.equal(eventos.includes("commit"), false);
+      } else if (caso.fallaBitacora) {
         await assert.rejects(resolver, (error) => error === errorBitacora);
         assert.equal(eventos.at(-1), "rollback");
         assert.equal(eventos.includes("commit"), false);
@@ -215,6 +229,8 @@ for (const caso of [
     t.mock.method(pool, "request", () => ({
       input() { return this; },
       async query(query) {
+        // Estos escenarios previos no tienen vacaciones superpuestas.
+        if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
         if (query.includes("INNER JOIN dbo.Incapacidades")) {
           return { recordset: caso.inexistente ? [] : [solicitud] };
         }
@@ -238,6 +254,8 @@ for (const caso of [
         return this;
       },
       async query(query) {
+        // Estos escenarios previos no tienen vacaciones superpuestas.
+        if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
         const parametros = this.parametros;
         if (query.includes("FROM dbo.Solicitudes AS s")) {
           return { recordset: caso.inexistente ? [] : [solicitud] };
@@ -321,6 +339,8 @@ for (const fallaBitacora of [false, true]) {
           return this;
         },
         async query(query) {
+          // Estos escenarios previos no tienen vacaciones superpuestas.
+          if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
           assert.match(query, /FROM Colaboradores WHERE ColaboradorId = @id/);
           return {
             recordset: [{ ColaboradorId: 4, RestauranteId: 2, Activo: true }],
@@ -343,6 +363,8 @@ for (const fallaBitacora of [false, true]) {
           return this;
         },
         async query(query) {
+          // Estos escenarios previos no tienen vacaciones superpuestas.
+          if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
           const parametros = this.parametros;
           if (query.includes("WITH (UPDLOCK, HOLDLOCK)")) {
             eventos.push("bloquear");

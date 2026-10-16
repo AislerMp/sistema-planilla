@@ -1,13 +1,7 @@
-import { crearQuery, parseResponse } from "../utils/helper.js";
+import { crearQuery, parseResponse, ensureApiUrl } from "../utils/helper.js";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const endpoint = `${API_URL}/incapacidades`;
-
-function ensureApiUrl() {
-  if (!API_URL) {
-    throw new Error("Falta configurar VITE_API_URL en client/.env");
-  }
-}
 
 export async function getTiposIncapacidades() {
   ensureApiUrl();
@@ -147,6 +141,17 @@ export async function resolverIncapacidadRh(id, { estado, observacion } = {}) {
     },
   );
 
+  return parseResponse(response);
+}
+
+export async function revertirIncapacidad(id, { motivo }) {
+  ensureApiUrl();
+  const response = await fetch(`${endpoint}/${encodeURIComponent(id)}/revertir`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ motivo }),
+  });
   return parseResponse(response);
 }
 

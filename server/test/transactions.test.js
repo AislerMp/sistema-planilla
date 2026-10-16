@@ -24,6 +24,9 @@ function request(transaction) {
   return {
     input(name, type, value) { parameters[name] = value; return this; },
     async query(query) {
+      // Estos escenarios previos no tienen vacaciones superpuestas.
+      if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
+      if (query.includes("FROM dbo.Colaboradores") && query.includes("WITH (UPDLOCK, HOLDLOCK)")) return { recordset: [{ ColaboradorId: 4 }] };
       const next = expected.shift();
       assert.ok(next, `Consulta inesperada: ${query}`);
       assert.match(query, next.pattern);

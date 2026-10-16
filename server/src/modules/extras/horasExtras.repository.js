@@ -301,3 +301,33 @@ export async function resolverSolicitud(
   
   return getSolicitudById(solicitudId, transaction);
 }
+
+export async function limpiarMinutosAutorizados(
+  solicitudId,
+  transaction,
+) {
+  if (!transaction) {
+    throw serviceError(
+      "Se requiere una transacción para restablecer los minutos autorizados.",
+      500,
+    );
+  }
+
+  const request = await createRequest(transaction);
+
+  const result = await request
+    .input("solicitudId", sql.Int, solicitudId)
+    .query(`
+      UPDATE d
+      SET MinutosAutorizados = NULL
+      OUTPUT INSERTED.SolicitudId
+      FROM dbo.SolicitudesHorasExtras AS d
+      INNER JOIN dbo.Solicitudes AS s
+        ON s.SolicitudId = d.SolicitudId
+      WHERE d.SolicitudId = @solicitudId
+        AND s.TipoSolicitud = 'HORAS_EXTRAS'
+        AND s.Estado = 'PENDIENTE';
+    `);
+
+  return result.recordset[0] ?? null;
+}

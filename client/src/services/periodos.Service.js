@@ -39,6 +39,7 @@ export async function getPeriodoActual() {
     credentials: "include",
   });
 
+  if (response.status === 404) return null;
   return parseResponse(response);
 }
 
@@ -50,24 +51,6 @@ export async function getPeriodoPorFecha(fechaAsignada) {
   const response = await fetch(`${endpoint}/por-fecha?${params}`, {
     method: "GET",
     credentials: "include",
-  });
-
-  return parseResponse(response);
-}
-
-export async function createPeriodo({
-  fechaInicio,
-  fechaFin,
-  fechaPago,
-  fechaLimiteAjustes,
-}) {
-  ensureApiUrl();
-
-  const response = await fetch(`${endpoint}/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ fechaInicio, fechaFin, fechaPago, fechaLimiteAjustes }),
   });
 
   return parseResponse(response);
@@ -91,6 +74,5 @@ export default {
   getPeriodo,
   getPeriodoActual,
   getPeriodoPorFecha,
-  createPeriodo,
   updateEstadoPeriodo,
 };

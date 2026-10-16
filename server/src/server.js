@@ -5,6 +5,7 @@ import app from "./app.js";
 import { getConnection, closeConnection } from "./shared/config/database.js";
 
 import { iniciarTareaPeriodos } from "./modules/periodoPlanilla/periodosPlanillas.tarea.js";
+import { iniciarTareaVacaciones, detenerTareaVacaciones } from "./modules/vacaciones/vacaciones.tarea.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
 
@@ -13,13 +14,15 @@ if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
 }
 
 async function startServer() {
+  let temporizadorPeriodos;
   try {
     // Primero comprobamos la conexión con SQL Server.
     await getConnection();
 
     console.log("Conexión con SQL Server establecida.");
 
-    await iniciarTareaPeriodos(process.env.USUARIO_SISTEMA_ID);
+    temporizadorPeriodos = await iniciarTareaPeriodos(process.env.USUARIO_SISTEMA_ID);
+    await iniciarTareaVacaciones(process.env.USUARIO_SISTEMA_ID);
     // Luego iniciamos el servidor HTTP.
     const server = createServer(app);
 
@@ -34,6 +37,10 @@ async function startServer() {
     console.error(error.message);
 
     process.exitCode = 1;
+
+    // Una recuperación o escucha fallida no debe dejar tareas vivas sin API.
+    clearInterval(temporizadorPeriodos);
+    await detenerTareaVacaciones();
 
     try {
       await closeConnection();

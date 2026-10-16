@@ -15,8 +15,6 @@ import CreateUsuario from "../pages/usuarios/createUsuario.jsx";
 import UpdateUsuario from "../pages/usuarios/updateUsuario.jsx";
 
 import PeriodosPlanillaMenu from "../pages/periodos/periodoPlanillaMenu.jsx";
-import PeriodosPlanillaList from "../pages/periodos/periodosPlanillaList.jsx";
-import CreatePeriodoPlanilla from "../pages/periodos/createPeriodoPlanilla.jsx";
 import AsistenciaMenu from "../pages/marcas&Asistencias/asistenciaMenu.jsx";
 import MisMarcas from "../pages/marcas&Asistencias/misMarcas.jsx";
 import GestionarAsistencias from "../pages/marcas&Asistencias/gestionarAsistencias.jsx";
@@ -67,9 +65,8 @@ export default function AppRoutes({ theme, onToggleTheme }) {
             <Route path="/periodos" element={<PeriodosPlanillaMenu />} />
             <Route
               path="/periodos/listado"
-              element={<PeriodosPlanillaList />}
+              element={<Navigate to="/periodos" replace />}
             />
-            <Route path="/periodos/crear" element={<CreatePeriodoPlanilla />} />
             <Route path="/asistencia" element={<AsistenciaMenu />} />
             <Route path="/asistencia/mis-marcas" element={<MisMarcas />} />
             <Route

@@ -64,6 +64,17 @@ export async function solicitarPermisoLaboral({ fechaSolicitada, motivo }) {
   return parseResponse(response);
 }
 
+export async function revertirPermisoLaboral(id, { motivo }) {
+  ensureApiUrl();
+  const response = await fetch(`${endpoint}/${encodeURIComponent(id)}/revertir`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ motivo }),
+  });
+  return parseResponse(response);
+}
+
 // estado: APROBADA o RECHAZADA.
 export async function resolverPermisoLaboral(id, { estado, observacion }) {
   ensureApiUrl();

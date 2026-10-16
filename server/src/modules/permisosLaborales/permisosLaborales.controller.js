@@ -47,3 +47,13 @@ export async function resolverPermisoLaboralController(req, res) {
   
   res.status(200).json(permisoResuelto);
 }
+
+export async function revertirPermisoLaboralController(req, res) {
+  const permisoRevertido = await permisosServices.revertirPermiso(
+    req.params.solicitudId,
+    req.body ?? {},
+    req.user,
+  );
+
+  return res.status(200).json(permisoRevertido);
+}

@@ -1,3 +1,12 @@
+export function obtenerFechaHoyCostaRica(instante = new Date()) {
+  const partes = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Costa_Rica",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(instante);
+  const valor = (tipo) => partes.find((parte) => parte.type === tipo).value;
+  return `${valor("year")}-${valor("month")}-${valor("day")}`;
+}
+
 export function obtenerDiasDelRango(desde, hasta) {
   const dias = [];
 

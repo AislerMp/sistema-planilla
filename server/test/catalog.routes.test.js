@@ -23,6 +23,9 @@ mock.method(pool, "request", () => {
   return {
     input(name, type, value) { parameters[name] = value; return this; },
     async query(query) {
+      // Estos escenarios previos no tienen vacaciones superpuestas.
+      if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
+      if (query.includes("FROM dbo.Colaboradores") && query.includes("WITH (UPDLOCK, HOLDLOCK)")) return { recordset: [{ ColaboradorId: 4 }] };
       const next = expected.shift();
       assert.ok(next, `Consulta inesperada: ${query}`);
       assert.match(query, next.pattern);
@@ -259,21 +262,21 @@ for (const rol of ["COLABORADOR", "GERENTE", "RECURSOS_HUMANOS", "ADMINISTRADOR"
 }
 
 for (const rol of ["RECURSOS_HUMANOS", "ADMINISTRADOR"]) {
-  test(`periodos permite actualizar estado y registrar bitacora a ${rol}`, async () => {
+  test(`periodos permite confirmar pago y registrar bitacora a ${rol}`, async () => {
     identity = { UsuarioId: 3, Rol: rol };
-    const anterior = { PeriodoId: 7, Estado: "ABIERTO", FechaFin: new Date("2020-01-15T00:00:00Z") };
-    const actualizado = { ...anterior, Estado: "EN_REVISION" };
+    const anterior = { PeriodoId: 7, Estado: "CERRADO", FechaPago: new Date("2020-01-17T00:00:00Z") };
+    const actualizado = { ...anterior, Estado: "PAGADO" };
     expected.push(
       { pattern: /FROM dbo.PeriodosPlanilla/, records: [anterior] },
       {
         pattern: /UPDATE dbo.PeriodosPlanilla/,
-        parameters: { PeriodoId: 7, EstadoActual: "ABIERTO", NuevoEstado: "EN_REVISION" },
+        parameters: { PeriodoId: 7, EstadoActual: "CERRADO", NuevoEstado: "PAGADO" },
         records: [actualizado],
       },
       { pattern: /INSERT INTO dbo.Bitacora/ },
     );
 
-    const response = await request("PATCH", "/periodos-planilla/7/estado", { estado: "EN_REVISION" });
+    const response = await request("PATCH", "/periodos-planilla/7/estado", { estado: "PAGADO" });
     assert.equal(response.status, 200);
     assert.deepEqual(response.body.periodo, JSON.parse(JSON.stringify(actualizado)));
     const auditoria = calls.at(-1).parameters;

@@ -25,6 +25,8 @@ import { sincronizarHorasExtras } from "../extras/horasExtras.service.js";
 import { validarDiaSinPermisoAprobado } from "../permisosLaborales/permisosLaborales.service.js";
 import { validarDiaSinIncapacidad } from "../incapacidades/incapacidades.services.js";
 import { beginTransaction } from "../../shared/config/database.js";
+import { validarDiasVacaciones } from "../vacaciones/services/vacaciones.service.js";
+import { bloquearColaboradorSolicitudes } from "../solicitudes/solicitudes.repository.js";
 
 export async function obtenerAsistencia(id) {
   const validId = validateId(id);
@@ -344,8 +346,16 @@ export async function ajustarMinutosAsistencia(
       fechaSQLComoTexto(asistenciaAnterior.FechaAsignada),
       transaction,
     );
+    
     await validarDiaSinIncapacidad(
       asistenciaAnterior.ColaboradorId,
+      asistenciaAnterior.FechaAsignada,
+      transaction,
+    );
+    await bloquearColaboradorSolicitudes(asistenciaAnterior.ColaboradorId, transaction);
+    await validarDiasVacaciones(
+      asistenciaAnterior.ColaboradorId,
+      asistenciaAnterior.FechaAsignada,
       asistenciaAnterior.FechaAsignada,
       transaction,
     );

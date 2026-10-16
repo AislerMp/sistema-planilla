@@ -15,6 +15,8 @@ export const entidades = {
   PERIODOS_PLANILLA: "PeriodosPlanilla",
   ASISTENCIAS_DIARIAS: "AsistenciasDiarias",
   HORAS_EXTRAS: "HorasExtras",
+  SALDOS_VACACIONES: "SaldosVacaciones",
+  VACACIONES: "Vacaciones",
   SOLICITUDES: "Solicitudes",
   // Se conservan para consultar bitácoras anteriores a la migración 005.
   SOLICITUDES_HORAS_EXTRAS: "SolicitudesHorasExtras",
@@ -25,6 +27,7 @@ export const entidades = {
 export const acciones = {
   CREAR: "CREAR",
   ACTUALIZAR: "ACTUALIZAR",
+  REVERTIR: "REVERTIR",
   ACTIVAR: "ACTIVAR",
   DESACTIVAR: "DESACTIVAR",
   CAMBIAR_TARIFA: "CAMBIAR_TARIFA",
@@ -38,6 +41,9 @@ export const acciones = {
   APROBAR_REVISION_INCAPACIDAD: "APROBAR_REVISION_INCAPACIDAD",
   APROBAR_INCAPACIDAD: "APROBAR_INCAPACIDAD",
   RECHAZAR_INCAPACIDAD: "RECHAZAR_INCAPACIDAD",
+  APROBAR_REVISION_VACACIONES: "APROBAR_REVISION_VACACIONES",
+  APROBAR_VACACIONES: "APROBAR_VACACIONES",
+  RECHAZAR_VACACIONES: "RECHAZAR_VACACIONES",
 };
 
 function validarDatos(datos, nombreCampo) {

@@ -11,11 +11,62 @@ const {
   resolverSolicitudHorasExtras,
 } = await import("../src/modules/extras/horasExtras.service.js");
 
+for (const Estado of ["ABIERTO", "EN_REVISION", "PROGRAMADO", "CERRADO", "PAGADO"]) {
+  for (const vencido of [false, true]) {
+    test(`ajustes extras: ${Estado}, ${vencido ? "jueves sin tarea ejecutada" : "miércoles completo"}`, async (t) => {
+      t.mock.timers.enable({ apis: ["Date"], now: new Date(vencido ? "2026-10-29T06:00:00Z" : "2026-10-29T05:59:59Z") });
+      let escrituras = 0;
+      t.mock.method(pool, "connect", async () => pool);
+      t.mock.method(pool, "request", () => ({
+        input() { return this; },
+        async query(query) {
+          // Estos escenarios previos no tienen vacaciones superpuestas.
+          if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
+          if (query.includes("FROM dbo.Colaboradores") && query.includes("WITH (UPDLOCK, HOLDLOCK)")) return { recordset: [{ ColaboradorId: 4 }] };
+          assert.match(query, /FROM Usuarios/);
+          return { recordset: [{ RestauranteId: 2 }] };
+        },
+      }));
+      t.mock.method(sql.Transaction.prototype, "begin", async () => {});
+      t.mock.method(sql.Transaction.prototype, "commit", async () => {});
+      t.mock.method(sql.Transaction.prototype, "rollback", async () => {});
+      t.mock.method(sql.Transaction.prototype, "request", () => ({
+        input() { return this; },
+        async query(query) {
+          // Estos escenarios previos no tienen vacaciones superpuestas.
+          if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
+          if (query.includes("FROM dbo.Colaboradores") && query.includes("WITH (UPDLOCK, HOLDLOCK)")) return { recordset: [{ ColaboradorId: 4 }] };
+          if (query.includes("FROM dbo.AsistenciasDiarias")) return { recordset: [{ AsistenciaId: 3, ColaboradorId: 4, FechaAsignada: new Date("2026-10-25"), RestauranteId: 2, PeriodoId: 1, MinutosEfectivos: 480 }] };
+          if (query.includes("FROM dbo.PeriodosPlanilla")) return { recordset: [{ Estado, FechaLimiteAjustes: new Date("2026-10-28") }] };
+          if (query.includes("FROM dbo.PermisosLaborales") || query.includes("FROM dbo.Incapacidades")) return { recordset: [] };
+          if (query.includes("FROM dbo.HorasExtras")) return { recordset: [{ HoraExtraId: 9, AsistenciaId: 3, MinutosDetectados: 60, MinutosAjustados: null }] };
+          escrituras++;
+          if (query.includes("UPDATE dbo.HorasExtras")) return { recordset: [{ HoraExtraId: 9, AsistenciaId: 3, MinutosDetectados: 60, MinutosAjustados: 0 }] };
+          assert.match(query, /INSERT INTO dbo.Bitacora/);
+          return { rowsAffected: [1] };
+        },
+      }));
+      const operacion = actualizarHorasExtra(3, 0, "Corrección", { UsuarioId: 7, Rol: "GERENTE" });
+      if (!vencido && ["ABIERTO", "EN_REVISION"].includes(Estado)) {
+        const resultado = await operacion;
+        assert.equal(resultado.MinutosExtras, 0);
+        assert.equal(escrituras, 2);
+      } else {
+        await assert.rejects(operacion, { status: 409 });
+        assert.equal(escrituras, 0);
+      }
+    });
+  }
+}
+
 test("actualizar horas extras confirma o revierte junto con la bitacora", async () => {
   mock.method(pool, "connect", async () => pool);
   mock.method(pool, "request", () => ({
     input() { return this; },
     async query(query) {
+      // Estos escenarios previos no tienen vacaciones superpuestas.
+      if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
+      if (query.includes("FROM dbo.Colaboradores") && query.includes("WITH (UPDLOCK, HOLDLOCK)")) return { recordset: [{ ColaboradorId: 4 }] };
       assert.match(query, /FROM Usuarios/);
       return { recordset: [{ RestauranteId: 2 }] };
     },
@@ -39,6 +90,9 @@ test("actualizar horas extras confirma o revierte junto con la bitacora", async 
     return {
       input(name, type, value) { parameters[name] = value; return this; },
       async query(query) {
+        // Estos escenarios previos no tienen vacaciones superpuestas.
+        if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
+        if (query.includes("FROM dbo.Colaboradores") && query.includes("WITH (UPDLOCK, HOLDLOCK)")) return { recordset: [{ ColaboradorId: 4 }] };
         if (query.includes("FROM dbo.AsistenciasDiarias")) {
           return { recordset: [{ AsistenciaId: 3, ColaboradorId: 4, FechaAsignada: new Date("2026-10-01"), RestauranteId: 2, PeriodoId: 1, MinutosEfectivos: 480 }] };
         }
@@ -119,6 +173,9 @@ test("resolver solicitud registra snapshots anterior y nuevo en la bitacora", as
   mock.method(pool, "request", () => ({
     input() { return this; },
     async query(query) {
+      // Estos escenarios previos no tienen vacaciones superpuestas.
+      if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
+      if (query.includes("FROM dbo.Colaboradores") && query.includes("WITH (UPDLOCK, HOLDLOCK)")) return { recordset: [{ ColaboradorId: 4 }] };
       if (query.includes("FROM Usuarios")) return { recordset: [{ RestauranteId: 2 }] };
       assert.match(query, /FROM dbo\.SolicitudesHorasExtras/);
       events.push("read");
@@ -137,6 +194,9 @@ test("resolver solicitud registra snapshots anterior y nuevo en la bitacora", as
     return {
       input(name, type, value) { parameters[name] = value; return this; },
       async query(query) {
+        // Estos escenarios previos no tienen vacaciones superpuestas.
+        if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
+        if (query.includes("FROM dbo.Colaboradores") && query.includes("WITH (UPDLOCK, HOLDLOCK)")) return { recordset: [{ ColaboradorId: 4 }] };
         if (query.includes("OUTPUT INSERTED.SolicitudId")) {
           events.push("update");
           assert.equal(parameters.estado, "APROBADA");

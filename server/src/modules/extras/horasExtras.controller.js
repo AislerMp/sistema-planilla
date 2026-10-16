@@ -5,6 +5,7 @@ import {
   getSolicitudesByRestaurante,
   crearSolicitudHorasExtras,
   resolverSolicitudHorasExtras,
+  revertirSolicitudHorasExtras
 } from "./horasExtras.service.js";
 
 export async function actualizarHorasExtraController(req, res) {
@@ -74,6 +75,19 @@ export async function resolverSolicitudController(req, res) {
 
   return res.status(200).json({
     message: "Solicitud de horas extras resuelta correctamente.",
+    solicitud,
+  });
+}
+
+export async function revertirSolicitudController(req, res) {
+  const solicitud = await revertirSolicitudHorasExtras(
+    req.params.id,
+    req.body ?? {},
+    req.user,
+  );
+
+  return res.status(200).json({
+    message: "Solicitud de horas extras revertida correctamente.",
     solicitud,
   });
 }

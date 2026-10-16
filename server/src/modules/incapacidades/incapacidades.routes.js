@@ -60,4 +60,10 @@ router.patch(
   incapacidadesController.resolverIncapacidadRhController,
 );
 
+router.patch(
+  "/:id/revertir",
+  permitirRoles("GERENTE", "RECURSOS_HUMANOS"),
+  incapacidadesController.revertirIncapacidadController,
+);
+
 export default router;

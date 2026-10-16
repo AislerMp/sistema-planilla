@@ -10,11 +10,13 @@ import {
   resolverIncapacidadRh,
   descargarComprobanteIncapacidad,
   getCalculoIncapacidad,
+  revertirIncapacidad,
 } from "../../services/incapacidades.Services.js";
 import { formatDate } from "../../utils/fechaUtils.js";
-import { notifySuccess } from "../../utils/notifications.js";
+import { confirmarReversion, notifySuccess } from "../../utils/notifications.js";
+import { obtenerEstadoReversionIncapacidad } from "../../utils/reversionSolicitudes.js";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 const estadosLabel = {
   PENDIENTE: "Pendiente de revisión de gerencia",
@@ -46,12 +48,14 @@ export default function DetalleIncapacidad() {
   const [err, setErr] = useState(null);
   const [descargando, setDescargando] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const reversionEnCurso = useRef(false);
 
   const {
     data: incapacidad,
     isLoading,
     error,
   } = useAsyncRequest(() => getIncapacidadById(id), [id, reloadKey]);
+  const estadoReversion = obtenerEstadoReversionIncapacidad(incapacidad, user?.Rol);
   const solicitudCalculoId =
     puedeVerCalculo && !isLoading && !error && incapacidad?.Estado === "APROBADA"
       ? incapacidad.SolicitudId
@@ -82,7 +86,7 @@ export default function DetalleIncapacidad() {
   async function handleSubmit(e) {
     e.preventDefault();
 
-    if (error || isLoading || busy || !incapacidad) return;
+    if (error || isLoading || busy || reversionEnCurso.current || !incapacidad) return;
     if (!isGerente && !isRH) return;
 
     const estado = e.nativeEvent.submitter?.value || (isGerente ? "EN_REVISION_RH" : "APROBADA");
@@ -119,8 +123,28 @@ export default function DetalleIncapacidad() {
     }
   }
 
+  async function deshacerResolucion() {
+    if (!estadoReversion || busy || reversionEnCurso.current || isLoading || error || descargando) return;
+    reversionEnCurso.current = true;
+    setBusy(true);
+    setErr(null);
+    try {
+      const motivo = await confirmarReversion(estadoReversion);
+      if (motivo === null) return;
+      await revertirIncapacidad(id, { motivo });
+      setForm(emptyForm);
+      setReloadKey((prev) => prev + 1);
+      notifySuccess("Resolución de incapacidad revertida correctamente.");
+    } catch (requestError) {
+      setErr(requestError.message || "No se pudo deshacer la resolución.");
+    } finally {
+      reversionEnCurso.current = false;
+      setBusy(false);
+    }
+  }
+
   async function handleDescargar() {
-    if (descargando || !incapacidad) return;
+    if (descargando || busy || reversionEnCurso.current || !incapacidad) return;
     try {
       setErr(null);
       setDescargando(true);
@@ -209,6 +233,13 @@ export default function DetalleIncapacidad() {
                 </li>
               ))}
             </ol>
+            {estadoReversion && (
+              <div className="solicitud-create-actions">
+                <button type="button" className="button button-secondary" disabled={busy || descargando} onClick={deshacerResolucion}>
+                  {busy ? "Procesando…" : "Deshacer resolución"}
+                </button>
+              </div>
+            )}
           </section>
 
           <div className="solicitud-detail-columns incapacidad-contenido">
@@ -263,7 +294,7 @@ export default function DetalleIncapacidad() {
                   className="button button-secondary"
                   type="button"
                   onClick={handleDescargar}
-                  disabled={descargando}
+                  disabled={descargando || busy}
                 >
                   <Download size={16} aria-hidden="true" /> {descargando ? "Descargando…" : "Descargar comprobante"}
                 </button>

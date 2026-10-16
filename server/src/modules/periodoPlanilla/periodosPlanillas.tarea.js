@@ -2,7 +2,20 @@ import {
   actualizarEstadosPeriodos,
 } from "./periodosPlanillas.service.js";
 
-export async function iniciarTareaPeriodos(usuarioSistemaId) {
+let inicioTarea = null;
+
+export function iniciarTareaPeriodos(usuarioSistemaId) {
+  // Compartir también la primera ejecución si se intenta iniciar dos veces.
+  if (!inicioTarea) {
+    inicioTarea = crearTemporizador(usuarioSistemaId).catch((error) => {
+      inicioTarea = null;
+      throw error;
+    });
+  }
+  return inicioTarea;
+}
+
+async function crearTemporizador(usuarioSistemaId) {
   let ejecutando = false;
 
   async function ejecutar() {

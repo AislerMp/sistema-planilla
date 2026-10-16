@@ -1,9 +1,4 @@
-const estados = {
-  ABIERTO: "Abierto",
-  EN_REVISION: "En revisión",
-  CERRADO: "Cerrado",
-  PAGADO: "Pagado",
-};
+import { estadoLabels as estados } from "../utils/periodosUtils.js";
 
 const formatoFecha = new Intl.DateTimeFormat("es-CR", {
   day: "numeric",

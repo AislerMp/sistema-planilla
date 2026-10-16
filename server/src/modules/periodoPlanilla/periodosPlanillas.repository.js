@@ -97,7 +97,8 @@ export async function createPeriodo(periodo, transaction = null) {
         FechaFin,
         FechaPago,
         FechaLimiteAjustes,
-        CreadoPorUsuarioId
+        CreadoPorUsuarioId,
+        Estado
       )
       OUTPUT INSERTED.*
       VALUES (
@@ -105,7 +106,8 @@ export async function createPeriodo(periodo, transaction = null) {
         @FechaFin,
         @FechaPago,
         @FechaLimiteAjustes,
-        @CreadoPorUsuarioId
+        @CreadoPorUsuarioId,
+        'PROGRAMADO'
       );
     `);
 

@@ -1,5 +1,9 @@
 import { createRequest, sql } from "../../shared/config/database.js";
-import { crearCabeceraSolicitud } from "../solicitudes/solicitudes.repository.js";
+import {
+  crearCabeceraSolicitud,
+  revisarSolicitudGerente,
+  resolverSolicitudRh,
+} from "../solicitudes/solicitudes.repository.js";
 import { serviceError } from "../../shared/utils/serviceUtils.js";
 
 // TIPOS DE INCAPACIDAD REPOSITORY
@@ -291,25 +295,12 @@ export async function revisarIncapacidadGerente(
   datosRevision,
   transaction,
 ) {
-  const request = await createRequest(transaction);
-
-  const result = await request
-    .input("solicitudId", sql.Int, solicitudId)
-    .input("estado", sql.VarChar(20), datosRevision.estado)
-    .input("observacion", sql.NVarChar(500), datosRevision.observacion ?? null)
-    .input("revisadoPorGerenteId", sql.Int, datosRevision.revisadoPorGerenteId)
-    .query(`
-      UPDATE dbo.Solicitudes
-      SET Estado = @estado,
-        Observacion = @observacion,
-        RevisadoPorGerenteId = @revisadoPorGerenteId
-      OUTPUT INSERTED.*
-      WHERE SolicitudId = @solicitudId
-      AND TipoSolicitud = 'INCAPACIDAD'
-      AND Estado = 'PENDIENTE';
-    `);
-
-  return result.recordset[0] ?? null;
+  return revisarSolicitudGerente(
+    solicitudId,
+    "INCAPACIDAD",
+    datosRevision,
+    transaction,
+  );
 }
 
 //Explicitamente por RH
@@ -318,23 +309,10 @@ export async function resolverIncapacidadRh(
   datosRevision,
   transaction,
 ) {
-  const request = await createRequest(transaction);
-
-  const result = await request
-    .input("solicitudId", sql.Int, solicitudId)
-    .input("estado", sql.VarChar(20), datosRevision.estado)
-    .input("observacion", sql.NVarChar(500), datosRevision.observacion ?? null)
-    .input("revisadoPorRhId", sql.Int, datosRevision.revisadoPorRhId)
-    .query(`
-      UPDATE dbo.Solicitudes
-      SET Estado = @estado,
-        Observacion = @observacion,
-        RevisadoPorRhId = @revisadoPorRhId
-      OUTPUT INSERTED.*
-      WHERE SolicitudId = @solicitudId
-      AND TipoSolicitud = 'INCAPACIDAD'
-      AND Estado = 'EN_REVISION_RH';
-    `);
-
-  return result.recordset[0] ?? null;
+  return resolverSolicitudRh(
+    solicitudId,
+    "INCAPACIDAD",
+    datosRevision,
+    transaction,
+  );
 }

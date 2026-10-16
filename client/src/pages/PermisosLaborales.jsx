@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, PlusIcon } from "lucide-react";
 import AlertMessage from "../components/AlertMessage.jsx";
@@ -13,10 +13,13 @@ import {
   getPermisosPorRestaurante,
   resolverPermisoLaboral,
   solicitarPermisoLaboral,
+  revertirPermisoLaboral,
 } from "../services/permisosLaborales.Service.js";
 
 import { getRestaurantes } from "../services/restaurantes.Service.js";
 import { formatDate } from "../utils/fechaUtils.js";
+import { confirmarReversion, notifySuccess } from "../utils/notifications.js";
+import { puedeRevertirSolicitudFutura } from "../utils/reversionSolicitudes.js";
 
 const estadosLabel = {
   PENDIENTE: "Pendiente",
@@ -50,7 +53,6 @@ export default function PermisosLaborales() {
     user?.Rol,
   );
 
-
   const [filters, setFilters] = useState({
     restauranteId: null,
     desde: "",
@@ -64,6 +66,8 @@ export default function PermisosLaborales() {
   const [error, setError] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+
+  const reversionEnCurso = useRef(false);
 
   const puedeConsultar = esColaborador || esGerente || puedeElegirRestaurante;
 
@@ -167,6 +171,43 @@ export default function PermisosLaborales() {
     setError(null);
     setFormRevision(formRevisionVacio);
     setDialog({ tipo: "resolver", permiso });
+  }
+
+  async function deshacerResolucion(event) {
+    const permiso = dialog?.permiso;
+
+    if (
+      isBusy ||
+      reversionEnCurso.current ||
+      !puedeRevertirSolicitudFutura(permiso, user?.Rol)
+    )
+      return;
+
+    const target = event.currentTarget.closest("dialog");
+    reversionEnCurso.current = true;
+    setIsBusy(true);
+    setError(null);
+
+    try {
+      const motivo = await confirmarReversion("PENDIENTE", target);
+
+      if (motivo === null) return;
+
+      const revertido = await revertirPermisoLaboral(permiso.SolicitudId, {
+        motivo,
+      });
+
+      setDialog({ tipo: "detalle", permiso: { ...permiso, ...revertido } });
+      setFormRevision(formRevisionVacio);
+      setReloadKey((current) => current + 1);
+      notifySuccess("Resolución del permiso revertida correctamente.", target);
+      
+    } catch (requestError) {
+      setError(requestError.message || "No se pudo deshacer la resolución.");
+    } finally {
+      reversionEnCurso.current = false;
+      setIsBusy(false);
+    }
   }
 
   function cerrarDialog() {
@@ -278,7 +319,7 @@ export default function PermisosLaborales() {
                     esGerente &&
                     permiso.Estado === "PENDIENTE" &&
                     String(permiso.FechaSolicitada).slice(0, 10) > fechaHoy;
-                    
+
                   return (
                     <tr key={permiso.SolicitudId}>
                       <td>#{permiso.SolicitudId}</td>
@@ -456,10 +497,26 @@ export default function PermisosLaborales() {
                   </div>
                 </dl>
               )}
+              <AlertMessage>{error}</AlertMessage>
               <footer className="solicitud-create-actions">
+                {puedeRevertirSolicitudFutura(
+                  permisoSeleccionado,
+                  user?.Rol,
+                  fechaHoy,
+                ) && (
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={isBusy}
+                    onClick={deshacerResolucion}
+                  >
+                    {isBusy ? "Procesando…" : "Deshacer resolución"}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="button button-secondary"
+                  disabled={isBusy}
                   onClick={cerrarDialog}
                 >
                   Cerrar

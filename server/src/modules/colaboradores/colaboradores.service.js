@@ -15,7 +15,7 @@ import {
   entidades,
   acciones,
 } from "../bitacora/bitacora.service.js";
-
+import { inicializarSaldoVacaciones } from "../vacaciones/services/saldosVacaciones.service.js";
 async function validateColaboradorData(colaborador) {
   const data = {
     identificacion: validateText(
@@ -134,6 +134,8 @@ export async function createNewColaborador(colaborador, usuarioActorId) {
       transaction,
     );
 
+    await inicializarSaldoVacaciones(colaboradorCreadoId, actorId);
+    
     await transaction.commit();
     return colaboradorCreadoId;
   } catch (error) {

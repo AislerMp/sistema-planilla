@@ -17,7 +17,7 @@ export function errorHandler(err, req, res, next) {
 
   const publicMessage = err instanceof AppError && status < 500;
 
-  if (status >= 500) console.error(err);
+  console.error(err);
 
   return res.status(status).json({
     message: publicMessage

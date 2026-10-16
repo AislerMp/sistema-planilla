@@ -7,6 +7,7 @@ import {
   listarSolicitudesRestauranteController,
   crearSolicitudController,
   resolverSolicitudController,
+  revertirSolicitudController
 } from "./horasExtras.controller.js";
 
 import { permitirRoles } from "../../shared/middlewares/auth.middleware.js";
@@ -50,6 +51,12 @@ router.patch(
   "/solicitudes/:id/resolver",
   permitirRoles("GERENTE"),
   resolverSolicitudController,
+);
+
+router.patch(
+  "/solicitudes/:id/revertir",
+  permitirRoles("GERENTE"),
+  revertirSolicitudController,
 );
 
 export default router;

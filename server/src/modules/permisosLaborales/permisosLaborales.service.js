@@ -1,4 +1,8 @@
 import * as permisosRepository from "./permisosLaborales.repository.js";
+import {
+  bloquearColaboradorSolicitudes,
+  revertirSolicitud,
+} from "../solicitudes/solicitudes.repository.js";
 
 import {
   validateId,
@@ -16,12 +20,12 @@ import {
   validarFechaSolicitudFutura,
   validarFechaResolucion,
 } from "../../shared/utils/solicitudUtils.js";
+import { validarDiasVacaciones } from "../vacaciones/services/vacaciones.service.js";
 
 import { getColaborador } from "../colaboradores/colaboradores.service.js";
 
 import { obtenerCalendarioActual } from "../../shared/utils/fechaUtils.js";
 
-import { bloquearColaboradorSolicitudes } from "../solicitudes/solicitudes.repository.js";
 import { beginTransaction } from "../../shared/config/database.js";
 import {
   registrarBitacora,
@@ -115,6 +119,8 @@ export async function solicitarPermiso({ fechaSolicitada, motivo }, usuario) {
       );
     }
 
+    await validarDiasVacaciones(colaboradorId, fechaValidada, fechaValidada, transaction);
+
     const solicitudCreada = await permisosRepository.createPermiso(
       {
         colaboradorId,
@@ -203,6 +209,12 @@ export async function resolverPermiso(
   const transaction = await beginTransaction();
 
   try {
+    if (estadoValidado === "APROBADA") {
+      await bloquearColaboradorSolicitudes(solicitudActual.ColaboradorId, transaction);
+      await validarDiasVacaciones(
+        solicitudActual.ColaboradorId, solicitudActual.FechaSolicitada, solicitudActual.FechaSolicitada, transaction,
+      );
+    }
     const permisoResuelto = await permisosRepository.resolverPermiso(
       id,
       {
@@ -271,5 +283,131 @@ export async function validarDiaSinPermisoAprobado(
       "El colaborador ya tiene un permiso laboral aprobado para la fecha indicada",
       400,
     );
+  }
+}
+
+export async function revertirPermiso(
+  solicitudId,
+  { motivo } = {},
+  usuario,
+) {
+  if (usuario.Rol !== "GERENTE") {
+    throw serviceError(
+      "Solo el gerente puede revertir permisos laborales.",
+      403,
+    );
+  }
+
+  const id = validateId(solicitudId, "SolicitudId");
+  const usuarioId = validateId(usuario.UsuarioId, "UsuarioId");
+  const motivoValidado = validateText(motivo, "Motivo de reversión", 500);
+
+  const transaction = await beginTransaction();
+
+  try {
+    const solicitudActual = await permisosRepository.getPermisosById(
+      id,
+      transaction,
+    );
+
+    if (!solicitudActual) {
+      throw serviceError(
+        "No se encontró la solicitud de permiso laboral.",
+        404,
+      );
+    }
+
+    await validarAccesoSolicitud(
+      solicitudActual,
+      usuario,
+      "Solo podés revertir permisos de tu restaurante.",
+    );
+
+    if (!["APROBADA", "RECHAZADA"].includes(solicitudActual.Estado)) {
+      throw serviceError(
+        "Solo se pueden revertir permisos aprobados o rechazados.",
+        409,
+      );
+    }
+
+    // No devolver a pendiente un permiso cuya fecha ya llegó.
+    validarFechaResolucion(solicitudActual.FechaSolicitada);
+
+    // Comparte el bloqueo utilizado al crear solicitudes.
+    await bloquearColaboradorSolicitudes(
+      solicitudActual.ColaboradorId,
+      transaction,
+    );
+
+    // Una solicitud rechazada podría tener otra solicitud para ese día.
+    const solicitudesDelDia =
+      await permisosRepository.getPermisosByColaborador(
+        solicitudActual.ColaboradorId,
+        {
+          desde: solicitudActual.FechaSolicitada,
+          hasta: solicitudActual.FechaSolicitada,
+        },
+        transaction,
+      );
+
+    const existeOtroPermiso = solicitudesDelDia.some(
+      (solicitud) =>
+        solicitud.SolicitudId !== id &&
+        ["PENDIENTE", "APROBADA"].includes(solicitud.Estado),
+    );
+
+    if (existeOtroPermiso) {
+      throw serviceError(
+        "Existe otro permiso pendiente o aprobado para esa fecha.",
+        409,
+      );
+    }
+
+    await validarDiasVacaciones(
+      solicitudActual.ColaboradorId, solicitudActual.FechaSolicitada, solicitudActual.FechaSolicitada, transaction,
+    );
+    const permisoRevertido = await revertirSolicitud(
+      id,
+      solicitudActual.TipoSolicitud,
+      solicitudActual.Estado,
+      "PENDIENTE",
+      transaction,
+    );
+
+    if (!permisoRevertido) {
+      throw serviceError(
+        "No se pudo revertir el permiso porque su estado cambió durante la operación.",
+        409,
+      );
+    }
+
+    await registrarBitacora(
+      {
+        usuarioId,
+        entidad: entidades.SOLICITUDES,
+        registroId: id,
+        accion: acciones.REVERTIR,
+        datosAnteriores: solicitudActual,
+        datosNuevos: {
+          ...permisoRevertido,
+          motivoReversion: motivoValidado,
+        },
+      },
+      transaction,
+    );
+
+    await transaction.commit();
+    return permisoRevertido;
+  } catch (error) {
+    try {
+      await transaction.rollback();
+    } catch (rollbackError) {
+      console.error(
+        "No se pudo deshacer la reversión del permiso laboral:",
+        rollbackError,
+      );
+    }
+
+    throw error;
   }
 }

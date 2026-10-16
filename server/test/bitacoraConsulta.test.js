@@ -6,7 +6,7 @@ Object.assign(process.env, {
   DB_USER: "test", DB_PASSWORD: "test",
 });
 const { pool } = await import("../src/shared/config/database.js");
-const { listarBitacoras, obtenerBitacora } = await import("../src/modules/bitacora/bitacora.service.js");
+const { listarBitacoras, obtenerBitacora, registrarBitacora, acciones, entidades } = await import("../src/modules/bitacora/bitacora.service.js");
 
 test("bitácoras valida filtros e IDs antes de consultar", async () => {
   for (const filtros of [
@@ -60,4 +60,31 @@ test("detalle conserva BIGINT, convierte los JSON y devuelve 404 si no existe", 
     registro = null;
     await assert.rejects(obtenerBitacora(id), { status: 404 });
   } finally { mock.restoreAll(); }
+});
+
+test("registra y filtra reversiones con su motivo y datos anteriores", async (t) => {
+  let params;
+  const request = () => ({
+    input(name, _type, value) { params[name] = value; return this; },
+    async query(query) {
+      if (query.includes("INSERT INTO dbo.Bitacora")) return { rowsAffected: [1] };
+      return { recordsets: [[{ Total: 0 }], []] };
+    },
+  });
+  t.mock.method(pool, "connect", async () => pool);
+  t.mock.method(pool, "request", request);
+  const transaction = { request };
+  const anteriores = { Estado: "RECHAZADA" };
+  const nuevos = { Estado: "PENDIENTE", motivoReversion: "Corregir resolución" };
+  params = {};
+  await registrarBitacora({
+    usuarioId: 7, entidad: entidades.SOLICITUDES, registroId: 11,
+    accion: acciones.REVERTIR, datosAnteriores: anteriores, datosNuevos: nuevos,
+  }, transaction);
+  assert.equal(params.Accion, "REVERTIR");
+  assert.deepEqual(JSON.parse(params.DatosAnteriores), anteriores);
+  assert.deepEqual(JSON.parse(params.DatosNuevos), nuevos);
+  params = {};
+  await listarBitacoras({ accion: "REVERTIR" });
+  assert.equal(params.accion, "REVERTIR");
 });

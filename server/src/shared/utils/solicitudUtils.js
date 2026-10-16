@@ -1,8 +1,18 @@
-import { validateId, validateDate, validateText, serviceError } from "./serviceUtils.js";
+import {
+  validateId,
+  validateDate,
+  validateText,
+  serviceError,
+} from "./serviceUtils.js";
 import { getRestaurantePermitido } from "../../modules/colaboradores/colaboradores.service.js";
 import { obtenerCalendarioActual, fechaSQLComoTexto } from "./fechaUtils.js";
 
-export const estadosSolicitud = new Set(["PENDIENTE", "EN_REVISION_RH", "APROBADA", "RECHAZADA"]);
+export const estadosSolicitud = new Set([
+  "PENDIENTE",
+  "EN_REVISION_RH",
+  "APROBADA",
+  "RECHAZADA",
+]);
 
 export function validarFiltrosSolicitudes(filtros = {}) {
   let desde = validateDate(filtros?.desde, "Fecha desde", true);
@@ -40,23 +50,26 @@ export async function validarAccesoSolicitud(
   if (usuario.Rol === "GERENTE") {
     const restaurantePermitido = await getRestaurantePermitido(usuario);
     if (solicitud.RestauranteId !== restaurantePermitido) {
-      throw serviceError(
-        mensajeRestaurante,
-        403,
-      );
+      throw serviceError(mensajeRestaurante, 403);
     }
   }
 }
 
 // Recibe el ID ya validado por el servicio, que decide si es obligatorio.
-export async function validarRestauranteSolicitudes(restauranteSolicitado, usuario) {
+export async function validarRestauranteSolicitudes(
+  restauranteSolicitado,
+  usuario,
+) {
   const restaurantePermitido = await getRestaurantePermitido(usuario);
   if (
     restaurantePermitido !== null &&
     restauranteSolicitado !== null &&
     restauranteSolicitado !== restaurantePermitido
   ) {
-    throw serviceError("Solo podés consultar solicitudes de tu restaurante asignado.", 403);
+    throw serviceError(
+      "Solo podés consultar solicitudes de tu restaurante asignado.",
+      403,
+    );
   }
 
   const restauranteId = restaurantePermitido ?? restauranteSolicitado;
@@ -80,12 +93,18 @@ export function validarSolicitudPendiente(solicitud) {
   }
 }
 
-export function validarFechaSolicitudFutura(fechaSolicitada, campo = "Fecha solicitada") {
+export function validarFechaSolicitudFutura(
+  fechaSolicitada,
+  campo = "Fecha solicitada",
+) {
   const fecha = validateDate(fechaSolicitada, campo);
   // Las solicitudes usan el día calendario de Costa Rica, sin el corte de marcas.
   const { fechaHoy } = obtenerCalendarioActual();
   if (fechaSQLComoTexto(fecha) <= fechaHoy) {
-    throw serviceError("La fecha solicitada debe ser posterior al día de hoy.", 400);
+    throw serviceError(
+      "La fecha solicitada debe ser posterior al día de hoy.",
+      400,
+    );
   }
   return fecha;
 }
@@ -95,7 +114,9 @@ export function validarFechaResolucion(fechaSolicitada) {
   const fecha = fechaSQLComoTexto(fechaSolicitada);
   const { fechaHoy } = obtenerCalendarioActual();
   if (fechaHoy >= fecha) {
-    throw serviceError("La solicitud solo puede resolverse antes de la fecha solicitada");
+    throw serviceError(
+      "La solicitud solo puede resolverse antes de la fecha solicitada",
+    );
   }
   return fecha;
 }

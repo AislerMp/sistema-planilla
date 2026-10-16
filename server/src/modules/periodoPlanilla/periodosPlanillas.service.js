@@ -19,15 +19,11 @@ import {
 } from "../bitacora/bitacora.service.js";
 
 export async function listarPeriodos() {
-  await actualizarEstadosPeriodos(process.env.USUARIO_SISTEMA_ID);
-
   return periodoRepository.getPeriodos();
 }
 
 export async function obtenerPeriodo(idPeriodo) {
   const periodoId = validateId(idPeriodo);
-  await actualizarEstadosPeriodos(process.env.USUARIO_SISTEMA_ID);
-
   const periodo = await periodoRepository.getPeriodoById(periodoId);
   if (!periodo) {
     throw serviceError("El período seleccionado no existe.", 404);
@@ -38,7 +34,6 @@ export async function obtenerPeriodo(idPeriodo) {
 
 export async function obtenerPeriodoPorFecha(fechaAsignada) {
   const fecha = validateDate(fechaAsignada, "La fecha asignada");
-  await actualizarEstadosPeriodos(process.env.USUARIO_SISTEMA_ID);
   const periodo = await periodoRepository.getPeriodoByFecha(fecha);
 
   if (!periodo) {
@@ -116,7 +111,7 @@ export async function crearPeriodo(periodo, usuarioActorId) {
         entidad: entidades.PERIODOS_PLANILLA,
         registroId: createdPeriodo.PeriodoId,
         accion: acciones.CREAR,
-        datosNuevos: periodoValidado,
+        datosNuevos: createdPeriodo,
         datosAnteriores: null,
       },
       transaction,
@@ -143,13 +138,11 @@ export async function cambiarEstadoPeriodo(
   const periodoId = validateId(idPeriodo);
   const nuevoState = validateText(nuevoEstado, "El estado", 15);
 
-  const siguientesEstados = {
-    ABIERTO: "EN_REVISION",
-    EN_REVISION: "CERRADO",
-    CERRADO: "PAGADO",
-  };
+  if (nuevoState !== "PAGADO") {
+    throw serviceError("Solo se permite confirmar manualmente el pago de un período cerrado.", 409);
+  }
 
-  const { fechaHoy, fechaAsignada } = obtenerCalendarioActual();
+  const { fechaHoy } = obtenerCalendarioActual();
 
   const transaction = await beginTransaction();
 
@@ -162,37 +155,16 @@ export async function cambiarEstadoPeriodo(
       throw serviceError("El periodo de planilla no fue encontrada", 404);
     }
 
-    if (siguientesEstados[periodoActual.Estado] !== nuevoState) {
+    if (periodoActual.Estado !== "CERRADO") {
       throw serviceError(
         `No se puede pasar de ${periodoActual.Estado} a ${nuevoState}`,
         409,
       );
     }
 
-    if (nuevoState === "EN_REVISION") {
-      const fechaFin = fechaSQLComoTexto(periodoActual.FechaFin);
-
-      if (fechaAsignada <= fechaFin)
-        throw serviceError(
-          "El período todavía permite marcas. Podrá pasar a revisión a las 4 a. m. del día siguiente a su finalización.",
-          409,
-        );
-    }
-
-    if (nuevoState === "CERRADO") {
-      const fechaLimite = fechaSQLComoTexto(periodoActual.FechaLimiteAjustes);
-      if (fechaHoy <= fechaLimite)
-        throw serviceError(
-          "Todavía está vigente el plazo de ajustes. Podrá cerrar el período al día siguiente de la fecha límite.",
-          409,
-        );
-    }
-
-    if (nuevoState === "PAGADO") {
-      const fechaPago = fechaSQLComoTexto(periodoActual.FechaPago);
-      if (fechaHoy < fechaPago)
-        throw serviceError("Todavía no ha llegado la fecha de pago", 409);
-    }
+    const fechaPago = fechaSQLComoTexto(periodoActual.FechaPago);
+    if (fechaHoy < fechaPago)
+      throw serviceError("Todavía no ha llegado la fecha de pago", 409);
 
     const updatedPeriodo = await periodoRepository.updateEstadoPeriodo(
       periodoId,
@@ -234,7 +206,8 @@ export async function cambiarEstadoPeriodo(
 
 
 /* FUNCIONES PARA AUTOMATIZAR LOS ESTADOS */
-function determinarEstadoPeriodo(periodo, calendario) {
+export function determinarEstadoPeriodo(periodo, calendario) {
+  if (["CERRADO", "PAGADO"].includes(periodo.Estado)) return periodo.Estado;
   const fechaInicio = fechaSQLComoTexto(periodo.FechaInicio);
   const fechaFin = fechaSQLComoTexto(periodo.FechaFin);
   const fechaLimite = fechaSQLComoTexto(periodo.FechaLimiteAjustes);

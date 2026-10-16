@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import useAsyncRequest from "../hooks/useAsyncRequest.js";
@@ -12,9 +12,12 @@ import {
   getSolicitudesPorRestaurante,
   createSolicitud,
   resolverSolicitud,
+  revertirSolicitud,
 } from "../services/horasExtras.Service.js";
 import { formatDate } from "../utils/fechaUtils.js";
 import Dialog from "../components/dialog.jsx";
+import { confirmarReversion, notifySuccess } from "../utils/notifications.js";
+import { puedeRevertirSolicitudFutura } from "../utils/reversionSolicitudes.js";
 
 
 const emptyCheckSolicitudForm = {
@@ -99,6 +102,7 @@ export default function SolicitudesHorasExtra() {
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState(null);
   const [dialog, setDialog] = useState(null);
+  const reversionEnCurso = useRef(false);
 
   const fechaHoy = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "America/Costa_Rica",
@@ -198,6 +202,29 @@ export default function SolicitudesHorasExtra() {
     if (isBusy) return;
     setError(null);
     setDialog(null);
+  }
+
+  async function deshacerResolucion(event) {
+    const solicitud = dialog?.solicitud;
+    if (isBusy || reversionEnCurso.current || !puedeRevertirSolicitudFutura(solicitud, user?.Rol)) return;
+    const target = event.currentTarget.closest("dialog");
+    reversionEnCurso.current = true;
+    setIsBusy(true);
+    setError(null);
+    try {
+      const motivo = await confirmarReversion("PENDIENTE", target);
+      if (motivo === null) return;
+      const resultado = await revertirSolicitud(solicitud.SolicitudId, { motivo });
+      setDialog({ tipo: "detalle", solicitud: resultado.solicitud });
+      setCheckSolicitudForm({ ...emptyCheckSolicitudForm });
+      setReloadKey((current) => current + 1);
+      notifySuccess(resultado.message || "Resolución de horas extras revertida correctamente.", target);
+    } catch (requestError) {
+      setError(requestError.message || "No se pudo deshacer la resolución.");
+    } finally {
+      reversionEnCurso.current = false;
+      setIsBusy(false);
+    }
   }
 
   function abrirSolicitud(tipo, solicitud) {
@@ -507,10 +534,17 @@ export default function SolicitudesHorasExtra() {
                   </div>
                 </dl>
               )}
+              <AlertMessage>{error}</AlertMessage>
               <footer className="solicitud-create-actions">
+                {puedeRevertirSolicitudFutura(seleccionada, user?.Rol, fechaHoy) && (
+                  <button type="button" className="button button-secondary" disabled={isBusy} onClick={deshacerResolucion}>
+                    {isBusy ? "Procesando…" : "Deshacer resolución"}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="button button-secondary"
+                  disabled={isBusy}
                   onClick={cerrarDialog}
                 >
                   Cerrar

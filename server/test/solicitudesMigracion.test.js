@@ -32,6 +32,8 @@ for (const esExtras of [true, false]) {
       t.mock.method(pool, "request", () => ({
         input() { return this; },
         async query(query) {
+          // Estos escenarios previos no tienen vacaciones superpuestas.
+          if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
           assert.match(query, /FROM Colaboradores/);
           return { recordset: [{ ColaboradorId: 4, RestauranteId: 2, Activo: true }] };
         },
@@ -48,6 +50,8 @@ for (const esExtras of [true, false]) {
         return {
           input(name, type, value) { parametros[name] = value; return this; },
           async query(query) {
+            // Estos escenarios previos no tienen vacaciones superpuestas.
+            if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
             if (query.includes("FROM dbo.Colaboradores")) {
               assert.match(query, /WITH \(UPDLOCK, HOLDLOCK\)/);
               assert.equal(parametros.colaboradorId, usuario.ColaboradorId);
@@ -113,6 +117,8 @@ for (const esExtras of [true, false]) {
     t.mock.method(pool, "request", () => ({
       input() { return this; },
       async query(query) {
+        // Estos escenarios previos no tienen vacaciones superpuestas.
+        if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
         assert.match(query, /s.SolicitudId = @solicitudId/);
         assert.match(query, new RegExp(`s.TipoSolicitud = '${tipo}'`));
         return { recordset: [] };
@@ -136,6 +142,8 @@ test("extras: conflicto de resolución y fallo de detalle revierten la transacci
   t.mock.method(pool, "request", () => ({
     input() { return this; },
     async query(query) {
+      // Estos escenarios previos no tienen vacaciones superpuestas.
+      if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
       return { recordset: query.includes("FROM Usuarios") ? [{ RestauranteId: 2 }] : [anterior] };
     },
   }));
@@ -147,6 +155,8 @@ test("extras: conflicto de resolución y fallo de detalle revierten la transacci
     return {
       input(name, type, value) { parametros[name] = value; return this; },
       async query(query) {
+        // Estos escenarios previos no tienen vacaciones superpuestas.
+        if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
         if (query.includes("UPDATE s")) {
           eventos.push("cabecera");
           assert.match(query, /s.TipoSolicitud = 'HORAS_EXTRAS'[\s\S]*s.Estado = 'PENDIENTE'/);
@@ -180,6 +190,8 @@ test("extras vencidas actualizan cabecera y minutos juntos y revierten ante fall
   t.mock.method(sql.Transaction.prototype, "request", () => ({
     input() { return this; },
     async query(query) {
+      // Estos escenarios previos no tienen vacaciones superpuestas.
+      if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
       assert.match(query, /OUTPUT INSERTED.SolicitudId INTO @Vencidas/);
       assert.match(query, /TipoSolicitud = 'HORAS_EXTRAS'/);
       assert.match(query, /UPDATE d SET MinutosAutorizados = 0/);
@@ -196,6 +208,8 @@ test("permiso aprobado sigue bloqueando operaciones y conserva los bloqueos SQL"
   t.mock.method(sql.Transaction.prototype, "request", () => ({
     input() { return this; },
     async query(query) {
+      // Estos escenarios previos no tienen vacaciones superpuestas.
+      if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
       assert.match(query, /INNER JOIN dbo.Solicitudes/);
       assert.match(query, /WITH \(UPDLOCK, HOLDLOCK\)/);
       assert.match(query, /TipoSolicitud = 'PERMISO_LABORAL'/);

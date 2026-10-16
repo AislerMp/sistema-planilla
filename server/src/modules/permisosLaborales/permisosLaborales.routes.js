@@ -34,4 +34,10 @@ router.patch(
   permisosLaboralesController.resolverPermisoLaboralController,
 );
 
+router.patch(
+  "/:solicitudId/revertir",
+  permitirRoles("GERENTE"),
+  permisosLaboralesController.revertirPermisoLaboralController,
+);
+
 export default router;

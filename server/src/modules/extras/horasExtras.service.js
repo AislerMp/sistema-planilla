@@ -13,6 +13,7 @@ import {
   validarFechaSolicitudFutura,
   validarFechaResolucion,
 } from "../../shared/utils/solicitudUtils.js";
+import { validarDiasVacaciones } from "../vacaciones/services/vacaciones.service.js";
 
 import { validarDiaSinPermisoAprobado } from "../permisosLaborales/permisosLaborales.service.js";
 import { validarDiaSinIncapacidad } from "../incapacidades/incapacidades.services.js";
@@ -29,7 +30,10 @@ import {
   fechaSQLComoTexto,
 } from "../../shared/utils/fechaUtils.js";
 
-import { bloquearColaboradorSolicitudes } from "../solicitudes/solicitudes.repository.js";
+import {
+  bloquearColaboradorSolicitudes,
+  revertirSolicitud,
+} from "../solicitudes/solicitudes.repository.js";
 import { beginTransaction } from "../../shared/config/database.js";
 import {
   registrarBitacora,
@@ -193,43 +197,57 @@ export async function actualizarHorasExtra(
       );
     }
 
-    await validarDiaSinPermisoAprobado(asistencia.ColaboradorId, fechaSQLComoTexto(asistencia.FechaAsignada), transaction);
+    await validarDiaSinPermisoAprobado(
+      asistencia.ColaboradorId,
+      fechaSQLComoTexto(asistencia.FechaAsignada),
+      transaction,
+    );
     await validarDiaSinIncapacidad(
       asistencia.ColaboradorId,
       asistencia.FechaAsignada,
       transaction,
     );
+    await bloquearColaboradorSolicitudes(asistencia.ColaboradorId, transaction);
+    await validarDiasVacaciones(
+      asistencia.ColaboradorId, asistencia.FechaAsignada, asistencia.FechaAsignada, transaction,
+    );
     // La asistencia guarda las horas normales; las extras se guardan aparte.
     // Quitar extras de una jornada corta no debe convertirla en ocho horas.
-    const minutosNormales = minutosAjustados > 0
-      ? 480
-      : Math.min(asistencia.MinutosEfectivos, 480);
+    const minutosNormales =
+      minutosAjustados > 0 ? 480 : Math.min(asistencia.MinutosEfectivos, 480);
     validarMinutosDetectados(minutosNormales);
 
     if (minutosNormales !== asistencia.MinutosEfectivos) {
-      const asistenciaActualizada = await asistenciasRepository.updateMinutosAsistencia(
-        asistenciaId, minutosNormales, "Ajustados", transaction,
-      );
+      const asistenciaActualizada =
+        await asistenciasRepository.updateMinutosAsistencia(
+          asistenciaId,
+          minutosNormales,
+          "Ajustados",
+          transaction,
+        );
 
       if (!asistenciaActualizada) {
         throw serviceError("No se pudieron ajustar las horas normales", 500);
       }
-      
-      await registrarBitacora({
-        usuarioId: actorId,
-        entidad: entidades.ASISTENCIAS_DIARIAS,
-        registroId: asistenciaId,
-        accion: acciones.AJUSTAR_HORAS,
-        datosAnteriores: {
-          minutosCalculados: asistencia.MinutosCalculados,
-          minutosAjustados: asistencia.MinutosAjustados,
+
+      await registrarBitacora(
+        {
+          usuarioId: actorId,
+          entidad: entidades.ASISTENCIAS_DIARIAS,
+          registroId: asistenciaId,
+          accion: acciones.AJUSTAR_HORAS,
+          datosAnteriores: {
+            minutosCalculados: asistencia.MinutosCalculados,
+            minutosAjustados: asistencia.MinutosAjustados,
+          },
+          datosNuevos: {
+            minutosCalculados: asistenciaActualizada.MinutosCalculados,
+            minutosAjustados: minutosNormales,
+            motivo: motivoValidado,
+          },
         },
-        datosNuevos: {
-          minutosCalculados: asistenciaActualizada.MinutosCalculados,
-          minutosAjustados: minutosNormales,
-          motivo: motivoValidado,
-        },
-      }, transaction);
+        transaction,
+      );
     }
 
     // 4. Buscar el registro de extras.
@@ -329,10 +347,6 @@ export async function sincronizarHorasExtras(
     );
   }
 
-  if (!asistencia) {
-    throw serviceError("La asistencia no existe", 404);
-  }
-
   const asistenciaId = validateId(asistencia.AsistenciaId, "AsistenciaId");
 
   const actorId = validateId(usuarioActorId, "UsuarioId");
@@ -356,22 +370,29 @@ export async function sincronizarHorasExtras(
 
   // Separar las horas normales incluso si las extras ya estaban guardadas.
   if (minutosExtras > 0 && asistencia.MinutosAjustados !== minutosNormales) {
-    const asistenciaActualizada = await asistenciasRepository.updateMinutosAsistencia(
-      asistenciaId, minutosNormales, "Ajustados", transaction,
-    );
-    
+    const asistenciaActualizada =
+      await asistenciasRepository.updateMinutosAsistencia(
+        asistenciaId,
+        minutosNormales,
+        "Ajustados",
+        transaction,
+      );
+
     if (!asistenciaActualizada) {
       throw serviceError("No se pudieron guardar las horas normales", 500);
     }
 
-    await registrarBitacora({
-      usuarioId: actorId,
-      entidad: entidades.ASISTENCIAS_DIARIAS,
-      registroId: asistenciaId,
-      accion: acciones.ACTUALIZAR,
-      datosAnteriores: { minutosAjustados: asistencia.MinutosAjustados },
-      datosNuevos: { minutosAjustados: minutosNormales },
-    }, transaction);
+    await registrarBitacora(
+      {
+        usuarioId: actorId,
+        entidad: entidades.ASISTENCIAS_DIARIAS,
+        registroId: asistenciaId,
+        accion: acciones.ACTUALIZAR,
+        datosAnteriores: { minutosAjustados: asistencia.MinutosAjustados },
+        datosNuevos: { minutosAjustados: minutosNormales },
+      },
+      transaction,
+    );
 
     // El llamador devuelve esta misma asistencia en su respuesta.
     asistencia.MinutosAjustados = minutosNormales;
@@ -413,7 +434,7 @@ export async function sincronizarHorasExtras(
   if (!registroGuardado) {
     throw serviceError("No se pudieron guardar las horas extras", 500);
   }
-  
+
   await registrarBitacora(
     {
       usuarioId: actorId,
@@ -440,9 +461,6 @@ export async function sincronizarHorasExtras(
 
   return registroGuardado;
 }
-
-
-
 
 /* SERVICES DE SOLICITUDES DE HORAS EXTRAS */
 
@@ -485,11 +503,19 @@ export async function getSolicitudesByColaborador(
     restaurantePermitido = await getRestaurantePermitido(usuario);
   }
 
-  await validarFechaPendiente({ colaboradorId: id, restauranteId: restaurantePermitido });
-  const solicitudes = await horasExtraRepository.getSolicitudesByColaborador(id, filtrosValidados);
-  return restaurantePermitido === null ? solicitudes : solicitudes.filter(
-    (solicitud) => solicitud.RestauranteId === restaurantePermitido,
+  await validarFechaPendiente({
+    colaboradorId: id,
+    restauranteId: restaurantePermitido,
+  });
+  const solicitudes = await horasExtraRepository.getSolicitudesByColaborador(
+    id,
+    filtrosValidados,
   );
+  return restaurantePermitido === null
+    ? solicitudes
+    : solicitudes.filter(
+        (solicitud) => solicitud.RestauranteId === restaurantePermitido,
+      );
 }
 
 export async function getSolicitudesByRestaurante(
@@ -510,7 +536,6 @@ export async function getSolicitudesByRestaurante(
   const filtrosValidados = validarFiltrosSolicitudes(filtros);
   await validarFechaPendiente({ restauranteId: restauranteConsultaId });
 
-
   return horasExtraRepository.getSolicitudesByRestaurante(
     restauranteConsultaId,
     filtrosValidados,
@@ -530,7 +555,10 @@ export async function crearSolicitudHorasExtras(
 
   const usuarioId = validateId(usuario.UsuarioId, "usuarioId");
   const colaboradorId = validateId(usuario.ColaboradorId, "ColaboradorId");
-  const validFecha = validarFechaSolicitudFutura(fechaSolicitada, "Fecha solicitada");
+  const validFecha = validarFechaSolicitudFutura(
+    fechaSolicitada,
+    "Fecha solicitada",
+  );
   const validMinutosSolicitados = validarMinutosSolicitados(minutosSolicitados);
   const validMotivo = validateText(motivo, "El motivo", 500);
 
@@ -545,13 +573,20 @@ export async function crearSolicitudHorasExtras(
     // Bloquear antes de consultar protege incluso cuando no hay solicitudes.
     await bloquearColaboradorSolicitudes(colaboradorId, transaction);
     const existente = await horasExtraRepository.obtenerSolicitudesByFechaAndID(
-      validFecha, colaboradorId, transaction,
+      validFecha,
+      colaboradorId,
+      transaction,
     );
 
     if (existente) {
-      throw serviceError("Ya tenés una solicitud de horas extras para esa fecha.", 409);
+      throw serviceError(
+        "Ya tenés una solicitud de horas extras para esa fecha.",
+        409,
+      );
     }
-    
+
+    await validarDiasVacaciones(colaboradorId, validFecha, validFecha, transaction);
+
     const solicitudCreada = await horasExtraRepository.createSolicitud(
       {
         registradoPorUsuarioId: usuarioId,
@@ -655,6 +690,12 @@ export async function resolverSolicitudHorasExtras(
   const transaction = await beginTransaction();
 
   try {
+    if (validEstado === "APROBADA") {
+      await bloquearColaboradorSolicitudes(solicitudActual.ColaboradorId, transaction);
+      await validarDiasVacaciones(
+        solicitudActual.ColaboradorId, solicitudActual.FechaSolicitada, solicitudActual.FechaSolicitada, transaction,
+      );
+    }
     const solicitudResuelta = await horasExtraRepository.resolverSolicitud(
       solicitudId,
       {
@@ -689,6 +730,151 @@ export async function resolverSolicitudHorasExtras(
       await transaction.rollback();
     } catch (rollbackError) {
       console.error("No se pudo completar el rollback.", rollbackError);
+    }
+    throw error;
+  }
+}
+
+export async function revertirSolicitudHorasExtras(
+  idSolicitud,
+  { motivo } = {},
+  usuario,
+) {
+  if (usuario.Rol !== "GERENTE") {
+    throw serviceError(
+      "Solo el gerente puede revertir solicitudes de horas extras.",
+      403,
+    );
+  }
+
+  const solicitudId = validateId(idSolicitud, "SolicitudId");
+  const usuarioId = validateId(usuario.UsuarioId, "UsuarioId");
+  const motivoValidado = validateText(motivo, "Motivo de reversión", 500);
+
+  const transaction = await beginTransaction();
+
+  try {
+    const solicitudActual = await horasExtraRepository.getSolicitudById(
+      solicitudId,
+      transaction,
+    );
+
+    if (!solicitudActual) {
+      throw serviceError("No se encontró la solicitud de horas extras.", 404);
+    }
+
+    await validarAccesoSolicitud(
+      solicitudActual,
+      usuario,
+      "Solo podés revertir solicitudes de tu restaurante.",
+    );
+
+    if (!["APROBADA", "RECHAZADA"].includes(solicitudActual.Estado)) {
+      throw serviceError(
+        "Solo se pueden revertir solicitudes aprobadas o rechazadas.",
+        409,
+      );
+    }
+
+    validarFechaResolucion(solicitudActual.FechaSolicitada);
+
+    await bloquearColaboradorSolicitudes(
+      solicitudActual.ColaboradorId,
+      transaction,
+    );
+
+    const solicitudesDelDia =
+      await horasExtraRepository.getSolicitudesByColaborador(
+        solicitudActual.ColaboradorId,
+        {
+          desde: solicitudActual.FechaSolicitada,
+          hasta: solicitudActual.FechaSolicitada,
+        },
+        transaction,
+      );
+
+    const existeOtraSolicitud = solicitudesDelDia.some(
+      (solicitud) =>
+        solicitud.SolicitudId !== solicitudId &&
+        ["PENDIENTE", "APROBADA"].includes(solicitud.Estado),
+    );
+
+    if (existeOtraSolicitud) {
+      throw serviceError(
+        "Existe otra solicitud pendiente o aprobada para esa fecha.",
+        409,
+      );
+    }
+
+    await validarDiasVacaciones(
+      solicitudActual.ColaboradorId, solicitudActual.FechaSolicitada, solicitudActual.FechaSolicitada, transaction,
+    );
+    const cabeceraRevertida = await revertirSolicitud(
+      solicitudId,
+      solicitudActual.TipoSolicitud,
+      solicitudActual.Estado,
+      "PENDIENTE",
+      transaction,
+    );
+
+    if (!cabeceraRevertida) {
+      throw serviceError(
+        "No se pudo revertir la solicitud porque su estado cambió durante la operación.",
+        409,
+      );
+    }
+
+    const detalleActualizado =
+      await horasExtraRepository.limpiarMinutosAutorizados(
+        solicitudId,
+        transaction,
+      );
+
+    if (!detalleActualizado) {
+      throw serviceError(
+        "No se pudieron restablecer los minutos autorizados.",
+        409,
+      );
+    }
+
+    // Consultar la cabecera y el detalle ya actualizados.
+    const solicitudRevertida = await horasExtraRepository.getSolicitudById(
+      solicitudId,
+      transaction,
+    );
+
+    if (!solicitudRevertida) {
+      throw serviceError(
+        "No se pudo obtener la solicitud después de revertirla.",
+        500,
+      );
+    }
+
+    await registrarBitacora(
+      {
+        usuarioId,
+        entidad: entidades.SOLICITUDES,
+        registroId: solicitudId,
+        accion: acciones.REVERTIR,
+        datosAnteriores: solicitudActual,
+        datosNuevos: {
+          ...solicitudRevertida,
+          motivoReversion: motivoValidado,
+        },
+      },
+      transaction,
+    );
+
+    await transaction.commit();
+    return solicitudRevertida;
+  } catch (error) {
+    try {
+      await transaction.rollback();
+    } catch (rollbackError) {
+      console.error(
+        "No se pudo deshacer la reversión de horas extras:",
+        rollbackError,
+      );
     }
     throw error;
   }

@@ -55,6 +55,17 @@ export async function createSolicitud({ fechaSolicitada, minutosSolicitados, mot
   return parseResponse(response);
 }
 
+export async function revertirSolicitud(id, { motivo }) {
+  ensureApiUrl();
+  const response = await fetch(`${endpoint}/${encodeURIComponent(id)}/revertir`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ motivo }),
+  });
+  return parseResponse(response);
+}
+
 // estado: APROBADA o RECHAZADA.
 export async function resolverSolicitud(id, { estado, minutosAutorizados, observacion }) {
   ensureApiUrl();
@@ -86,4 +97,5 @@ export default {
   getSolicitudesPorRestaurante,
   createSolicitud,
   resolverSolicitud,
+  revertirSolicitud,
 };

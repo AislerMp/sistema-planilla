@@ -25,6 +25,8 @@ import { sincronizarHorasExtras } from "../extras/horasExtras.service.js";
 import { validarDiaSinPermisoAprobado } from "../permisosLaborales/permisosLaborales.service.js";
 import { validarDiaSinIncapacidad } from "../incapacidades/incapacidades.services.js";
 import { beginTransaction } from "../../shared/config/database.js";
+import { validarDiasVacaciones } from "../vacaciones/services/vacaciones.service.js";
+import { bloquearColaboradorSolicitudes } from "../solicitudes/solicitudes.repository.js";
 
 export async function consultarMisMarcas(usuario, filtros = {}) {
   if (!usuario) throw serviceError("Debe iniciar sesion", 401);
@@ -105,6 +107,7 @@ export async function registrarEntrada(usuario) {
   const transaction = await beginTransaction();
 
   try {
+    await bloquearColaboradorSolicitudes(colaboradorId, transaction);
     const periodo = await periodoRepository.getPeriodoByFecha(
       fechaAsignada,
       transaction,
@@ -145,6 +148,7 @@ export async function registrarEntrada(usuario) {
 
     await validarDiaSinPermisoAprobado(colaboradorId, fechaSQLComoTexto(fechaAsignada), transaction);
     await validarDiaSinIncapacidad(colaboradorId, fechaAsignada, transaction);
+    await validarDiasVacaciones(colaboradorId, fechaAsignada, fechaAsignada, transaction);
 
     const asistenciaDiariaExistente =
       await asistenciasRepository.getAsistenciaByColaboradorYFecha(
@@ -212,6 +216,7 @@ export async function registrarSalida(usuario) {
   const transaction = await beginTransaction();
 
   try {
+    await bloquearColaboradorSolicitudes(colaboradorId, transaction);
     // 4. Validar período abierto.
     const periodo = await periodoRepository.getPeriodoByFecha(
       fechaAsignada,
@@ -246,6 +251,7 @@ export async function registrarSalida(usuario) {
 
     await validarDiaSinPermisoAprobado(colaboradorId, fechaSQLComoTexto(fechaAsignada), transaction);
     await validarDiaSinIncapacidad(colaboradorId, fechaAsignada, transaction);
+    await validarDiasVacaciones(colaboradorId, fechaAsignada, fechaAsignada, transaction);
 
     // 6. Obtener y validar la asistencia diaria.
     const asistenciaDiariaExistente =

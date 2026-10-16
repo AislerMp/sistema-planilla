@@ -31,6 +31,9 @@ mock.method(pool, "request", () => {
       return this;
     },
     async query(query) {
+      // Estos escenarios previos no tienen vacaciones superpuestas.
+      if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
+      if (query.includes("FROM dbo.Colaboradores") && query.includes("WITH (UPDLOCK, HOLDLOCK)")) return { recordset: [{ ColaboradorId: 4 }] };
       const next = expected.shift();
       assert.ok(next, `Consulta inesperada: ${query}`);
       assert.match(query, next.pattern);
@@ -323,6 +326,8 @@ test("minutos calculados permite cero y usa la transaccion del llamador", async 
 
 test("ajustar minutos revierte ante periodo cerrado o plazo vencido", async () => {
   for (const periodo of [
+    { Estado: "PROGRAMADO", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") },
+    { Estado: "PAGADO", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") },
     { Estado: "CERRADO", FechaLimiteAjustes: new Date("9999-12-31T00:00:00Z") },
     { Estado: "ABIERTO", FechaLimiteAjustes: new Date("2000-12-31T00:00:00Z") },
   ]) {
@@ -334,6 +339,28 @@ test("ajustar minutos revierte ante periodo cerrado o plazo vencido", async () =
     assert.equal(sql.Transaction.prototype.rollback.mock.callCount(), rollbacks + 1);
   }
 });
+
+for (const Estado of ["ABIERTO", "EN_REVISION"]) {
+  for (const vencido of [false, true]) {
+    test(`ajustes de asistencia ${Estado}: ${vencido ? "jueves rechaza aunque la tarea no haya cerrado" : "miércoles 23:59:59 permite"}`, async (t) => {
+      t.mock.timers.enable({ apis: ["Date"], now: new Date(vencido ? "2026-10-29T06:00:00Z" : "2026-10-29T05:59:59Z") });
+      respond(/FROM Usuarios/, [{ RestauranteId: 3 }]);
+      respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1, ColaboradorId: 8, FechaAsignada: new Date("2026-10-25"), PeriodoId: 2, RestauranteId: 3, MinutosCalculados: 60, MinutosAjustados: null }]);
+      respond(/FROM dbo.PeriodosPlanilla/, [{ Estado, FechaLimiteAjustes: new Date("2026-10-28T00:00:00Z") }]);
+      if (vencido) {
+        await assert.rejects(asistencias.ajustarMinutosAsistencia(1, 0, "Corrección", { UsuarioId: 1, Rol: "GERENTE" }), { status: 409 });
+      } else {
+        respond(/FROM dbo.PermisosLaborales/, []);
+        respond(/FROM dbo.Incapacidades/, []);
+        respond(/SET MinutosAjustados = @Minutos/, [{ AsistenciaId: 1, MinutosCalculados: 60, MinutosAjustados: 0 }]);
+        respond(/INSERT INTO dbo.Bitacora/);
+        respond(/FROM dbo.HorasExtras/, []);
+        const result = await asistencias.ajustarMinutosAsistencia(1, 0, "Corrección", { UsuarioId: 1, Rol: "GERENTE" });
+        assert.equal(result.MinutosEfectivos, 0);
+      }
+    });
+  }
+}
 
 test("asistencias valida la fecha con un mensaje identificable", async () => {
   await assert.rejects(

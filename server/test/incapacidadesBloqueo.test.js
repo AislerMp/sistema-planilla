@@ -43,6 +43,7 @@ for (const estado of ["PENDIENTE", "EN_REVISION_RH", "APROBADA"]) {
           input(name, _type, value) { parametros[name] = value; return this; },
           async query(query) {
             assert.doesNotMatch(query, /\b(INSERT|UPDATE|DELETE)\b/);
+            if (query.includes("FROM dbo.Colaboradores") && query.includes("WITH (UPDLOCK, HOLDLOCK)")) return { recordset: [{ ColaboradorId: 4 }] };
             if (query.includes("FROM dbo.PeriodosPlanilla")) {
               return { recordset: [{ PeriodoId: 1, Estado: "ABIERTO", FechaLimiteAjustes: new Date("2099-12-31") }] };
             }

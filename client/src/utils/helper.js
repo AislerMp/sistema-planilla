@@ -1,3 +1,5 @@
+const API_URL = import.meta.env.VITE_API_URL;
+
 export async function parseResponse(response) {
   const contentType = response.headers.get("content-type") ?? "";
 
@@ -25,4 +27,10 @@ export function crearQuery(filtros) {
   }
   const query = params.toString();
   return query ? `?${query}` : "";
+}
+
+export function ensureApiUrl() {
+  if (!API_URL) {
+    throw new Error("Falta configurar VITE_API_URL en client/.env");
+  }
 }

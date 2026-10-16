@@ -118,3 +118,13 @@ export async function descargarComprobanteController(req, res, next) {
     }
   });
 }
+
+export async function revertirIncapacidadController(req, res) {
+  const incapacidad = await incapacidadesServices.revertirIncapacidad(
+    req.params.id,
+    req.body ?? {},
+    req.user,
+  );
+
+  return res.status(200).json(incapacidad);
+}

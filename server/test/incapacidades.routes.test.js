@@ -23,6 +23,8 @@ mock.method(pool, "request", () => {
   return {
     input(name, _type, value) { parametros[name] = value; return this; },
     async query(query) {
+      // Estos escenarios previos no tienen vacaciones superpuestas.
+      if (query.includes("FROM dbo.Vacaciones")) return { recordset: [] };
       const respuesta = expected.shift();
       assert.ok(respuesta, `Consulta inesperada: ${query}`);
       assert.match(query, respuesta.pattern);
