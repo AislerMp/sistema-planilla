@@ -16,7 +16,7 @@ import {
 import { validarDiasVacaciones } from "../vacaciones/services/vacaciones.service.js";
 
 import { validarDiaSinPermisoAprobado } from "../permisosLaborales/permisosLaborales.service.js";
-import { validarDiaSinIncapacidad } from "../incapacidades/incapacidades.services.js";
+import { validarDiaSinIncapacidad } from "../incapacidades/services/incapacidades.services.js";
 import * as horasExtraRepository from "./horasExtras.repository.js";
 import * as asistenciasRepository from "../asistenciasDiarias/asistenciasDiarias.repository.js";
 import {

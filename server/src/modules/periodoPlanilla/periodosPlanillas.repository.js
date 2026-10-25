@@ -14,7 +14,14 @@ export async function getPeriodos(transaction = null) {
       CreadoPorUsuarioId,
       FechaCreacion
     FROM dbo.PeriodosPlanilla
-    ORDER BY FechaInicio DESC;
+    ORDER BY
+      CASE
+        WHEN CAST(GETDATE() AS DATE) BETWEEN FechaInicio AND FechaFin THEN 0  -- actual
+        WHEN FechaInicio > CAST(GETDATE() AS DATE) THEN 1                      -- futuros
+        ELSE 2                                                                 -- pasados
+      END,
+      CASE WHEN FechaInicio > CAST(GETDATE() AS DATE) THEN FechaInicio END ASC, -- futuros: el más cercano primero
+      FechaInicio DESC   
   `);
 
   return result.recordset || [];

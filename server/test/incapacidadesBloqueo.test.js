@@ -7,7 +7,7 @@ Object.assign(process.env, {
 });
 
 const { pool, sql } = await import("../src/shared/config/database.js");
-const { validarDiaSinIncapacidad } = await import("../src/modules/incapacidades/incapacidades.services.js");
+const { validarDiaSinIncapacidad } = await import("../src/modules/incapacidades/services/incapacidades.services.js");
 const { registrarEntrada, registrarSalida } = await import("../src/modules/marcas/marcas.service.js");
 const { ajustarMinutosAsistencia } = await import("../src/modules/asistenciasDiarias/asistenciasDiarias.service.js");
 const { actualizarHorasExtra } = await import("../src/modules/extras/horasExtras.service.js");

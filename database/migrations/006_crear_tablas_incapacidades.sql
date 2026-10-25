@@ -64,7 +64,7 @@ BEGIN TRY
             PRIMARY KEY (CalculoId),
 
         CONSTRAINT UQ_CalculosIncapacidad_Solicitud
-            UNIQUE (SolicitudId),
+            UNIQUE (SolicitudId, PeriodoId),
 
         CONSTRAINT FK_CalculosIncapacidad_Incapacidades
             FOREIGN KEY (SolicitudId)

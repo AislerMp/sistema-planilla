@@ -9,19 +9,20 @@ import {
   History,
   HeartPulse,
   Settings2,
+  ReceiptText,
 } from "lucide-react";
 
 export const menuGroups = [
   {
     id: "solicitudes",
     title: "Solicitudes y permisos",
-    description: "Horas extras, permisos laborales e incapacidades en un mismo lugar.",
+    description: "Horas extras, permisos, incapacidades, vacaciones y deducciones en un mismo lugar.",
     icon: ClipboardList,
   },
   {
     id: "mantenimiento",
     title: "Mantenimiento",
-    description: "Personal, restaurantes, puestos y cuentas de acceso al sistema.",
+    description: "Personal, restaurantes, puestos, deducciones y cuentas de acceso.",
     icon: Settings2,
   },
   {
@@ -79,6 +80,24 @@ export const menuItems = [
     nonPermision: [],
   },
   {
+    title: "Vacaciones",
+    path: "/vacaciones",
+    group: "solicitudes",
+    icon: CalendarDays,
+    description: "Saldo, solicitudes y seguimiento de vacaciones.",
+    showCount: false,
+    nonPermision: [],
+  },
+  {
+    title: "Solicitudes de deducciones",
+    path: "/solicitudes-deducciones",
+    group: "solicitudes",
+    icon: ReceiptText,
+    description: "Solicitud y seguimiento de deducciones adicionales.",
+    showCount: false,
+    nonPermision: [],
+  },
+  {
     title: "Colaboradores",
     path: "/colaboradores",
     group: "mantenimiento",
@@ -103,6 +122,15 @@ export const menuItems = [
     icon: BriefcaseBusiness,
     description: "Cargos y tarifas de pago por hora.",
     label: "puestos activos",
+    nonPermision: ["COLABORADOR", "GERENTE"],
+  },
+  {
+    title: "Deducciones",
+    path: "/deducciones",
+    group: "mantenimiento",
+    icon: ReceiptText,
+    description: "Conceptos legales y adicionales del catálogo.",
+    showCount: false,
     nonPermision: ["COLABORADOR", "GERENTE"],
   },
   {

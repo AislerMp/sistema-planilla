@@ -11,13 +11,15 @@ Object.assign(process.env, {
 
 const { pool, sql } = await import("../src/shared/config/database.js");
 const incapacidades = await import(
-  "../src/modules/incapacidades/incapacidades.services.js"
+  "../src/modules/incapacidades/services/incapacidades.services.js"
 );
 
 for (const caso of [
   { estado: "APROBADA", accion: "APROBAR_INCAPACIDAD", calcular: true },
+  { estado: "APROBADA", accion: "APROBAR_INCAPACIDAD", calcular: true, codigo: "RIESGO_TRABAJO_INS", porcentaje: 0, minutos: 0 },
+  { estado: "APROBADA", accion: "APROBAR_INCAPACIDAD", calcular: true, estadoPeriodo: "EN_REVISION", periodoPermitido: true },
   { estado: "RECHAZADA", accion: "RECHAZAR_INCAPACIDAD", calcular: false },
-  ...["PROGRAMADO", "EN_REVISION", "CERRADO", "PAGADO"].map((estadoPeriodo) => ({
+  ...["PROGRAMADO", "CERRADO", "PAGADO"].map((estadoPeriodo) => ({
     estado: "APROBADA", accion: "APROBAR_INCAPACIDAD", calcular: true, estadoPeriodo,
   })),
   {
@@ -28,7 +30,7 @@ for (const caso of [
   },
 ]) {
   test(
-    `resolver incapacidad RH ${caso.estadoPeriodo ? `rechaza cálculo en período ${caso.estadoPeriodo}` : caso.fallaBitacora ? "revierte la bitácora fallida" : `registra ${caso.estado.toLowerCase()}`}`,
+    `resolver incapacidad RH ${caso.estadoPeriodo ? `${caso.periodoPermitido ? "acepta" : "rechaza"} cálculo en período ${caso.estadoPeriodo}` : caso.fallaBitacora ? "revierte la bitácora fallida" : `registra ${caso.estado.toLowerCase()} ${caso.codigo ?? "ENFERMEDAD_CCSS"}`}`,
     async (t) => {
       t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-12T09:59:59Z") });
       const eventos = [];
@@ -55,12 +57,13 @@ for (const caso of [
         Observacion: "Revisada",
         RevisadoPorRhId: usuario.UsuarioId,
       };
+      let solicitudAlmacenada = solicitud;
       const calculoCreado = {
         CalculoId: 93,
         SolicitudId: solicitud.SolicitudId,
         PeriodoId: 5,
-        MinutosReconocidos: 1440,
-        PorcentajePatronalAplicado: 50,
+        MinutosReconocidos: caso.minutos ?? 720,
+        PorcentajePatronalAplicado: caso.porcentaje ?? 50,
       };
 
       t.mock.method(pool, "connect", async () => pool);
@@ -86,7 +89,7 @@ for (const caso of [
           const parametros = this.parametros;
           if (query.includes("FROM dbo.Solicitudes AS s")) {
             eventos.push("leer-incapacidad");
-            return { recordset: [solicitud] };
+            return { recordset: [solicitudAlmacenada] };
           }
           if (query.includes("s.ColaboradorId = @colaboradorId")) {
             return { recordset: [solicitud] };
@@ -97,8 +100,8 @@ for (const caso of [
               recordset: [
                 {
                   TipoIncapacidadId: 1,
-                  Codigo: "ENFERMEDAD_CCSS",
-                  PorcentajePatronal: 50,
+                  Codigo: caso.codigo ?? "ENFERMEDAD_CCSS",
+                  PorcentajePatronal: caso.porcentaje ?? 50,
                 },
               ],
             };
@@ -116,16 +119,20 @@ for (const caso of [
             eventos.push("buscar-calculo");
             return { recordset: [] };
           }
+          if (query.includes("FROM dbo.AsistenciasDiarias")) return { recordset: [] };
           if (query.includes("UPDATE dbo.Solicitudes")) {
             eventos.push("resolver-solicitud");
             assert.equal(parametros.solicitudId, solicitud.SolicitudId);
             assert.equal(parametros.estado, caso.estado);
             assert.equal(parametros.revisadoPorRhId, usuario.UsuarioId);
+            solicitudAlmacenada = { ...solicitud, ...incapacidadActualizada };
             return { recordset: [incapacidadActualizada] };
           }
           if (query.includes("INSERT INTO dbo.CalculosIncapacidad")) {
             eventos.push("crear-calculo");
             assert.equal(parametros.solicitudId, solicitud.SolicitudId);
+            assert.equal(parametros.minutosReconocidos, calculoCreado.MinutosReconocidos);
+            assert.equal(parametros.porcentajePatronalAplicado, calculoCreado.PorcentajePatronalAplicado);
             return { recordset: [calculoCreado] };
           }
 
@@ -163,7 +170,7 @@ for (const caso of [
         usuario,
       );
 
-      if (caso.estadoPeriodo) {
+      if (caso.estadoPeriodo && !caso.periodoPermitido) {
         await assert.rejects(resolver, { status: 409 });
         assert.equal(eventos.at(-1), "rollback");
         assert.equal(eventos.includes("crear-calculo"), false);

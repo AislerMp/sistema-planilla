@@ -26,9 +26,17 @@ import {
   validarRestauranteSolicitudes,
 } from "../../../shared/utils/solicitudUtils.js";
 
+import {
+  fechaSQLComoTexto,
+  obtenerCalendarioActual,
+} from "../../../shared/utils/fechaUtils.js";
+
 import { registrarCalculoVacaciones } from "./calculosVacaciones.service.js";
 import * as calculosRepository from "../repositorios/calculosVacaciones.repository.js";
-import { fechaSQLComoTexto } from "../../../shared/utils/fechaUtils.js";
+import {
+  getIncapacidadesSuperpuestas,
+  getIncapacidadVigenteByFecha,
+} from "../../incapacidades/incapacidades.repository.js";
 export async function getVacacionesById(solicitudID, usuario) {
   const id = validateId(solicitudID);
 
@@ -41,6 +49,18 @@ export async function getVacacionesById(solicitudID, usuario) {
 
   await validarAccesoSolicitud(vacacionSolicitud, usuario);
   return vacacionSolicitud;
+}
+
+export async function obtenerCalculosVacaciones(solicitudId, usuario) {
+  if (!["RECURSOS_HUMANOS", "ADMINISTRADOR"].includes(usuario?.Rol)) {
+    throw serviceError(
+      "Solo Recursos Humanos y Administración pueden consultar los cálculos de vacaciones.",
+      403,
+    );
+  }
+
+  const solicitud = await getVacacionesById(solicitudId, usuario);
+  return calculosRepository.getCalculosBySolicitud(solicitud.SolicitudId);
 }
 
 export async function getMisVacaciones(filtros = {}, usuario) {
@@ -106,6 +126,23 @@ export async function solicitarVacaciones(datos, usuario) {
     );
   }
 
+  // La fecha solicitada no deberia de estar dentro de la semana actual
+
+  const { fechaHoy } = obtenerCalendarioActual();
+  const inicioSemana = validateDate(fechaHoy, "Fecha actual");
+  const diasDesdeLunes = (inicioSemana.getUTCDay() + 6) % 7;
+  inicioSemana.setUTCDate(inicioSemana.getUTCDate() - diasDesdeLunes);
+
+  const inicioSiguienteSemana = new Date(inicioSemana);
+  inicioSiguienteSemana.setUTCDate(inicioSiguienteSemana.getUTCDate() + 7);
+
+  if (fechaInicio >= inicioSemana && fechaInicio < inicioSiguienteSemana) {
+    throw serviceError(
+      "La fecha de inicio de las vacaciones no puede estar dentro de la semana actual (de lunes a domingo).",
+      400,
+    );
+  }
+
   const diferenciaDias =
     Math.floor((fechaFin.getTime() - fechaInicio.getTime()) / 86_400_000) + 1;
 
@@ -156,6 +193,34 @@ export async function solicitarVacaciones(datos, usuario) {
     ) {
       throw serviceError(
         "Los días solicitados superan los días disponibles.",
+        409,
+      );
+    }
+
+    // No deberia de poder hacer otra solicitud de vacaciones si ya hay una pendiente
+    const tienePendiente = await vacacionesRepository.existeVacacionPendiente(
+      colaboradorId,
+      transaction,
+    );
+
+    if (tienePendiente) {
+      throw serviceError(
+        "Ya tenés una solicitud de vacaciones pendiente.",
+        409,
+      );
+    }
+
+    // Hay que comprobar si en la fecha de las vacaciones solicitadas existe alguna incapacidad, si existe entonces invalida solicitud
+    const incapacidadesSuperpuestas = await getIncapacidadesSuperpuestas(
+      colaboradorId,
+      datosVacaciones.fechaInicio,
+      datosVacaciones.fechaFin,
+      transaction,
+    );
+
+    if (incapacidadesSuperpuestas.length > 0) {
+      throw serviceError(
+        "Las fechas solicitadas coinciden con una incapacidad pendiente, en revisión o aprobada.",
         409,
       );
     }
@@ -272,6 +337,28 @@ export async function revisarVacacionesGerente(
     if (solicitudActual.Estado !== "PENDIENTE") {
       throw serviceError(
         "La solicitud ya fue revisada y no está pendiente de revisión del gerente.",
+        409,
+      );
+    }
+
+    const vacaciones = await vacacionesRepository.getVacacionesByColaborador(
+      solicitudActual.ColaboradorId,
+      {},
+      transaction,
+    );
+
+    const vacacionesPendientes = vacaciones.find(
+      (currentVacacion) =>
+        currentVacacion.SolicitudId !== id &&
+        ["PENDIENTE", "EN_REVISION_RH"].includes(currentVacacion.Estado) &&
+        currentVacacion.FechaInicio < solicitudActual.FechaInicio,
+    );
+
+    if (vacacionesPendientes) {
+      throw serviceError(
+        `Debe resolver primero la solicitud ${
+          vacacionesPendientes.SolicitudId
+        }, correspondiente a una solicitud de vacaciones anterior.`,
         409,
       );
     }
@@ -459,7 +546,10 @@ export async function resolverVacacionesRH(
         transaction,
       );
     } else {
-      await bloquearColaboradorSolicitudes(vacacionActual.ColaboradorId, transaction);
+      await bloquearColaboradorSolicitudes(
+        vacacionActual.ColaboradorId,
+        transaction,
+      );
       await validarDiasVacaciones(
         vacacionActual.ColaboradorId,
         vacacionActual.FechaInicio,
@@ -514,6 +604,27 @@ export async function resolverVacacionesRH(
         throw serviceError(
           "No se pudo registrar el cálculo de vacaciones.",
           500,
+        );
+      }
+
+      const saldoVacacionActual = await saldosRepository.getSaldoByColaborador(
+        vacacionActual.ColaboradorId,
+        transaction,
+      );
+      const nuevosDiasUtilizados =
+        Number(saldoVacacionActual.DiasUtilizados) +
+        Number(vacacionActual.DiasSolicitados);
+
+      const saldoActualizado = await saldosRepository.updateDiasUtilizados(
+        vacacionActual.ColaboradorId,
+        nuevosDiasUtilizados,
+        transaction,
+      );
+
+      if (!saldoActualizado) {
+        throw serviceError(
+          "No se pudo actualizar el saldo de vacaciones.",
+          409,
         );
       }
     }
@@ -668,7 +779,7 @@ export async function revertirVacaciones(
       estadoDestino,
       transaction,
     );
-    
+
     if (!cabecera) {
       throw serviceError(
         "No se pudo revertir la solicitud porque su estado cambió durante la operación.",

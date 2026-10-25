@@ -16,6 +16,7 @@ import bitacoraRoutes from "./modules/bitacora/bitacora.routes.js";
 import permisosLaboralesRoutes from "./modules/permisosLaborales/permisosLaborales.routes.js";
 import incapacidadesRoutes from "./modules/incapacidades/incapacidades.routes.js";
 import vacacionesRoutes from "./modules/vacaciones/vacaciones.routes.js";
+import deduccionesRoutes from "./modules/deducciones/deducciones.routes.js";
 
 import { isAuthenticate } from "./shared/middlewares/auth.middleware.js";
 import { errorHandler } from "./shared/middlewares/error.middleware.js";
@@ -63,6 +64,7 @@ app.use("/api/bitacoras", bitacoraRoutes);
 app.use("/api/permisos-laborales", permisosLaboralesRoutes);
 app.use("/api/incapacidades", incapacidadesRoutes);
 app.use("/api/vacaciones", vacacionesRoutes);
+app.use("/api/deducciones", deduccionesRoutes);
 
 app.use(errorHandler);
 

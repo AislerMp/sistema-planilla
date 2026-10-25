@@ -18,6 +18,7 @@ import { formatDate } from "../utils/fechaUtils.js";
 import Dialog from "../components/dialog.jsx";
 import { confirmarReversion, notifySuccess } from "../utils/notifications.js";
 import { puedeRevertirSolicitudFutura } from "../utils/reversionSolicitudes.js";
+import { ordenarSolicitudesPorEstado } from "../utils/solicitudUtils.js";
 
 
 const emptyCheckSolicitudForm = {
@@ -85,7 +86,7 @@ export default function SolicitudesHorasExtra() {
       : getSolicitudesPorRestaurante(filters);
   }, [filters, isColaborador, puedeConsultar, reloadKey]);
 
-  const solicitudes = data ?? [];
+  const solicitudes = ordenarSolicitudesPorEstado(data, user?.Rol);
 
   const {
     data: restaurantesData,

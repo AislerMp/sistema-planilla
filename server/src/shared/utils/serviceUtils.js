@@ -66,3 +66,19 @@ export function validateDate(value, field, optional = false) {
   
   return date;
 }
+
+export async function validateNumber(value, field, optional = false) {
+  if (optional && (value === undefined || value === null || value === ""))
+    return null;
+
+  const number =
+    typeof value === "number" ||
+    (typeof value === "string" && /^\d+(\.\d+)?$/.test(value.trim()))
+      ? Number(value)
+      : NaN;
+
+  if (Number.isNaN(number)) {
+    throw serviceError(`${field} debe ser un número válido`);
+  }
+  return number;
+}

@@ -1058,6 +1058,277 @@ label {
 .catalog-form .table-actions, .catalog-form fieldset > p { grid-column: 1 / -1; }
 .catalog-message { padding: 16px 24px; }
 
+/* Catálogo de deducciones. */
+.deducciones-page { max-width: 1120px; margin: 0 auto; }
+.deducciones-page-heading { margin-bottom: 24px; }
+.deducciones-page-heading .button { align-self: center; }
+.deducciones-volver {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 20px;
+  color: var(--color-info);
+}
+.deducciones-volver:hover { text-decoration: underline; }
+.deducciones-section-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: var(--color-hover);
+  color: var(--color-accent);
+}
+.deducciones-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.deducciones-section-heading h2,
+.deducciones-results-heading h2 { font-size: 18px; }
+.deducciones-section-heading p,
+.deducciones-results-heading p { margin-top: 3px; color: var(--color-text-muted); font-size: 12px; }
+.deducciones-kicker {
+  margin-bottom: 5px;
+  color: var(--color-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.deducciones-filter-panel { padding: 24px; margin-bottom: 20px; }
+.deducciones-filtros {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+}
+.deducciones-filtros label { display: grid; gap: 8px; }
+.deducciones-filtros input, .deducciones-filtros select { width: 100%; }
+.deducciones-filter-actions { display: flex; gap: 8px; }
+.deducciones-results-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+.deducciones-page table { min-width: 790px; white-space: normal; }
+.deducciones-page th, .deducciones-page td { padding: 16px 20px; }
+.deducciones-page tbody tr:hover { background: var(--color-hover); }
+.deducciones-concepto strong, .deducciones-fecha strong { display: block; font-weight: 650; }
+.deducciones-concepto small, .deducciones-fecha small {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-muted);
+}
+.deducciones-tipo {
+  display: inline-block;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: var(--color-soft);
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+.deducciones-tipo--legal { background: #eaf2f8; color: #365d78; }
+.deducciones-tipo--adicional { background: #f3eff5; color: #695674; }
+:root[data-theme="dark"] .deducciones-tipo--legal { background: #273743; color: #bbd3e4; }
+:root[data-theme="dark"] .deducciones-tipo--adicional { background: #352c39; color: #d5c0dd; }
+.deducciones-porcentaje { font-weight: 600; }
+.deducciones-table-link { min-height: 38px; padding: 8px 12px; white-space: nowrap; }
+.deducciones-form { max-width: 880px; padding: 0; }
+.deducciones-form .deducciones-create-fieldset { display: block; }
+.deducciones-form-section { padding: 28px 30px; border-bottom: 1px solid var(--color-border); }
+.deducciones-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.deducciones-form-grid label { display: grid; align-content: start; gap: 8px; }
+.deducciones-form-grid input, .deducciones-form-grid select { width: 100%; }
+.deducciones-form-hint { margin-top: 16px; color: var(--color-text-muted); font-size: 12px; }
+.deducciones-form-actions { justify-content: flex-end; }
+.deducciones-form > .alert-message { margin: 24px 30px 0; }
+.deducciones-form .deducciones-form-actions { padding: 22px 30px; }
+.deducciones-overview {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 26px 28px;
+  margin-bottom: 20px;
+  border-top: 3px solid var(--color-primary);
+}
+.deducciones-overview-main { display: flex; align-items: flex-start; gap: 16px; min-width: 0; }
+.deducciones-overview h2 { overflow-wrap: anywhere; }
+.deducciones-overview-code { margin-top: 5px; color: var(--color-text-muted); font-size: 13px; }
+.deducciones-overview > .status-badge { flex: 0 0 auto; margin-top: 4px; }
+.deducciones-management-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.deducciones-info-panel, .deducciones-action-panel { padding: 26px; }
+.deducciones-info-panel .deducciones-section-heading { justify-content: space-between; }
+.deducciones-version-id {
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: var(--color-soft);
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.deducciones-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin: 0;
+  padding-top: 22px;
+  border-top: 1px solid var(--color-border);
+}
+.deducciones-detail-grid dt { color: var(--color-text-muted); font-size: 12px; }
+.deducciones-detail-grid dd { margin: 6px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.deducciones-action-panel > p { margin: -8px 0 18px; color: var(--color-text-muted); font-size: 13px; }
+.deducciones-action-list { display: grid; gap: 8px; }
+.deducciones-action-list button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 50px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-field);
+  color: var(--color-text);
+  text-align: left;
+  font-weight: 600;
+}
+.deducciones-action-list button svg { color: var(--color-accent); }
+.deducciones-action-list button:hover:not(:disabled) { border-color: var(--color-accent); background: var(--color-hover); }
+.deducciones-action-list button:disabled { opacity: 0.5; }
+.deducciones-page .solicitudes-modal { width: min(720px, calc(100vw - 32px)); }
+.deducciones-dialog-resumen {
+  display: grid;
+  gap: 5px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+.deducciones-dialog-resumen strong { overflow-wrap: anywhere; }
+.deducciones-dialog-resumen span,
+.deducciones-dialog-nota,
+.deducciones-history-heading p { color: var(--color-text-muted); font-size: 13px; }
+.deducciones-dialog-nota { margin: 12px 0 0; }
+.deducciones-dialog-resumen + .alert-message,
+.deducciones-dialog-nota + .alert-message { margin-top: 20px; }
+.deducciones-dialog-form { margin-top: 20px; }
+.deducciones-dialog-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.deducciones-dialog-fields label { display: grid; align-content: start; gap: 8px; }
+.deducciones-dialog-fields input { width: 100%; min-width: 0; }
+.deducciones-dialog-form .deducciones-form-actions { margin-top: 24px; }
+.deducciones-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.deducciones-history-message { padding: 20px 0; color: var(--color-text-muted); }
+.deducciones-history-table { border: 1px solid var(--color-border); border-radius: 8px; }
+.deducciones-history-table table { min-width: 600px; }
+@media (max-width: 850px) {
+  .deducciones-filtros { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .deducciones-filter-actions { grid-column: 1 / -1; }
+  .deducciones-management-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 540px) {
+  .deducciones-page-heading { flex-wrap: wrap; }
+  .deducciones-page-heading .button { width: 100%; }
+  .deducciones-filter-panel, .deducciones-info-panel, .deducciones-action-panel { padding: 20px; }
+  .deducciones-filtros, .deducciones-form-grid,
+  .deducciones-dialog-fields, .deducciones-detail-grid { grid-template-columns: minmax(0, 1fr); }
+  .deducciones-filter-actions .button { flex: 1; }
+  .deducciones-form-section { padding: 22px 20px; }
+  .deducciones-form .deducciones-form-actions { padding: 20px; }
+  .deducciones-form-actions .button { flex: 1 1 140px; }
+  .deducciones-overview { padding: 22px 20px; flex-wrap: wrap; }
+}
+
+/* Solicitudes de deducciones: listado, formulario y detalle. */
+.deduccion-solicitudes-page { max-width: 1120px; margin: 0 auto; }
+.deduccion-solicitudes-page .page-header { align-items: flex-end; }
+.deduccion-solicitudes-page .page-header .button { flex-shrink: 0; }
+.deduccion-solicitudes-intro { display: flex; align-items: center; gap: 18px; padding: 20px 24px; margin-bottom: 20px; border-left: 3px solid var(--color-primary); }
+.deduccion-solicitudes-icon { display: grid; place-items: center; flex: 0 0 46px; width: 46px; height: 46px; border-radius: 10px; background: var(--color-hover); color: var(--color-accent); }
+.deduccion-solicitudes-intro h2, .deduccion-solicitudes-card h2, .deduccion-solicitudes-table-heading h2 { margin: 0; font-size: 18px; }
+.deduccion-solicitudes-intro p, .deduccion-solicitudes-card-heading p { margin-top: 5px; color: var(--color-text-muted); font-size: 13px; line-height: 1.5; }
+.deduccion-solicitudes-form select { width: 100%; min-width: 0; }
+.deduccion-solicitudes-table-heading { align-items: center; border-bottom: 1px solid var(--color-border); }
+.deduccion-solicitudes-table-heading .solicitud-create-note { margin-top: 5px; }
+.deduccion-solicitudes-page table { min-width: 790px; }
+.deduccion-solicitudes-page th, .deduccion-solicitudes-page td { padding: 15px 18px; }
+.deduccion-solicitudes-small { display: block; margin-top: 4px; color: var(--color-text-muted); font-size: 11px; }
+.deduccion-solicitudes-demo { color: var(--color-text-muted); font-size: 12px; }
+.deduccion-solicitudes-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(270px, 1fr); align-items: start; gap: 20px; }
+.deduccion-solicitudes-main, .deduccion-solicitudes-aside { display: grid; gap: 20px; min-width: 0; }
+.deduccion-solicitudes-card { padding: 26px; }
+.deduccion-solicitudes-card-heading { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 22px; }
+.deduccion-solicitudes-card-heading > svg { flex-shrink: 0; color: var(--color-accent); }
+.deduccion-solicitudes-form { display: grid; gap: 20px; }
+.deduccion-solicitudes-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.deduccion-solicitudes-form fieldset { gap: 18px; }
+.deduccion-solicitudes-authorization { display: flex; gap: 12px; padding: 15px; border-radius: 8px; background: var(--color-hover); color: var(--color-text); }
+.deduccion-solicitudes-authorization svg { flex-shrink: 0; color: var(--color-accent); }
+.deduccion-solicitudes-authorization p { font-size: 13px; line-height: 1.55; }
+.deduccion-solicitudes-form .deduccion-solicitudes-demo { text-align: right; }
+.deduccion-solicitudes-steps { display: grid; gap: 20px; margin: 0; padding: 0; list-style: none; }
+.deduccion-solicitudes-steps li { display: flex; gap: 12px; }
+.deduccion-solicitudes-steps li > span { display: grid; place-items: center; flex: 0 0 28px; height: 28px; border-radius: 50%; background: var(--color-hover); color: var(--color-accent); font-size: 12px; font-weight: 700; }
+.deduccion-solicitudes-steps strong { font-size: 13px; }
+.deduccion-solicitudes-steps p, .deduccion-solicitudes-hint p { margin-top: 5px; color: var(--color-text-muted); font-size: 13px; line-height: 1.5; }
+.deduccion-solicitudes-hint { background: var(--color-field); }
+.deduccion-solicitudes-detail-header .solicitud-state { padding: 8px 12px; font-size: 12px; }
+.deduccion-solicitudes-hero { margin-bottom: 20px; }
+.deduccion-solicitudes-hero-title { display: flex; align-items: center; gap: 14px; }
+.deduccion-solicitudes-hero-title > div { min-width: 0; }
+.deduccion-solicitudes-hero-title h2 { margin: 4px 0; }
+.deduccion-solicitudes-hero-title p:last-child { color: var(--color-text-muted); font-size: 12px; }
+.deduccion-solicitudes-hero-title .deduccion-solicitudes-demo { margin-left: auto; white-space: nowrap; }
+.deduccion-solicitudes-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin: 22px 0 0; padding: 18px; border-radius: 8px; background: var(--color-field); }
+.deduccion-solicitudes-summary dt { color: var(--color-text-muted); font-size: 12px; }
+.deduccion-solicitudes-summary dd { margin: 6px 0 0; font-weight: 650; }
+.deduccion-solicitudes-progress { margin: 22px 0 0; padding-top: 20px; border-top: 1px solid var(--color-border); }
+.deduccion-solicitudes-progress li { display: flex; align-items: center; gap: 9px; flex: 1 1 140px; }
+.deduccion-solicitudes-detail-layout .solicitud-details { gap: 20px; }
+.deduccion-solicitudes-detail-layout .solicitud-create-form { display: grid; gap: 16px; }
+.deduccion-solicitudes-detail-layout .deduccion-solicitudes-demo { text-align: right; }
+.deduccion-solicitudes-timeline { display: grid; gap: 22px; margin-left: 8px; }
+.deduccion-solicitudes-timeline > div { position: relative; padding-left: 24px; border-left: 1px solid var(--color-border); }
+.deduccion-solicitudes-timeline strong { font-size: 13px; }
+.deduccion-solicitudes-timeline p { margin-top: 5px; color: var(--color-text-muted); font-size: 12px; line-height: 1.5; }
+.deduccion-solicitudes-timeline-dot { position: absolute; top: 2px; left: -6px; width: 11px; height: 11px; border-radius: 50%; background: var(--color-accent); }
+.deduccion-solicitudes-timeline > div:last-child .deduccion-solicitudes-timeline-dot { background: var(--color-soft); border: 1px solid var(--color-border); }
+@media (max-width: 850px) {
+  .deduccion-solicitudes-layout { grid-template-columns: minmax(0, 1fr); }
+  .deduccion-solicitudes-aside { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .deduccion-solicitudes-page .page-header { align-items: flex-start; }
+  .deduccion-solicitudes-page .page-header .button { width: 100%; }
+  .deduccion-solicitudes-intro { align-items: flex-start; }
+  .deduccion-solicitudes-field-grid, .deduccion-solicitudes-summary, .deduccion-solicitudes-aside { grid-template-columns: minmax(0, 1fr); }
+  .deduccion-solicitudes-card { padding: 20px; }
+  .deduccion-solicitudes-hero-title { flex-wrap: wrap; }
+  .deduccion-solicitudes-hero-title .deduccion-solicitudes-demo { margin-left: 0; }
+  .deduccion-solicitudes-detail-layout .solicitud-details { grid-template-columns: minmax(0, 1fr); }
+}
+
 .bitacoras-filters {
   margin-bottom: 20px;
 }

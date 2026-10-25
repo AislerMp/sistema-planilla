@@ -14,6 +14,7 @@ import {
 
 import { getRestaurantes } from "../../services/restaurantes.Service.js";
 import { formatDate } from "../../utils/fechaUtils.js";
+import { ordenarSolicitudesPorEstado } from "../../utils/solicitudUtils.js";
 
 const estadosLabel = {
   PENDIENTE: "Pendiente",
@@ -51,10 +52,7 @@ export default function ConsultarIncapacidades() {
     estado: null,
   });
 
-  const puedeConsultar =
-    esColaborador ||
-    esGerente ||
-    (puedeElegirRestaurante && !!filters.restauranteId);
+  const puedeConsultar = esColaborador || esGerente || puedeElegirRestaurante;
 
   const {
     data: restaurantesData,
@@ -82,7 +80,7 @@ export default function ConsultarIncapacidades() {
         );
   }, [esColaborador, esGerente, puedeConsultar, filters]);
   
-  const incapacidades = incapacidadesData ?? [];
+  const incapacidades = ordenarSolicitudesPorEstado(incapacidadesData, user?.Rol);
   const columnas = esColaborador ? 6 : 7;
   return (
     <div>
@@ -93,8 +91,12 @@ export default function ConsultarIncapacidades() {
       <div className="page-header">
         <div>
           <p className="eyebrow accent">CONSULTA Y SEGUIMIENTO</p>
-          <h1>Mis incapacidades</h1>
-          <p>Consultá tus solicitudes y el avance de su revisión.</p>
+          <h1>{esColaborador ? "Mis incapacidades" : "Incapacidades"}</h1>
+          <p>{esColaborador
+            ? "Consultá tus solicitudes y el avance de su revisión."
+            : esGerente
+              ? "Consultá las solicitudes de tu restaurante y el avance de su revisión."
+              : "Consultá las solicitudes de todos los restaurantes y el avance de su revisión."}</p>
         </div>
 
         <Link className="button button-primary" to="/incapacidades/registrar">
@@ -111,7 +113,6 @@ export default function ConsultarIncapacidades() {
         error={errorIncapacidades}
         puedeConsultar={puedeConsultar}
         mostrarRestaurante={puedeElegirRestaurante}
-        restauranteRequerido={puedeElegirRestaurante}
         restaurantes={restaurantes}
         cargandoRestaurantes={cargandoRestaurantes}
         errorRestaurantes={errorRestaurantes}
@@ -141,9 +142,7 @@ export default function ConsultarIncapacidades() {
               {!puedeConsultar ? (
                 <tr>
                   <td colSpan={columnas} className="catalog-message">
-                    {puedeElegirRestaurante
-                      ? "Seleccioná un restaurante y aplicá los filtros para consultar sus incapacidades."
-                      : "No tenés permisos para consultar incapacidades."}
+                    No tenés permisos para consultar incapacidades.
                   </td>
                 </tr>
               ) : isLoading ? (
@@ -187,7 +186,7 @@ export default function ConsultarIncapacidades() {
                         {dias} {dias === 1 ? "día" : "días"}
                       </td>
                       <td>
-                        {incapacidad.TipoSolicitud}
+                        {incapacidad.TipoIncapacidad}
                       </td>
                       <td>{incapacidad.NumeroDocumento}</td>
                       <td>

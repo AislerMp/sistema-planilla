@@ -20,6 +20,7 @@ import { getRestaurantes } from "../services/restaurantes.Service.js";
 import { formatDate } from "../utils/fechaUtils.js";
 import { confirmarReversion, notifySuccess } from "../utils/notifications.js";
 import { puedeRevertirSolicitudFutura } from "../utils/reversionSolicitudes.js";
+import { ordenarSolicitudesPorEstado } from "../utils/solicitudUtils.js";
 
 const estadosLabel = {
   PENDIENTE: "Pendiente",
@@ -82,7 +83,7 @@ export default function PermisosLaborales() {
       : getPermisosPorRestaurante(filters.restauranteId, filters);
   }, [filters, reloadKey]);
 
-  const permisos = permisosData ?? [];
+  const permisos = ordenarSolicitudesPorEstado(permisosData, user?.Rol);
 
   const {
     data: restaurantesData,

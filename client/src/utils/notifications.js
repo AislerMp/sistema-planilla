@@ -2,6 +2,30 @@ import Swal from "sweetalert2/dist/sweetalert2.js";
 import "sweetalert2/dist/sweetalert2.min.css";
 import { validarMotivoReversion } from "./reversionSolicitudes.js";
 
+export async function confirmarAprobacion(
+  { tipoSolicitud, solicitudId, enviarARh = false },
+  target,
+) {
+  const resultado = await Swal.fire({
+    titleText: enviarARh ? "¿Enviar la solicitud a RH?" : "¿Aprobar la solicitud?",
+    text: enviarARh
+      ? `La solicitud de ${tipoSolicitud} #${solicitudId} pasará a revisión de Recursos Humanos.`
+      : `Se aprobará la solicitud de ${tipoSolicitud} #${solicitudId} y se registrará su cálculo en planilla.`,
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonText: enviarARh ? "Sí, enviar a RH" : "Sí, aprobar",
+    cancelButtonText: "Cancelar",
+    reverseButtons: true,
+    focusCancel: true,
+    keydownListenerCapture: true,
+    background: "var(--color-surface)",
+    color: "var(--color-text)",
+    confirmButtonColor: "var(--color-primary)",
+    ...(target ? { target } : {}),
+  });
+  return resultado.isConfirmed;
+}
+
 export async function confirmarReversion(estadoDestino, target) {
   const resultado = await Swal.fire({
     titleText: "Deshacer resolución",

@@ -128,6 +128,7 @@ export async function getIncapacidadesByColaborador(
         s.RegistradoPorUsuarioId, s.Estado, s.Motivo,
         s.RevisadoPorGerenteId, s.RevisadoPorRhId, s.Observacion,
         i.NumeroDocumento, i.FechaInicio, i.FechaFin,
+        t.Codigo AS CodigoTipoIncapacidad,
         t.Nombre AS TipoIncapacidad, t.EntidadEmisora
       FROM dbo.Incapacidades AS i
       INNER JOIN dbo.Solicitudes AS s ON s.SolicitudId = i.SolicitudId
@@ -165,7 +166,8 @@ export async function getIncapacidadesByRestaurante(
       INNER JOIN dbo.TiposIncapacidad AS t ON t.TipoIncapacidadId = i.TipoIncapacidadId
       INNER JOIN dbo.Solicitudes AS s ON s.SolicitudId = i.SolicitudId
       INNER JOIN dbo.Colaboradores AS c ON c.ColaboradorId = s.ColaboradorId
-      WHERE s.TipoSolicitud = 'INCAPACIDAD' AND s.RestauranteId = @restauranteId
+      WHERE s.TipoSolicitud = 'INCAPACIDAD'
+        AND (@restauranteId IS NULL OR s.RestauranteId = @restauranteId)
         AND (@desde IS NULL OR i.FechaFin >= @desde)
         AND (@hasta IS NULL OR i.FechaInicio <= @hasta)
         AND (@estado IS NULL OR s.Estado = @estado)

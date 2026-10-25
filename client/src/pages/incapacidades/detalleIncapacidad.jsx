@@ -13,7 +13,7 @@ import {
   revertirIncapacidad,
 } from "../../services/incapacidades.Services.js";
 import { formatDate } from "../../utils/fechaUtils.js";
-import { confirmarReversion, notifySuccess } from "../../utils/notifications.js";
+import { confirmarAprobacion, confirmarReversion, notifySuccess } from "../../utils/notifications.js";
 import { obtenerEstadoReversionIncapacidad } from "../../utils/reversionSolicitudes.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useRef, useState } from "react";
@@ -48,7 +48,7 @@ export default function DetalleIncapacidad() {
   const [err, setErr] = useState(null);
   const [descargando, setDescargando] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const reversionEnCurso = useRef(false);
+  const operacionEnCurso = useRef(false);
 
   const {
     data: incapacidad,
@@ -86,14 +86,28 @@ export default function DetalleIncapacidad() {
   async function handleSubmit(e) {
     e.preventDefault();
 
-    if (error || isLoading || busy || reversionEnCurso.current || !incapacidad) return;
-    if (!isGerente && !isRH) return;
+    if (error || isLoading || busy || descargando || operacionEnCurso.current || !incapacidad) return;
+    const puedeRevisarGerencia = isGerente && incapacidad.Estado === "PENDIENTE";
+    const puedeResolverRh = isRH && incapacidad.Estado === "EN_REVISION_RH";
+    if (!puedeRevisarGerencia && !puedeResolverRh) return;
 
-    const estado = e.nativeEvent.submitter?.value || (isGerente ? "EN_REVISION_RH" : "APROBADA");
+    const estado = e.nativeEvent?.submitter?.value || (isGerente ? "EN_REVISION_RH" : "APROBADA");
+    const estadoAprobacion = puedeRevisarGerencia ? "EN_REVISION_RH" : "APROBADA";
+    if (!["RECHAZADA", estadoAprobacion].includes(estado)) return;
 
+    operacionEnCurso.current = true;
     try {
       setErr(null);
       setBusy(true);
+
+      if (estado !== "RECHAZADA") {
+        const confirmado = await confirmarAprobacion({
+          tipoSolicitud: "incapacidad",
+          solicitudId: incapacidad.SolicitudId,
+          enviarARh: puedeRevisarGerencia,
+        });
+        if (!confirmado) return;
+      }
 
       if (isGerente) {
         await revisarIncapacidadGerente(id, {
@@ -119,13 +133,14 @@ export default function DetalleIncapacidad() {
     } catch (error) {
       setErr(error.message);
     } finally {
+      operacionEnCurso.current = false;
       setBusy(false);
     }
   }
 
   async function deshacerResolucion() {
-    if (!estadoReversion || busy || reversionEnCurso.current || isLoading || error || descargando) return;
-    reversionEnCurso.current = true;
+    if (!estadoReversion || busy || operacionEnCurso.current || isLoading || error || descargando) return;
+    operacionEnCurso.current = true;
     setBusy(true);
     setErr(null);
     try {
@@ -138,13 +153,13 @@ export default function DetalleIncapacidad() {
     } catch (requestError) {
       setErr(requestError.message || "No se pudo deshacer la resolución.");
     } finally {
-      reversionEnCurso.current = false;
+      operacionEnCurso.current = false;
       setBusy(false);
     }
   }
 
   async function handleDescargar() {
-    if (descargando || busy || reversionEnCurso.current || !incapacidad) return;
+    if (descargando || busy || operacionEnCurso.current || !incapacidad) return;
     try {
       setErr(null);
       setDescargando(true);
@@ -299,6 +314,7 @@ export default function DetalleIncapacidad() {
                   <Download size={16} aria-hidden="true" /> {descargando ? "Descargando…" : "Descargar comprobante"}
                 </button>
               </section>
+              
               {incapacidad.Estado === "PENDIENTE" ? (
                 <form
                   className="data-panel catalog-form solicitud-create-form"

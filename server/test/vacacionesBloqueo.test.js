@@ -11,7 +11,7 @@ const marcas = await import("../src/modules/marcas/marcas.service.js");
 const asistencias = await import("../src/modules/asistenciasDiarias/asistenciasDiarias.service.js");
 const extras = await import("../src/modules/extras/horasExtras.service.js");
 const permisos = await import("../src/modules/permisosLaborales/permisosLaborales.service.js");
-const incapacidades = await import("../src/modules/incapacidades/incapacidades.services.js");
+const incapacidades = await import("../src/modules/incapacidades/services/incapacidades.services.js");
 const fecha = (texto) => new Date(`${texto}T00:00:00.000Z`);
 
 for (const caso of [

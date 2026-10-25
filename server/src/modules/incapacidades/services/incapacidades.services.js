@@ -1,45 +1,47 @@
-import * as incapacidadesRepository from "./incapacidades.repository.js";
-import * as calculosRepository from "./calculoIncapacidades.repository.js";
-import * as periodoRepository from "../periodoPlanilla/periodosPlanillas.repository.js";
-import {
-  getAsistenciaByColaboradorYFecha,
-  updateMinutosAsistencia,
-} from "../asistenciasDiarias/asistenciasDiarias.repository.js";
+import * as incapacidadesRepository from "../incapacidades.repository.js";
+import * as calculosRepository from "../calculoIncapacidades.repository.js";
+
 import {
   validateId,
   validateDate,
   validateText,
   serviceError,
-} from "../../shared/utils/serviceUtils.js";
+} from "../../../shared/utils/serviceUtils.js";
 
 import {
   validarAccesoSolicitud,
   validarFiltrosSolicitudes,
   validarRestauranteSolicitudes,
-} from "../../shared/utils/solicitudUtils.js";
-import { validarDiasVacaciones } from "../vacaciones/services/vacaciones.service.js";
+} from "../../../shared/utils/solicitudUtils.js";
+import { validarDiasVacaciones } from "../../vacaciones/services/vacaciones.service.js";
 
-import { getColaborador } from "../colaboradores/colaboradores.service.js";
-import { sincronizarHorasExtras } from "../extras/horasExtras.service.js";
+import { getColaborador } from "../../colaboradores/colaboradores.service.js";
+
+import {
+  calcularReconocimientoIncapacidad,
+  registrarCalculoIncapacidad,
+  registrarReconocimientoMaternidad,
+} from "./calculoIncapacidades.services.js";
+
 import {
   bloquearColaboradorSolicitudes,
   revisarSolicitudGerente,
   resolverSolicitudRh,
   revertirSolicitud,
-} from "../solicitudes/solicitudes.repository.js";
+} from "../../solicitudes/solicitudes.repository.js";
 
 import {
   obtenerCalendarioActual,
   fechaSQLComoTexto,
-} from "../../shared/utils/fechaUtils.js";
+} from "../../../shared/utils/fechaUtils.js";
 
-import { beginTransaction } from "../../shared/config/database.js";
+import { beginTransaction } from "../../../shared/config/database.js";
 
 import {
   registrarBitacora,
   entidades,
   acciones,
-} from "../bitacora/bitacora.service.js";
+} from "../../bitacora/bitacora.service.js";
 
 // CONSULTAS
 
@@ -112,17 +114,34 @@ export async function obtenerCalculoIncapacidad(solicitudId, usuario) {
 
   const idSolicitud = validateId(solicitudId, "SolicitudId");
 
-  const calculoSolicitud =
-    await calculosRepository.getCalculoBySolicitud(idSolicitud);
+  const calculos = await calculosRepository.getCalculosBySolicitud(idSolicitud);
 
-  if (!calculoSolicitud) {
+  if (calculos.length === 0) {
     throw serviceError(
       "La solicitud no tiene un cálculo de incapacidad registrado.",
       404,
     );
   }
 
-  return calculoSolicitud;
+  if (calculos.length === 1) return calculos[0];
+
+  // Mantener el objeto de consulta y exponer todos los períodos, sin atribuir
+  // el total a un único cálculo o período de planilla.
+  return {
+    SolicitudId: idSolicitud,
+    CalculoId: null,
+    PeriodoId: null,
+    MinutosReconocidos: calculos.reduce(
+      (total, calculo) => total + calculo.MinutosReconocidos,
+      0,
+    ),
+    PorcentajePatronalAplicado: calculos.every(
+      (calculo) => calculo.PorcentajePatronalAplicado === calculos[0].PorcentajePatronalAplicado,
+    )
+      ? calculos[0].PorcentajePatronalAplicado
+      : null,
+    calculos,
+  };
 }
 
 // CREACIÓN Y REVISIONES
@@ -274,7 +293,10 @@ export async function solicitarIncapacidad(datos, usuario) {
     }
 
     await validarDiasVacaciones(
-      datosValidados.colaboradorId, datosValidados.fechaInicio, datosValidados.fechaFin, transaction,
+      datosValidados.colaboradorId,
+      datosValidados.fechaInicio,
+      datosValidados.fechaFin,
+      transaction,
     );
 
     const incapacidadCreada = await incapacidadesRepository.createIncapacidad(
@@ -456,7 +478,7 @@ export async function resolverIncapacidadRh(
   if (usuario.Rol !== "RECURSOS_HUMANOS") {
     throw serviceError(
       "Solo Recursos Humanos puede resolver solicitudes de incapacidad.",
-      409,
+      403,
     );
   }
 
@@ -477,92 +499,104 @@ export async function resolverIncapacidadRh(
   ).toUpperCase();
 
   if (!["RECHAZADA", "APROBADA"].includes(estadoValidado)) {
-    throw serviceError("Estado debe ser aprobada o rechazada", 400);
+    throw serviceError("El estado debe ser APROBADA o RECHAZADA.", 400);
   }
 
   const transaction = await beginTransaction();
 
   try {
+    const solicitudConsultada = await incapacidadesRepository.getSolicitudById(
+      id,
+      transaction,
+    );
+
+    if (!solicitudConsultada) {
+      throw serviceError("No se encontró la solicitud de incapacidad.", 404);
+    }
+
+    await bloquearColaboradorSolicitudes(
+      solicitudConsultada.ColaboradorId,
+      transaction,
+    );
+
+    // Consultar nuevamente después de obtener el bloqueo.
     const incapacidadActual = await incapacidadesRepository.getSolicitudById(
       id,
       transaction,
     );
 
-    if (!incapacidadActual)
-      throw serviceError("No existe una incapacidad con este ID", 404);
-
-    if (incapacidadActual.Estado !== "EN_REVISION_RH")
+    if (!incapacidadActual) {
       throw serviceError(
-        "La incapacidad debe de ser aprobada por el gerente primero",
-        403,
+        "La solicitud de incapacidad ya no está disponible.",
+        404,
       );
+    }
 
-    const incapacidades =
-      await incapacidadesRepository.getIncapacidadesByColaborador(
-        incapacidadActual.ColaboradorId,
-        {},
-        transaction,
-      );
-
-    const anteriorSinResolver = incapacidades.find(
-      (anterior) =>
-        anterior.SolicitudId !== id &&
-        ["PENDIENTE", "EN_REVISION_RH"].includes(anterior.Estado) &&
-        anterior.FechaInicio < incapacidadActual.FechaInicio,
-    );
-
-    if (anteriorSinResolver) {
+    if (incapacidadActual.Estado !== "EN_REVISION_RH") {
       throw serviceError(
-        `Debe resolver primero la solicitud ${
-          anteriorSinResolver.SolicitudId
-        }, correspondiente a una incapacidad anterior.`,
+        "La solicitud debe estar en revisión de Recursos Humanos.",
         409,
       );
     }
 
-    let incapacidadActualizada;
+    let tipoIncapacidad = null;
     let registroCalculoCreado = null;
-    let reconocimiento = null;
 
-    if (estadoValidado === "RECHAZADA") {
-      incapacidadActualizada = await resolverSolicitudRh(
-        id,
-        "INCAPACIDAD",
-        {
-          estado: estadoValidado,
-          observacion: observacionValidada,
-          revisadoPorRhId: usuarioActualId,
-        },
+    // Estas validaciones corresponden únicamente a la aprobación.
+    if (estadoValidado === "APROBADA") {
+      tipoIncapacidad = await incapacidadesRepository.getTipoIncapacidadById(
+        incapacidadActual.TipoIncapacidadId,
         transaction,
       );
-    } else {
-      await bloquearColaboradorSolicitudes(incapacidadActual.ColaboradorId, transaction);
-      await validarDiasVacaciones(
-        incapacidadActual.ColaboradorId, incapacidadActual.FechaInicio, incapacidadActual.FechaFin, transaction,
-      );
-      const tipoIncapacidad =
-        await incapacidadesRepository.getTipoIncapacidadById(
-          incapacidadActual.TipoIncapacidadId,
-          transaction,
+
+      if (!tipoIncapacidad) {
+        throw serviceError("No se encontró el tipo de incapacidad.", 404);
+      }
+
+      // Los antecedentes afectan al cálculo de enfermedad común.
+      if (tipoIncapacidad.Codigo === "ENFERMEDAD_CCSS") {
+        const incapacidades =
+          await incapacidadesRepository.getIncapacidadesByColaborador(
+            incapacidadActual.ColaboradorId,
+            {},
+            transaction,
+          );
+
+        const anteriorSinResolver = incapacidades.find(
+          (anterior) =>
+            anterior.SolicitudId !== id &&
+            anterior.TipoIncapacidadId ===
+              incapacidadActual.TipoIncapacidadId &&
+            ["PENDIENTE", "EN_REVISION_RH"].includes(anterior.Estado) &&
+            anterior.FechaInicio < incapacidadActual.FechaInicio,
         );
 
-      reconocimiento = await calcularReconocimientoIncapacidad(
-        incapacidadActual,
-        tipoIncapacidad,
-        transaction,
-      );
+        if (anteriorSinResolver) {
+          throw serviceError(
+            `Debe resolver primero la solicitud ${anteriorSinResolver.SolicitudId}, correspondiente a una enfermedad anterior.`,
+            409,
+          );
+        }
+      }
 
-      incapacidadActualizada = await resolverSolicitudRh(
-        id,
-        "INCAPACIDAD",
-        {
-          estado: estadoValidado,
-          observacion: observacionValidada,
-          revisadoPorRhId: usuarioActualId,
-        },
+      await validarDiasVacaciones(
+        incapacidadActual.ColaboradorId,
+        incapacidadActual.FechaInicio,
+        incapacidadActual.FechaFin,
         transaction,
       );
     }
+
+    const incapacidadActualizada = await resolverSolicitudRh(
+      id,
+      "INCAPACIDAD",
+      {
+        estado: estadoValidado,
+        observacion: observacionValidada,
+        revisadoPorRhId: usuarioActualId,
+      },
+      transaction,
+    );
 
     if (!incapacidadActualizada) {
       throw serviceError(
@@ -571,13 +605,36 @@ export async function resolverIncapacidadRh(
       );
     }
 
+    // Solo las aprobaciones generan cálculos.
     if (estadoValidado === "APROBADA") {
-      registroCalculoCreado = await registrarCalculoIncapacidad(
-        incapacidadActual,
-        reconocimiento,
-        transaction,
-        usuarioActualId,
-      );
+      if (tipoIncapacidad.Codigo === "MATERNIDAD_CCSS") {
+        registroCalculoCreado = await registrarReconocimientoMaternidad(
+          incapacidadActual,
+          tipoIncapacidad,
+          usuarioActualId,
+          transaction,
+        );
+      } else {
+        const reconocimiento = await calcularReconocimientoIncapacidad(
+          incapacidadActual,
+          tipoIncapacidad,
+          transaction,
+        );
+
+        registroCalculoCreado = await registrarCalculoIncapacidad(
+          incapacidadActual,
+          reconocimiento,
+          transaction,
+          usuarioActualId,
+        );
+      }
+
+      if (!registroCalculoCreado || (tipoIncapacidad.Codigo === "MATERNIDAD_CCSS" && !registroCalculoCreado.calculos?.length)) {
+        throw serviceError(
+          "No se pudo registrar el reconocimiento de la incapacidad.",
+          500,
+        );
+      }
     }
 
     const resultado = {
@@ -585,17 +642,15 @@ export async function resolverIncapacidadRh(
       registroCalculoCreado,
     };
 
-    const accionBitacora =
-      estadoValidado === "APROBADA"
-        ? acciones.APROBAR_INCAPACIDAD
-        : acciones.RECHAZAR_INCAPACIDAD;
-
     await registrarBitacora(
       {
         usuarioId: usuarioActualId,
         entidad: entidades.SOLICITUDES_INCAPACIDADES,
         registroId: id,
-        accion: accionBitacora,
+        accion:
+          estadoValidado === "APROBADA"
+            ? acciones.APROBAR_INCAPACIDAD
+            : acciones.RECHAZAR_INCAPACIDAD,
         datosAnteriores: incapacidadActual,
         datosNuevos: {
           ...incapacidadActual,
@@ -613,346 +668,12 @@ export async function resolverIncapacidadRh(
       await transaction.rollback();
     } catch (rollbackError) {
       console.error(
-        "No se pudo revertir la revisión de la incapacidad:",
+        "No se pudo revertir la resolución de la incapacidad:",
         rollbackError,
       );
     }
+
     throw error;
-  }
-}
-
-// FUNCIONES INTERNAS DEL CÁLCULO
-async function calcularReconocimientoIncapacidad(
-  incapacidad,
-  tipoIncapacidad,
-  transaction,
-) {
-  if (!transaction) {
-    throw serviceError(
-      "No se recibió la transacción necesaria para calcular la incapacidad.",
-      500,
-    );
-  }
-
-  if (!incapacidad || !tipoIncapacidad) {
-    throw serviceError(
-      "Faltan los datos de la incapacidad o de su tipo para realizar el cálculo.",
-      500,
-    );
-  }
-
-  const colaboradorId = validateId(incapacidad.ColaboradorId, "ColaboradorId");
-
-  if (incapacidad.TipoIncapacidadId !== tipoIncapacidad.TipoIncapacidadId) {
-    throw serviceError(
-      "El tipo consultado no corresponde a la incapacidad.",
-      409,
-    );
-  }
-
-  if (tipoIncapacidad.Codigo !== "ENFERMEDAD_CCSS") {
-    throw serviceError(
-      "Todavía no está disponible el cálculo para el tipo de incapacidad seleccionado.",
-      409,
-    );
-  }
-
-  const fechaInicio = incapacidad.FechaInicio;
-  const fechaFin = incapacidad.FechaFin;
-
-  if (
-    !(fechaInicio instanceof Date) ||
-    !(fechaFin instanceof Date) ||
-    Number.isNaN(fechaInicio.getTime()) ||
-    Number.isNaN(fechaFin.getTime())
-  ) {
-    throw serviceError(
-      "Las fechas almacenadas de la incapacidad no son válidas.",
-      500,
-    );
-  }
-
-  if (fechaFin < fechaInicio) {
-    throw serviceError(
-      "La incapacidad tiene una fecha final anterior a su fecha inicial.",
-      409,
-    );
-  }
-
-  const porcentajePatronal = tipoIncapacidad.PorcentajePatronal;
-
-  if (
-    !Number.isFinite(porcentajePatronal) ||
-    porcentajePatronal < 0 ||
-    porcentajePatronal > 100
-  ) {
-    throw serviceError(
-      "El porcentaje patronal configurado debe ser un número entre 0 y 100.",
-      500,
-    );
-  }
-
-  // Regla definida para el proyecto:
-  // hasta tres días reconocidos por ventana fija de treinta días.
-  const milisegundosPorDia = 24 * 60 * 60 * 1000;
-  const duracionVentanaDias = 30;
-  const maximoDiasReconocibles = 3;
-  const minutosBaseDiaria = 8 * 60;
-
-  const antecedentes =
-    await calculosRepository.getIncapacidadesAprobadasAnteriores(
-      colaboradorId,
-      fechaInicio,
-      transaction,
-    );
-
-  const antecedentesEnfermedad = antecedentes.filter(
-    (anterior) => anterior.CodigoTipoIncapacidad === "ENFERMEDAD_CCSS",
-  );
-
-  antecedentesEnfermedad.sort(
-    (a, b) => a.FechaInicio.getTime() - b.FechaInicio.getTime(),
-  );
-
-  let inicioVentana = null;
-  let diasReconocidosVentana = 0;
-
-  function reconocerDia(dia) {
-    const terminoVentana =
-      inicioVentana !== null &&
-      dia - inicioVentana >= duracionVentanaDias * milisegundosPorDia;
-
-    if (inicioVentana === null || terminoVentana) {
-      inicioVentana = dia;
-      diasReconocidosVentana = 0;
-    }
-
-    if (diasReconocidosVentana >= maximoDiasReconocibles) {
-      return false;
-    }
-
-    diasReconocidosVentana += 1;
-    return true;
-  }
-
-  for (const anterior of antecedentesEnfermedad) {
-    for (
-      let dia = anterior.FechaInicio.getTime();
-      dia <= anterior.FechaFin.getTime();
-      dia += milisegundosPorDia
-    ) {
-      reconocerDia(dia);
-    }
-  }
-
-  let diasReconociblesActuales = 0;
-  for (
-    let dia = fechaInicio.getTime();
-    dia <= fechaFin.getTime();
-    dia += milisegundosPorDia
-  ) {
-    if (reconocerDia(dia)) {
-      diasReconociblesActuales += 1;
-    }
-  }
-
-  const minutosReconocidos = Math.round(
-    diasReconociblesActuales * minutosBaseDiaria * (porcentajePatronal / 100),
-  );
-
-  return {
-    minutosReconocidos,
-    porcentajePatronalAplicado: porcentajePatronal,
-  };
-}
-
-async function registrarCalculoIncapacidad(
-  incapacidad,
-  reconocimiento,
-  transaction,
-  usuarioActorId,
-) {
-  if (!transaction) {
-    throw serviceError(
-      "Se requiere una transacción para registrar el cálculo de incapacidad.",
-      500,
-    );
-  }
-
-  if (!incapacidad || !reconocimiento) {
-    throw serviceError(
-      "Faltan los datos necesarios para registrar el cálculo de incapacidad.",
-      500,
-    );
-  }
-
-  const solicitudId = validateId(incapacidad.SolicitudId, "SolicitudId");
-  const actorId = validateId(usuarioActorId, "UsuarioId");
-
-  const { minutosReconocidos, porcentajePatronalAplicado } = reconocimiento;
-
-  if (
-    !Number.isInteger(minutosReconocidos) ||
-    minutosReconocidos < 0 ||
-    minutosReconocidos > 2147483647
-  ) {
-    throw serviceError(
-      "El cálculo debe generar minutos reconocidos enteros y no negativos.",
-      500,
-    );
-  }
-
-  if (
-    !Number.isFinite(porcentajePatronalAplicado) ||
-    porcentajePatronalAplicado < 0 ||
-    porcentajePatronalAplicado > 100
-  ) {
-    throw serviceError(
-      "El porcentaje patronal calculado debe estar entre 0 y 100.",
-      500,
-    );
-  }
-
-  // Comprobar el duplicado antes de modificar las horas.
-  const calculoExistente = await calculosRepository.getCalculoBySolicitud(
-    solicitudId,
-    transaction,
-  );
-
-  if (calculoExistente) {
-    throw serviceError(
-      "La solicitud de incapacidad ya tiene un cálculo registrado.",
-      409,
-    );
-  }
-
-  const solicitudActual = await incapacidadesRepository.getSolicitudById(
-    solicitudId,
-    transaction,
-  );
-
-  if (solicitudActual.Estado !== "APROBADA") {
-    throw serviceError(
-      "La incapacidad debe estar aprobada para registrar su cálculo.",
-      409,
-    );
-  }
-
-  // El reconocimiento se asigna al período de la fecha de aprobación.
-  const { fechaAsignada, fechaHoy } = obtenerCalendarioActual();
-  const fechaValida = validateDate(fechaAsignada, "Fecha asignada actual");
-
-  const periodoActual = await periodoRepository.getPeriodoByFecha(
-    fechaValida,
-    transaction,
-  );
-
-  if (!periodoActual) {
-    throw serviceError(
-      "No existe un período de planilla para asignar el reconocimiento.",
-      409,
-    );
-  }
-
-  if (
-    periodoActual.Estado !== "ABIERTO" &&
-    periodoActual.Estado !== "EN_REVISION"
-  ) {
-    throw serviceError(
-      "El período actual no está abierto y no permite asignar nuevos cálculos de incapacidad.",
-      409,
-    );
-  }
-
-  await invalidarHorasTrabajadasAsistencia(
-    solicitudActual,
-    transaction,
-    fechaHoy,
-    actorId,
-  );
-
-  const calculoIncapacidadCreado =
-    await calculosRepository.createCalculoIncapacidad(
-      {
-        solicitudId,
-        periodoId: periodoActual.PeriodoId,
-        minutosReconocidos,
-        porcentajePatronalAplicado,
-      },
-      transaction,
-    );
-
-  if (!calculoIncapacidadCreado) {
-    throw serviceError("No se pudo registrar el cálculo de incapacidad.", 409);
-  }
-
-  return calculoIncapacidadCreado;
-}
-
-async function invalidarHorasTrabajadasAsistencia(
-  solicitudActual,
-  transaction,
-  fechaHoy,
-  actorId,
-) {
-  // Buscar la asistencia del primer día de la incapacidad.
-  const asistenciaDiariaActual = await getAsistenciaByColaboradorYFecha(
-    solicitudActual.ColaboradorId,
-    solicitudActual.FechaInicio,
-    transaction,
-  );
-
-  if (asistenciaDiariaActual) {
-    // Este período puede ser diferente al del reconocimiento.
-    const periodoAsistencia = await periodoRepository.getPeriodoById(
-      asistenciaDiariaActual.PeriodoId,
-      transaction,
-    );
-
-    const permiteAjustes =
-      ["ABIERTO", "EN_REVISION"].includes(periodoAsistencia.Estado) &&
-      fechaHoy <= fechaSQLComoTexto(periodoAsistencia.FechaLimiteAjustes);
-
-    // Si el período ya no permite ajustes, las horas quedan intactas.
-    if (permiteAjustes) {
-      const newAsistencia = await updateMinutosAsistencia(
-        asistenciaDiariaActual.AsistenciaId,
-        0,
-        "Ajustados",
-        transaction,
-      );
-
-      if (!newAsistencia) {
-        throw serviceError(
-          "No se pudieron ajustar las horas por incapacidad.",
-          409,
-        );
-      }
-
-      await sincronizarHorasExtras(newAsistencia, actorId, transaction, true);
-
-      await registrarBitacora(
-        {
-          usuarioId: actorId,
-          entidad: entidades.ASISTENCIAS_DIARIAS,
-          registroId: asistenciaDiariaActual.AsistenciaId,
-          accion: acciones.ACTUALIZAR,
-
-          datosAnteriores: {
-            minutosCalculados: asistenciaDiariaActual.MinutosCalculados,
-            minutosAjustados: asistenciaDiariaActual.MinutosAjustados,
-          },
-
-          datosNuevos: {
-            minutosCalculados: newAsistencia.MinutosCalculados,
-            minutosAjustados: newAsistencia.MinutosAjustados,
-            solicitudId: solicitudActual.SolicitudId,
-            motivo: "Horas ajustadas a cero por incapacidad aprobada por RH.",
-          },
-        },
-        transaction,
-      );
-    }
   }
 }
 
@@ -1071,12 +792,12 @@ export async function revertirIncapacidad(
     );
 
     // No devolver a revisión una solicitud con un cálculo registrado.
-    const calculoExistente = await calculosRepository.getCalculoBySolicitud(
+  const calculosExistentes = await calculosRepository.getCalculosBySolicitud(
       id,
       transaction,
     );
 
-    if (calculoExistente) {
+  if (calculosExistentes.length > 0) {
       throw serviceError(
         "Esta incapacidad tiene un cálculo registrado y no admite esta reversión.",
         409,
@@ -1104,7 +825,10 @@ export async function revertirIncapacidad(
     }
 
     await validarDiasVacaciones(
-      solicitudActual.ColaboradorId, solicitudActual.FechaInicio, solicitudActual.FechaFin, transaction,
+      solicitudActual.ColaboradorId,
+      solicitudActual.FechaInicio,
+      solicitudActual.FechaFin,
+      transaction,
     );
     const cabeceraRevertida = await revertirSolicitud(
       id,

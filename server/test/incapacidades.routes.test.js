@@ -148,13 +148,32 @@ test("restaurante admite parámetro o query y conserva las restricciones del ser
       assert.equal(calls.at(-1).parametros.restauranteId, 2);
     }
   }
-  assert.equal((await request("GET", "/restaurante")).status, 400);
   identity = { UsuarioId: 7, Rol: "GERENTE" };
   respond(/FROM Usuarios/, [{ RestauranteId: 2 }]);
   respond(/FROM dbo.Incapacidades/, []);
   assert.equal((await request("GET", "/restaurante")).status, 200);
+  assert.equal(calls.at(-1).parametros.restauranteId, 2);
   respond(/FROM Usuarios/, [{ RestauranteId: 2 }]);
   assert.equal((await request("GET", "/restaurante/3")).status, 403);
+});
+
+test("RH y Administración consultan todos los restaurantes sin un filtro obligatorio", async () => {
+  const solicitudes = [solicitud, { ...solicitud, SolicitudId: 32, RestauranteId: 3 }];
+  for (const Rol of ["RECURSOS_HUMANOS", "ADMINISTRADOR"]) {
+    identity = { UsuarioId: 7, Rol };
+    respond(/FROM dbo.Incapacidades/, solicitudes);
+    const response = await request("GET", "/restaurante?desde=2026-10-01&hasta=2026-10-31&estado=pendiente");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), solicitudes);
+    const consulta = calls.at(-1);
+    assert.equal(consulta.parametros.restauranteId, null);
+    assert.equal(consulta.parametros.estado, "PENDIENTE");
+    assert.equal(consulta.parametros.desde.toISOString(), "2026-10-01T00:00:00.000Z");
+    assert.match(consulta.query, /@restauranteId IS NULL OR s.RestauranteId = @restauranteId/);
+    assert.equal((await request("GET", "/restaurante?restauranteId=abc")).status, 400);
+    assert.equal((await request("GET", "/restaurante?estado=INVALIDO")).status, 400);
+  }
+  assert.ok(calls.every((consulta) => !consulta.query.includes("FROM Usuarios")));
 });
 
 test("cálculo tiene su propia ruta para RH y Administración", async () => {
@@ -166,6 +185,28 @@ test("cálculo tiene su propia ruta para RH y Administración", async () => {
   }
 });
 
+test("consulta de maternidad conserva todos los cálculos y devuelve el total sin atribuirlo a un solo período", async () => {
+  identity = { UsuarioId: 7, Rol: "RECURSOS_HUMANOS" };
+  const calculos = [
+    { CalculoId: 1, SolicitudId: 31, PeriodoId: 8, MinutosReconocidos: 1440, PorcentajePatronalAplicado: 50 },
+    { CalculoId: 2, SolicitudId: 31, PeriodoId: 9, MinutosReconocidos: 3360, PorcentajePatronalAplicado: 50 },
+    { CalculoId: 3, SolicitudId: 31, PeriodoId: 10, MinutosReconocidos: 960, PorcentajePatronalAplicado: 50 },
+  ];
+  respond(/FROM dbo.CalculosIncapacidad/, calculos);
+  const response = await request("GET", "/31/calculo");
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    SolicitudId: 31, CalculoId: null, PeriodoId: null,
+    MinutosReconocidos: 5760, PorcentajePatronalAplicado: 50, calculos,
+  });
+});
+
+test("consultar una lista vacía de cálculos devuelve 404", async () => {
+  identity = { UsuarioId: 7, Rol: "RECURSOS_HUMANOS" };
+  respond(/FROM dbo.CalculosIncapacidad/);
+  assert.equal((await request("GET", "/31/calculo")).status, 404);
+});
+
 for (const gerente of [true, false]) {
   test(`revisión HTTP ${gerente ? "gerente" : "RH"} utiliza el actor autenticado`, async () => {
     identity = { UsuarioId: 7, Rol: gerente ? "GERENTE" : "RECURSOS_HUMANOS" };
@@ -174,11 +215,11 @@ for (const gerente of [true, false]) {
     const campo = gerente ? "revisadoPorGerenteId" : "revisadoPorRhId";
     const nueva = { ...anterior, Estado: estado };
     respond(/FROM dbo.Solicitudes AS s/, [anterior]);
+    respond(/WITH \(UPDLOCK, HOLDLOCK\)/, [{ ColaboradorId: 4 }]);
+    respond(/FROM dbo.Solicitudes AS s/, [anterior]);
     if (gerente) {
-      respond(/WITH \(UPDLOCK, HOLDLOCK\)/, [{ ColaboradorId: 4 }]);
-      respond(/FROM dbo.Solicitudes AS s/, [anterior]);
       respond(/FROM Usuarios/, [{ RestauranteId: 2 }]);
-    } else respond(/FROM dbo.Incapacidades/, [anterior]);
+    }
     respond(/UPDATE dbo.Solicitudes/, [nueva]);
     respond(/INSERT INTO dbo.Bitacora/);
     const response = await request("PATCH", `/31/${gerente ? "revisar-gerente" : "resolver-rh"}`, {

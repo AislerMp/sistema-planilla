@@ -9,6 +9,14 @@ export async function getVacacionController(req, res) {
   return res.status(200).json(vacacion);
 }
 
+export async function getCalculosVacacionesController(req, res) {
+  const calculos = await vacacionesServices.obtenerCalculosVacaciones(
+    req.params.id,
+    req.user,
+  );
+  return res.status(200).json(calculos);
+}
+
 export async function getMisVacacionesController(req, res) {
   const vacaciones = await vacacionesServices.getMisVacaciones(
     {

@@ -29,6 +29,7 @@ export default function SolicitudesFiltros({
   restaurantes = [],
   cargandoRestaurantes = false,
   errorRestaurantes = null,
+  estados = estadosSolicitud,
   etiquetaFecha = "Fecha solicitada desde",
   ariaLabel = "Filtros de solicitudes",
 }) {
@@ -82,7 +83,7 @@ export default function SolicitudesFiltros({
           role="group"
           aria-label="Estado de las solicitudes"
         >
-          {estadosSolicitud.map(({ valor, etiqueta }) => (
+          {estados.map(({ valor, etiqueta }) => (
             <button
               key={valor ?? "todas"}
               type="button"

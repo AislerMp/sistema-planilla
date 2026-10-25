@@ -29,6 +29,12 @@ router.get(
 );
 
 router.get(
+  "/:id/calculos",
+  permitirRoles("RECURSOS_HUMANOS", "ADMINISTRADOR"),
+  vacacionesController.getCalculosVacacionesController,
+);
+
+router.get(
   "/:id",
   permitirRoles("COLABORADOR", "GERENTE", "RECURSOS_HUMANOS", "ADMINISTRADOR"),
   vacacionesController.getVacacionController,

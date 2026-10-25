@@ -206,6 +206,9 @@ export async function acumularVacacionesColaborador(
     fechaDesde,
     fechaDelCorte,
     fechasLaboradas,
+    incapacidades.filter(
+      (incapacidad) => incapacidad.CodigoTipoIncapacidad === "MATERNIDAD_CCSS",
+    ),
   );
 
   // Solo sumamos el aporte diario de las fechas pendientes, no de toda la consulta.
@@ -265,7 +268,7 @@ export async function acumularVacacionesColaborador(
   return saldoActualizado;
 }
 
-function acumularDiaLibre(fechaDesde, fechaCorte, fechasLaboradas) {
+function acumularDiaLibre(fechaDesde, fechaCorte, fechasLaboradas, maternidades) {
   let descansos = 0;
   const fechas = [...fechasLaboradas];
 
@@ -285,7 +288,14 @@ function acumularDiaLibre(fechaDesde, fechaCorte, fechasLaboradas) {
       (fecha) => fecha >= desde && fecha <= hasta,
     );
 
-    if (trabajoEsaSemana) descansos++;
+    // La maternidad ya acreditó todos sus días naturales, incluido este domingo.
+    const domingoAcreditadoPorMaternidad = maternidades.some(
+      (maternidad) =>
+        hasta >= fechaSQLComoTexto(maternidad.FechaInicio) &&
+        hasta <= fechaSQLComoTexto(maternidad.FechaFin),
+    );
+
+    if (trabajoEsaSemana && !domingoAcreditadoPorMaternidad) descansos++;
 
     // También permite recuperar semanas si el servidor estuvo apagado el lunes.
     domingo.setUTCDate(domingo.getUTCDate() + 7);
@@ -348,4 +358,136 @@ export async function actualizarAcumulacionVacaciones(
     procesados,
     fallidos,
   };
+}
+
+export async function ajustarAcumulacionSaldoVacacionesPorAsistencia(
+  asistenciaAnterior,
+  asistenciaActualizada,
+  usuarioActorId,
+  transaction,
+) {
+  if (!transaction) {
+    throw serviceError(
+      "Se requiere una transacción para corregir la acumulación de vacaciones.",
+      500,
+    );
+  }
+
+  if (!asistenciaAnterior || !asistenciaActualizada) {
+    throw serviceError(
+      "Faltan los datos anteriores o nuevos de la asistencia.",
+      500,
+    );
+  }
+
+  const colaboradorId = validateId(
+    asistenciaAnterior.ColaboradorId,
+    "ColaboradorId",
+  );
+
+  const actorId = validateId(usuarioActorId, "UsuarioId");
+
+  if (
+    asistenciaAnterior.AsistenciaId !== asistenciaActualizada.AsistenciaId ||
+    colaboradorId !== asistenciaActualizada.ColaboradorId ||
+    fechaSQLComoTexto(asistenciaAnterior.FechaAsignada) !==
+      fechaSQLComoTexto(asistenciaActualizada.FechaAsignada)
+  ) {
+    throw serviceError(
+      "Los registros recibidos no corresponden a la misma asistencia.",
+      500,
+    );
+  }
+
+  const minutosAntes =
+    asistenciaAnterior.MinutosAjustados ??
+    asistenciaAnterior.MinutosCalculados;
+
+  const minutosDespues =
+    asistenciaActualizada.MinutosAjustados ??
+    asistenciaActualizada.MinutosCalculados;
+
+
+  let variacion = 0;
+
+  if (minutosAntes > 0 && minutosDespues === 0) {
+    variacion = -0.04;
+  } else if (minutosAntes === 0 && minutosDespues > 0) {
+    variacion = 0.04;
+  }
+
+  if (variacion === 0) {
+    return null;
+  }
+
+  const saldo = await saldosRepository.getSaldoByColaborador(
+    colaboradorId,
+    transaction,
+  );
+
+  // No existe una acumulación que corregir.
+  if (!saldo) {
+    return null;
+  }
+
+  const fechaAsistencia = fechaSQLComoTexto(
+    asistenciaAnterior.FechaAsignada,
+  );
+
+  const fechaProcesada = fechaSQLComoTexto(
+    saldo.FechaAcumuladaHasta,
+  );
+
+  // La tarea diaria todavía no ha procesado ese día.
+  if (fechaAsistencia > fechaProcesada) {
+    return null;
+  }
+
+  const acumulados = Number(saldo.DiasAcumulados);
+  const utilizados = Number(saldo.DiasUtilizados);
+
+  const nuevoAcumulado = Number(
+    (acumulados + variacion).toFixed(2),
+  );
+
+  if (nuevoAcumulado < 0 || nuevoAcumulado < utilizados) {
+    throw serviceError(
+      "No se puede corregir la asistencia porque el descuento dejaría el saldo de vacaciones por debajo de cero o de los días ya utilizados.",
+      409,
+    );
+  }
+
+  const saldoActualizado = await saldosRepository.updateDiasAcumulados(
+    colaboradorId,
+    nuevoAcumulado,
+    saldo.FechaAcumuladaHasta,
+    transaction,
+  );
+
+  if (!saldoActualizado) {
+    throw serviceError(
+      "No se pudo corregir el saldo de vacaciones.",
+      409,
+    );
+  }
+
+  await registrarBitacora(
+    {
+      usuarioId: actorId,
+      entidad: entidades.SALDOS_VACACIONES,
+      registroId: colaboradorId,
+      accion: acciones.ACTUALIZAR,
+      datosAnteriores: saldo,
+      datosNuevos: {
+        ...saldoActualizado,
+        asistenciaId: asistenciaAnterior.AsistenciaId,
+        fechaAsistencia,
+        variacion,
+        motivo: "Corrección del aporte por ajuste de asistencia.",
+      },
+    },
+    transaction,
+  );
+
+  return saldoActualizado;
 }

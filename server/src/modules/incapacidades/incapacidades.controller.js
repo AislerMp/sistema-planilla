@@ -1,4 +1,4 @@
-import * as incapacidadesServices from "./incapacidades.services.js";
+import * as incapacidadesServices from "./services/incapacidades.services.js";
 import {
   guardarComprobante,
   eliminarComprobante,

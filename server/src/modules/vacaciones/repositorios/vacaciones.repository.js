@@ -69,6 +69,27 @@ export async function getVacacionSolicitudById(solicitudId, transaction) {
   return result.recordset[0] ?? null;
 }
 
+export async function existeVacacionPendiente(
+  colaboradorId,
+  transaction = null,
+) {
+  const request = await createRequest(transaction);
+
+  const result = await request
+    .input("colaboradorId", sql.Int, colaboradorId)
+    .query(`
+      SELECT TOP (1) s.SolicitudId
+      FROM dbo.Solicitudes AS s
+      INNER JOIN dbo.Vacaciones AS v
+        ON v.SolicitudId = s.SolicitudId
+      WHERE s.TipoSolicitud = 'VACACIONES'
+        AND s.ColaboradorId = @colaboradorId
+        AND s.Estado = 'PENDIENTE';
+    `);
+
+  return result.recordset.length > 0;
+}
+
 export async function getVacacionesByColaborador(
   colaboradorId,
   filtros = {},

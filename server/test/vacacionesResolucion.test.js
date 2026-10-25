@@ -61,6 +61,7 @@ function prepararBD(t, opciones = {}) {
         if (query.includes("WITH (UPDLOCK, HOLDLOCK)")) return { recordset: [{ ColaboradorId: 2018 }] };
         if (query.includes("FROM Usuarios")) return { recordset: [{ RestauranteId: 2 }] };
         if (query.includes("SELECT * FROM Colaboradores")) return { recordset: [{ ColaboradorId: 2018, RestauranteId: 2, Activo: true }] };
+        if (query.includes("SELECT TOP (1) s.SolicitudId")) return { recordset: [] };
         if (query.includes("FROM dbo.Vacaciones")) return { recordset: opciones.anteriores ?? [] };
         if (query.includes("FROM dbo.Solicitudes AS s")) return { recordset: solicitud ? [{ ...solicitud }] : [] };
         if (query.includes("FROM dbo.SaldosVacaciones")) return { recordset: opciones.sinSaldo ? [] : [{ DiasDisponibles: opciones.disponibles ?? 10 }] };
@@ -182,6 +183,7 @@ for (const estado of ["EN_REVISION_RH", "RECHAZADA"]) {
 }
 
 test("crear vacaciones usa Vacaciones, CREAR y el ID generado", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-16T18:00:00Z") });
   const bd = prepararBD(t, { solicitud: { Estado: "PENDIENTE" } });
   const resultado = await vacaciones.solicitarVacaciones({ fechaInicio: "2026-11-02", fechaFin: "2026-11-04", motivo: "Descanso" }, { UsuarioId: 2, ColaboradorId: 2018 });
   const { parametros: p } = bd.auditorias[0];

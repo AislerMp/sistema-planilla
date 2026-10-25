@@ -27,6 +27,17 @@ export async function getVacacionById(id) {
   return parseResponse(response);
 }
 
+export async function getCalculosVacaciones(id) {
+  ensureApiUrl();
+
+  const response = await fetch(`${endpoint}/${encodeURIComponent(id)}/calculos`, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  return parseResponse(response);
+}
+
 // El gerente queda limitado a su restaurante; RH y Administración pueden omitirlo.
 export async function getVacacionesPorRestaurante(
   restauranteId,

@@ -26,6 +26,14 @@ import DetalleBitacora from "../pages/bitacoras/detalleBitacora.jsx";
 import ConsultarIncapacidades from "../pages/incapacidades/consultarIncapacidades.jsx";
 import DetalleIncapacidad from "../pages/incapacidades/detalleIncapacidad.jsx";
 import RegistrarIncapacidad from "../pages/incapacidades/registrarIncapacidad.jsx";
+import VacacionesDashboard from "../pages/vacaciones/vacacionesDashboard.jsx";
+import DetalleVacaciones from "../pages/vacaciones/detalleVacaciones.jsx";
+import ConsultarDeducciones from "../pages/deducciones/mantenimiento/consultarDeducciones.jsx";
+import CrearDeduccion from "../pages/deducciones/mantenimiento/crearDeduccion.jsx";
+import GestionarDeduccion from "../pages/deducciones/mantenimiento/gestionarDeduccion.jsx";
+import DeduccionesDashboard from "../pages/deducciones/solicitudes/deduccionesDashboard.jsx";
+import SolicitarDeduccion from "../pages/deducciones/solicitudes/solicitarDeduccion.jsx";
+import DetalleSolicitudDeduccion from "../pages/deducciones/solicitudes/detalleSolicitudDeduccion.jsx";
 
 export default function AppRoutes({ theme, onToggleTheme }) {
   return (
@@ -107,6 +115,23 @@ export default function AppRoutes({ theme, onToggleTheme }) {
               path="/incapacidades/registrar"
               element={<RegistrarIncapacidad />}
             />
+
+            <Route path="/vacaciones" element={<VacacionesDashboard />} />
+            <Route path="/vacaciones/:id" element={<DetalleVacaciones />} />
+
+            <Route path="/solicitudes-deducciones" element={<DeduccionesDashboard />} />
+            <Route element={<ProtectedRoute roles={["COLABORADOR"]} />}>
+              <Route path="/solicitudes-deducciones/nueva" element={<SolicitarDeduccion />} />
+            </Route>
+            <Route path="/solicitudes-deducciones/:solicitudId" element={<DetalleSolicitudDeduccion />} />
+
+            <Route element={<ProtectedRoute roles={["ADMINISTRADOR", "RECURSOS_HUMANOS"]} />}>
+              <Route path="/deducciones" element={<ConsultarDeducciones />} />
+            </Route>
+            <Route element={<ProtectedRoute roles={["ADMINISTRADOR"]} />}>
+              <Route path="/deducciones/crear" element={<CrearDeduccion />} />
+              <Route path="/deducciones/:deduccionId" element={<GestionarDeduccion />} />
+            </Route>
 
             <Route path="*" element={<NotFoundPage />} />
           </Route>

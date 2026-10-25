@@ -37,7 +37,7 @@ export async function getIncapacidadById(id) {
   return parseResponse(response);
 }
 
-// El gerente puede omitir restauranteId; RH y Administración deben indicarlo.
+// El gerente queda limitado a su restaurante; RH y Administración pueden omitirlo.
 export async function getIncapacidadesPorRestaurante(
   restauranteId,
   { desde, hasta, estado } = {},

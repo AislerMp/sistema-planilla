@@ -1,8 +1,8 @@
 import { createRequest, sql } from "../../shared/config/database.js";
 import { serviceError } from "../../shared/utils/serviceUtils.js";
 
-// Obtener el cálculo asociado a una solicitud.
-export async function getCalculoBySolicitud(
+// Una maternidad puede tener un cálculo por cada período cubierto.
+export async function getCalculosBySolicitud(
   solicitudId,
   transaction = null,
 ) {
@@ -18,10 +18,11 @@ export async function getCalculoBySolicitud(
         MinutosReconocidos,
         PorcentajePatronalAplicado
       FROM dbo.CalculosIncapacidad
-      WHERE SolicitudId = @solicitudId;
+      WHERE SolicitudId = @solicitudId
+      ORDER BY PeriodoId, CalculoId;
     `);
 
-  return result.recordset[0] ?? null;
+  return result.recordset;
 }
 
 // Obtener los cálculos que se reconocerán en una planilla.

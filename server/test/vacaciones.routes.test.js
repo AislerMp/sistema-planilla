@@ -79,6 +79,7 @@ for (const [method, path, permitidos] of [
   ["GET", "/restaurante", roles.slice(1)],
   ["GET", "/restaurante/2", roles.slice(1)],
   ["GET", "/31", roles],
+  ["GET", "/31/calculos", ["RECURSOS_HUMANOS", "ADMINISTRADOR"]],
   ["POST", "/", ["COLABORADOR"]],
   ["PATCH", "/31/revisar-gerente", ["GERENTE"]],
   ["PATCH", "/31/resolver-rh", ["RECURSOS_HUMANOS"]],
@@ -133,6 +134,37 @@ test("detalle limita al propietario y al restaurante vigente del gerente", async
   assert.equal((await request("GET", "/abc")).status, 400);
 });
 
+test("RH y Administración consultan todos los cálculos de una solicitud existente", async () => {
+  const calculos = [
+    { CalculoVacacionId: 1, SolicitudId: 31, PeriodoId: 8, FechaInicioReconocida: fecha("2026-10-15"), FechaFinReconocida: fecha("2026-10-18"), DiasReconocidos: 4, MinutosReconocidos: 1920 },
+    { CalculoVacacionId: 2, SolicitudId: 31, PeriodoId: 9, FechaInicioReconocida: fecha("2026-10-19"), FechaFinReconocida: fecha("2026-10-28"), DiasReconocidos: 10, MinutosReconocidos: 4800 },
+  ];
+  for (const Rol of ["RECURSOS_HUMANOS", "ADMINISTRADOR"]) {
+    identity = { Rol };
+    respond(/FROM dbo.Solicitudes AS s/, [{ ...solicitud, Estado: "APROBADA" }]);
+    respond(/FROM dbo.CalculosVacaciones/, calculos);
+    const response = await request("GET", "/31/calculos");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), json(calculos));
+    assert.equal(calls.at(-1).parametros.solicitudId, 31);
+    assert.match(calls.at(-1).query, /ORDER BY FechaInicioReconocida, PeriodoId/);
+  }
+  assert.equal(eventos.length, 0, "La consulta no debe crear transacciones");
+});
+
+test("cálculos: lista vacía, solicitud inexistente e ID inválido", async () => {
+  identity = { Rol: "RECURSOS_HUMANOS" };
+  respond(/FROM dbo.Solicitudes AS s/, [solicitud]);
+  respond(/FROM dbo.CalculosVacaciones/);
+  const response = await request("GET", "/31/calculos");
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), []);
+
+  respond(/FROM dbo.Solicitudes AS s/);
+  assert.equal((await request("GET", "/99/calculos")).status, 404);
+  assert.equal((await request("GET", "/abc/calculos")).status, 400);
+});
+
 test("gerente consulta solo su restaurante, por ruta, query o sin filtro", async () => {
   identity = { Rol: "GERENTE", RestauranteId: 999 };
   for (const path of ["/restaurante", "/restaurante/2", "/restaurante?restauranteId=2"]) {
@@ -179,12 +211,14 @@ test("saldos: el colaborador consulta el suyo; RH y administrador consultan por 
   assert.equal((await request("GET", "/saldos/abc")).status, 400);
 });
 
-test("POST crea con JSON y usa la identidad y restaurante reales", async () => {
+test("POST crea con JSON y usa la identidad y restaurante reales", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-05T18:00:00Z") });
   identity = { Rol: "COLABORADOR" };
   respond(/FROM Colaboradores/, [{ ColaboradorId: 4, RestauranteId: 2 }]);
   respond(/WITH \(UPDLOCK, HOLDLOCK\)/, [{ ColaboradorId: 4 }]);
   respond(/FROM dbo.Vacaciones/);
   respond(/FROM dbo.SaldosVacaciones/, [saldo]);
+  respond(/SELECT TOP \(1\) s.SolicitudId/);
   respond(/INSERT INTO dbo.Solicitudes/, [{ SolicitudId: 31 }]);
   respond(/INSERT INTO dbo.Vacaciones/, [solicitud]);
   respond(/FROM dbo.Solicitudes AS s/, [solicitud]);
