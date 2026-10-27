@@ -77,8 +77,9 @@ for (const extrasExistentes of [false, true]) {
       FechaAsignada: new Date("2026-09-28T00:00:00Z"),
       FechaHoraEntrada: new Date("2026-09-28T23:32:00Z"),
     };
-    const asistencia = { AsistenciaId: 4, ColaboradorId: 8, PeriodoId: 2, MinutosCalculados: 240, MinutosAjustados: null };
-    const actualizada = { ...asistencia, MinutosCalculados: 748 };
+    const asistencia = { AsistenciaId: 4, ColaboradorId: 8, PeriodoId: 2, TipoJornada: "DIURNA", MinutosCalculados: 240, MinutosAjustados: null };
+    const clasificada = { ...asistencia, TipoJornada: "NOCTURNA" };
+    const actualizada = { ...clasificada, MinutosCalculados: 748 };
     respond(/FROM Colaboradores/, [{ ColaboradorId: 8, Activo: true }]);
     respond(/FROM dbo.PeriodosPlanilla/, [{ PeriodoId: 2, Estado: "ABIERTO" }]);
     respond(/FROM dbo.MarcasAsistencia/, [marca]);
@@ -86,24 +87,31 @@ for (const extrasExistentes of [false, true]) {
     respond(/FROM dbo.Incapacidades/, []);
     respond(/FROM dbo.AsistenciasDiarias/, [asistencia]);
     respond(/UPDATE dbo.MarcasAsistencia/, [{ ...marca, FechaHoraSalida: salida }]);
-    respond(/FROM dbo.AsistenciasDiarias/, [asistencia]);
+    respond(/FROM dbo.MarcasAsistencia/, [
+      { FechaHoraEntrada: new Date("2026-09-28T18:00:00Z"), FechaHoraSalida: new Date("2026-09-28T22:00:00Z") },
+      { ...marca, FechaHoraSalida: salida },
+    ]);
+    respond(/SET TipoJornada = @TipoJornada/, [clasificada]);
+    respond(/INSERT INTO dbo.Bitacora/);
+    respond(/FROM dbo.AsistenciasDiarias/, [clasificada]);
     respond(/FROM dbo.PeriodosPlanilla/, [{ PeriodoId: 2, Estado: "ABIERTO" }]);
     respond(/UPDATE dbo.AsistenciasDiarias/, [actualizada]);
     respond(/INSERT INTO dbo.Bitacora/);
     respond(/FROM dbo.HorasExtras/, extrasExistentes ? [{ HoraExtraId: 5, MinutosDetectados: 0 }] : []);
-    respond(/SET MinutosAjustados = @Minutos/, [{ ...actualizada, MinutosAjustados: 480 }]);
+    respond(/SET MinutosAjustados = @Minutos/, [{ ...actualizada, MinutosAjustados: 360 }]);
     respond(/INSERT INTO dbo.Bitacora/);
     // Comprueba también la separación de columnas que SQL Server requiere en OUTPUT.
     respond(/(?:INSERT INTO|UPDATE) dbo.HorasExtras[\s\S]*INSERTED.MinutosDetectados,\s*INSERTED.MinutosAjustados/,
-      [{ HoraExtraId: 5, AsistenciaId: 4, MinutosDetectados: 268 }]);
+      [{ HoraExtraId: 5, AsistenciaId: 4, MinutosDetectados: 388 }]);
     respond(/INSERT INTO dbo.Bitacora/);
 
     const resultado = await marcas.registrarSalida({ UsuarioId: 1, ColaboradorId: 8, Rol: "COLABORADOR" });
     assert.equal(resultado.marca.FechaAsignada.toISOString().slice(0, 10), "2026-09-28");
     assert.equal(resultado.asistencia.MinutosCalculados, 748);
-    assert.equal(resultado.asistencia.MinutosAjustados, 480);
+    assert.equal(resultado.asistencia.TipoJornada, "NOCTURNA");
+    assert.equal(resultado.asistencia.MinutosAjustados, 360);
     assert.equal(calls[2].parameters.fechaAsignada.value.toISOString().slice(0, 10), "2026-09-28");
-    assert.equal(calls.at(-1).parameters.minutosDetectados.value, 268);
+    assert.equal(calls.at(-1).parameters.minutosDetectados.value, 388);
     assert.equal(commit.mock.callCount(), 1);
     assert.equal(rollback.mock.callCount(), 0);
   });
@@ -372,7 +380,7 @@ test("asistencias valida la fecha con un mensaje identificable", async () => {
 test("asistencias usa la semana actual y requiere restaurante para administración", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-29T18:00:00Z") });
   respond(/FROM dbo.AsistenciasDiarias/, [{ AsistenciaId: 1 }]);
-  assert.deepEqual(await asistencias.listarAsistenciasPorColaborador(1), [{ AsistenciaId: 1 }]);
+  assert.deepEqual(await asistencias.listarAsistenciasPorColaborador(1), [{ AsistenciaId: 1, LimiteOrdinarioMinutos: 480 }]);
   assert.equal(calls[0].parameters.Desde.value.toISOString().slice(0, 10), "2026-09-28");
   assert.equal(calls[0].parameters.Hasta.value.toISOString().slice(0, 10), "2026-09-29");
   await assert.rejects(
@@ -396,13 +404,13 @@ test("asistencias de restaurante rechaza usuario ausente y rol colaborador", asy
   }
 });
 
-test("asistencias de restaurante detecta un listado vacío", async () => {
+test("asistencias de restaurante permite un listado vacío", async () => {
   respond(/FROM dbo.AsistenciasDiarias AS a/, []);
-  await assert.rejects(
-    asistencias.listarAsistenciasPorRestaurante(
+  assert.deepEqual(
+    await asistencias.listarAsistenciasPorRestaurante(
       { UsuarioId: 1, Rol: "RECURSOS_HUMANOS" }, 2, { periodoId: 1 },
     ),
-    { status: 404 },
+    [],
   );
 });
 
@@ -412,7 +420,7 @@ test("gerente consulta su restaurante sin enviarlo y no puede consultar otro", a
   respond(/FROM dbo.AsistenciasDiarias AS a/, [{ AsistenciaId: 7 }]);
   assert.deepEqual(
     await asistencias.listarAsistenciasPorRestaurante(usuario, null, { periodoId: 1 }),
-    [{ AsistenciaId: 7 }],
+    [{ AsistenciaId: 7, LimiteOrdinarioMinutos: 480 }],
   );
   assert.equal(calls.at(-1).parameters.RestauranteId.value, 2);
   respond(/FROM Usuarios/, [{ RestauranteId: 2 }]);
@@ -433,13 +441,13 @@ test("asistencias consulta periodo completo sin fechas nulas y semana dentro del
     { periodoId: 12, desde: "2026-08-24", hasta: "2026-08-30" },
   ]) {
     respond(/FROM dbo.AsistenciasDiarias AS a/, [{ AsistenciaId: 7 }]);
-    assert.deepEqual(await asistencias.listarAsistenciasPorRestaurante(usuario, 3, filtros), [{ AsistenciaId: 7 }]);
+    assert.deepEqual(await asistencias.listarAsistenciasPorRestaurante(usuario, 3, filtros), [{ AsistenciaId: 7, LimiteOrdinarioMinutos: 480 }]);
     assert.equal(calls.at(-1).parameters.PeriodoId.value, 12);
     assert.equal(calls.at(-1).parameters.Desde.value?.toISOString().slice(0, 10) ?? null, filtros.desde ?? null);
     assert.equal(calls.at(-1).parameters.Hasta.value?.toISOString().slice(0, 10) ?? null, filtros.hasta ?? null);
   }
   respond(/FROM dbo.AsistenciasDiarias AS a/, [{ AsistenciaId: 8 }]);
-  assert.deepEqual(await asistencias.listarAsistenciasPorColaborador(8, { periodoId: 12 }), [{ AsistenciaId: 8 }]);
+  assert.deepEqual(await asistencias.listarAsistenciasPorColaborador(8, { periodoId: 12 }), [{ AsistenciaId: 8, LimiteOrdinarioMinutos: 480 }]);
 });
 const colaborador = {
   identificacion: "123456789", correo: "persona@example.com", nombre: "Ana", apellido: "Mora",

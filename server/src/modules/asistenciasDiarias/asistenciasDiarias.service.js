@@ -29,6 +29,14 @@ import { validarDiaSinIncapacidad } from "../incapacidades/services/incapacidade
 import { beginTransaction } from "../../shared/config/database.js";
 import { validarDiasVacaciones } from "../vacaciones/services/vacaciones.service.js";
 import { bloquearColaboradorSolicitudes } from "../solicitudes/solicitudes.repository.js";
+import { obtenerLimiteOrdinarioMinutos } from "../../shared/utils/jornadaUtils.js";
+
+function agregarLimiteOrdinario(asistencia) {
+  return {
+    ...asistencia,
+    LimiteOrdinarioMinutos: obtenerLimiteOrdinarioMinutos(asistencia.TipoJornada),
+  };
+}
 
 export async function obtenerAsistencia(id) {
   const validId = validateId(id);
@@ -37,7 +45,7 @@ export async function obtenerAsistencia(id) {
   if (!asistenciaObj)
     throw serviceError("Asistencia del dia no encontrado", 404);
 
-  return asistenciaObj;
+  return agregarLimiteOrdinario(asistenciaObj);
 }
 
 export async function obtenerAsistenciaPorColaboradorYfecha(
@@ -56,7 +64,7 @@ export async function obtenerAsistenciaPorColaboradorYfecha(
   if (!asistenciaObj)
     throw serviceError("Dia de asistencia no ha sido encontrada", 404);
 
-  return asistenciaObj;
+  return agregarLimiteOrdinario(asistenciaObj);
 }
 
 // Funcion explicitamente para el colaborador
@@ -109,11 +117,7 @@ export async function listarAsistenciasPorColaborador(
       },
     );
 
-  if (asistenciasFiltered.length === 0) {
-    throw serviceError("Asistencias no encontradas", 404);
-  }
-
-  return asistenciasFiltered;
+  return asistenciasFiltered.map(agregarLimiteOrdinario);
 }
 
 //Gerente Valida por su propio Restaurante
@@ -195,11 +199,7 @@ export async function listarAsistenciasPorRestaurante(
     },
   );
 
-  if (asistencias.length === 0) {
-    throw serviceError("No se encontraron asistencias", 404);
-  }
-
-  return asistencias;
+  return asistencias.map(agregarLimiteOrdinario);
 }
 
 export async function crearAsistenciaDiaria(
@@ -343,6 +343,16 @@ export async function ajustarMinutosAsistencia(
       );
     }
 
+    // Si se intenta ajustar el mismo día rechaza, se permite editar solo si ya terminaron de trabajar ese mismo día
+   
+    if (fechaSQLComoTexto(asistenciaAnterior.FechaAsignada) === fechaHoy) {
+    throw serviceError(
+      "No se puede ajustar la asistencia del mismo día",
+      409,
+    );
+  }
+  
+    
     await validarDiaSinPermisoAprobado(
       asistenciaAnterior.ColaboradorId,
       fechaSQLComoTexto(asistenciaAnterior.FechaAsignada),
@@ -410,13 +420,13 @@ export async function ajustarMinutosAsistencia(
       asistenciaActualizada,
       actorId,
       transaction,
-      true,
+      minutos,
     );
 
     await transaction.commit();
 
     return {
-      ...asistenciaActualizada,
+      ...agregarLimiteOrdinario(asistenciaActualizada),
       MinutosEfectivos:
         asistenciaActualizada.MinutosAjustados ??
         asistenciaActualizada.MinutosCalculados,

@@ -11,6 +11,8 @@ import LoadingState from "../../components/loadingState.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getRestaurantes } from "../../services/restaurantes.Service.js";
 import { getPeriodos } from "../../services/periodos.Service.js";
+import { getColaboradores, getColaborador } from "../../services/colaboradores.Service.js";
+import { obtenerRangoAsistencias } from "../../utils/asistenciaUtils.js";
 import {
   getAsistenciasPorColaborador,
   getAsistenciasPorRestaurante,
@@ -47,15 +49,20 @@ export default function GestionarAsistencias() {
     tipo: "Fechas",
   });
   
-  const { data, isLoading, error } = useAsyncRequest(() => {
-    if (!puedeConsultar) return Promise.resolve([]);
+  const { data, isLoading, error } = useAsyncRequest(async () => {
+    if (!puedeConsultar) return { asistencias: [], colaboradores: [] };
 
-    return isColaborador
-      ? getAsistenciasPorColaborador(filters)
-      : getAsistenciasPorRestaurante(filters);
-  }, [filters, puedeConsultar, isColaborador, user?.UsuarioId]);
+    const [asistencias, colaboradores] = await Promise.all([
+      isColaborador ? getAsistenciasPorColaborador(filters) : getAsistenciasPorRestaurante(filters),
+      isColaborador
+        ? getColaborador(user.ColaboradorId).then((colaborador) => [colaborador])
+        : getColaboradores({ restauranteId: filters.restauranteId }),
+    ]);
+    return { asistencias, colaboradores };
+  }, [filters, puedeConsultar, isColaborador, user?.UsuarioId, user?.ColaboradorId]);
 
-  const asistenciasDiarias = data ?? [];
+  const asistenciasDiarias = data?.asistencias ?? [];
+  const colaboradores = data?.colaboradores ?? [];
 
   const {
     data: restaurantesData,
@@ -79,6 +86,8 @@ export default function GestionarAsistencias() {
   const periodoAplicado = periodos.find(
     (periodo) => Number(periodo.PeriodoId) === Number(filters.periodoId),
   );
+  
+  const rangoAplicado = obtenerRangoAsistencias(filters, periodoAplicado, asistenciasDiarias);
 
   // Derivar las semanas despues de inicializar el catalogo asincrono.
   const periodoSeleccionado = periodos.find(
@@ -428,16 +437,16 @@ export default function GestionarAsistencias() {
             <RotateCcw size={17} aria-hidden="true" /> Reintentar consulta
           </button>
         </>
-      ) : asistenciasDiarias.length === 0 ? (
+      ) : asistenciasDiarias.length === 0 && colaboradores.length === 0 ? (
         <AlertMessage type="info" title="Sin asistencias">
-          No hay registros para los filtros aplicados. Prueba otras fechas o un
-          periodo diferente.
+          No hay colaboradores ni registros para los filtros aplicados.
         </AlertMessage>
       ) : (
         <TablaAsistencias
-          desde={filters.desde || periodoAplicado?.FechaInicio?.slice(0, 10)}
-          hasta={filters.hasta || periodoAplicado?.FechaFin?.slice(0, 10)}
+          desde={rangoAplicado.desde}
+          hasta={rangoAplicado.hasta}
           asistencias={asistenciasDiarias}
+          colaboradores={colaboradores}
           puedeVerMarcas={isGerente || puedeElegirRestaurante}
           onSeleccionarAsistencia={isGerente ? onSeleccionarAsistencia : undefined}
         />

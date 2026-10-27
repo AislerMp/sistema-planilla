@@ -2000,7 +2000,7 @@ label {
 .editar-horas-modal form { margin-top: 20px; }
 .editar-horas-campos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
 .editar-horas-modal label { display: grid; gap: 6px; font-size: 11px; color: var(--color-text-muted); }
-.editar-horas-modal input, .editar-horas-modal textarea {
+.editar-horas-modal input, .editar-horas-modal textarea, .editar-horas-modal select {
   width: 100%; min-width: 0; padding: 10px;
   border: 1px solid var(--color-border); border-radius: 6px;
   background: var(--color-field); color: var(--color-text); font: inherit; font-size: 12px;
@@ -2099,6 +2099,20 @@ label {
   color: inherit;
   font: inherit;
 }
+.tabla-asistencias td button:disabled { opacity: 0.65; }
+.tabla-asistencias td .jornada-etiqueta {
+  display: inline-flex; margin-top: 8px; padding: 4px 8px; border: 1px solid currentColor;
+  font-size: 10px; font-weight: 600; line-height: 1.4; white-space: nowrap;
+  color: var(--color-text-muted); background: var(--color-soft);
+}
+.tabla-asistencias td .jornada-etiqueta--diurna { color: var(--color-warning); background: var(--color-warning-background); }
+.tabla-asistencias td .jornada-etiqueta--mixta { color: var(--color-info); background: var(--color-info-background); }
+.tabla-asistencias td .jornada-etiqueta--nocturna { color: #6d28d9; background: #f3edff; }
+:root[data-theme="dark"] .tabla-asistencias td .jornada-etiqueta--nocturna { color: #d0baff; background: #30233f; }
+.tabla-asistencias td .jornada-etiqueta:hover { filter: brightness(0.95); }
+.detalle-jornada { display: grid; gap: 16px; }
+.detalle-jornada .table-actions { justify-content: flex-end; margin: 0; }
+.editar-horas-modal .editar-horas-vista-previa { margin-top: 12px; padding: 10px; border-radius: 6px; background: var(--color-field); }
 
 table {
   border-collapse: collapse;

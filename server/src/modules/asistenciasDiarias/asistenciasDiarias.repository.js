@@ -11,6 +11,7 @@ export async function getAsistenciaById(asistenciaId, transaction = null) {
         RestauranteId,
         PeriodoId,
         FechaAsignada,
+        TipoJornada,
         MinutosCalculados,
         MinutosAjustados,
         COALESCE(
@@ -41,6 +42,7 @@ export async function getAsistenciaByColaboradorYFecha(
         RestauranteId,
         PeriodoId,
         FechaAsignada,
+        TipoJornada,
         MinutosCalculados,
         MinutosAjustados,
         COALESCE(
@@ -100,6 +102,7 @@ export async function getAsistenciasByColaborador(
       SELECT
         a.AsistenciaId,
         a.FechaAsignada,
+        a.TipoJornada,
 
         a.RestauranteId,
         r.Nombre AS Restaurante,
@@ -173,6 +176,7 @@ export async function getAsistenciasByRestaurante(
       SELECT
         a.AsistenciaId,
         a.FechaAsignada,
+        a.TipoJornada,
 
         a.RestauranteId,
         r.Nombre AS Restaurante,
@@ -231,6 +235,24 @@ export async function getAsistenciasByRestaurante(
     `);
 
   return result.recordset;
+}
+
+export async function updateTipoJornada(
+  asistenciaId,
+  tipoJornada,
+  transaction = null,
+) {
+  const request = await createRequest(transaction);
+  const result = await request
+    .input("AsistenciaId", sql.Int, asistenciaId)
+    .input("TipoJornada", sql.VarChar(8), tipoJornada).query(`
+      UPDATE dbo.AsistenciasDiarias
+      SET TipoJornada = @TipoJornada
+      OUTPUT INSERTED.*
+      WHERE AsistenciaId = @AsistenciaId;
+    `);
+
+  return result.recordset[0] ?? null;
 }
 
 export async function updateMinutosAsistencia(

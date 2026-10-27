@@ -3,6 +3,12 @@ import { createPortal } from "react-dom";
 import { ajustarMinutosAsistencia } from "../services/asistenciasDiarias.Service.js";
 import { actualizarHorasExtra } from "../services/horasExtras.Service.js";
 import AlertMessage from "./AlertMessage.jsx";
+import {
+  distribuirMinutos,
+  mostrarDuracion,
+  puedeAjustarAsistencia,
+} from "../utils/asistenciaUtils.js";
+import { obtenerFechaHoyCostaRica } from "../utils/fechaUtils.js";
 
 export default function EditarHorasModal({
   asistencia,
@@ -14,9 +20,12 @@ export default function EditarHorasModal({
     minutos: asistencia.MinutosEfectivos ?? 0,
     extras: asistencia.MinutosExtras ?? 0,
   });
+  const totalGuardado = guardados.current.minutos + guardados.current.extras;
+  const [tipoAjuste, setTipoAjuste] = useState("total");
+
   const [form, setForm] = useState({
-    horas: Math.floor(guardados.current.minutos / 60),
-    minutos: guardados.current.minutos % 60,
+    horas: Math.floor(totalGuardado / 60),
+    minutos: totalGuardado % 60,
     horasExtra: Math.floor(guardados.current.extras / 60),
     minutosExtra: guardados.current.extras % 60,
     motivo: "",
@@ -24,6 +33,23 @@ export default function EditarHorasModal({
 
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  const limiteOrdinario = asistencia.LimiteOrdinarioMinutos;
+  const limiteValido = Number.isInteger(limiteOrdinario) && limiteOrdinario > 0;
+  const puedeEditar = puedeAjustarAsistencia(
+    asistencia,
+    obtenerFechaHoyCostaRica(),
+  );
+  const totalIngresado =
+    form.horas === "" ||
+    form.minutos === "" ||
+    !Number.isInteger(Number(form.horas)) ||
+    Number(form.horas) < 0 ||
+    !Number.isInteger(Number(form.minutos)) ||
+    Number(form.minutos) < 0 ||
+    Number(form.minutos) > 59
+      ? null
+      : Number(form.horas) * 60 + Number(form.minutos);
+  const vistaPrevia = distribuirMinutos(totalIngresado, limiteOrdinario);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -38,32 +64,7 @@ export default function EditarHorasModal({
 
   function cambiarCampo(event) {
     const { name, value } = event.target;
-
-    setForm((anterior) => {
-      const siguiente = { ...anterior, [name]: value };
-
-      if (name === "motivo" || value === "") 
-        return siguiente;
-
-      if (name === "horas" || name === "minutos") {
-        if (siguiente.horas === "" || siguiente.minutos === "") return siguiente;
-        const horas = Number(siguiente.horas);
-        const minutos = Number(siguiente.minutos);
-        if (!Number.isInteger(horas) || horas < 0 ||
-            !Number.isInteger(minutos) || minutos < 0 || minutos > 59) return siguiente;
-
-        const total = horas * 60 + minutos;
-        const calculadas = Math.max(0, total - 480);
-        siguiente.horasExtra = Math.floor(calculadas / 60);
-        siguiente.minutosExtra = calculadas % 60;
-        if (total > 480) {
-          siguiente.horas = 8;
-          siguiente.minutos = 0;
-        }
-      }
-
-      return siguiente;
-    });
+    setForm((anterior) => ({ ...anterior, [name]: value }));
     setError("");
   }
 
@@ -71,16 +72,26 @@ export default function EditarHorasModal({
     event.preventDefault();
 
     if (guardando) return;
+    if (!puedeEditar) {
+      setError(
+        "El período o su plazo de ajustes no permite editar esta asistencia.",
+      );
+      return;
+    }
 
     const minutos = Number(form.horas) * 60 + Number(form.minutos);
     const extras = Number(form.horasExtra) * 60 + Number(form.minutosExtra);
 
     if (
-      [form.horas, form.minutos, form.horasExtra, form.minutosExtra].some(
-        (valor) => valor === "" || !Number.isInteger(Number(valor)) || Number(valor) < 0,
+      (tipoAjuste === "total"
+        ? [form.horas, form.minutos]
+        : [form.horasExtra, form.minutosExtra]
+      ).some(
+        (valor) =>
+          valor === "" || !Number.isInteger(Number(valor)) || Number(valor) < 0,
       ) ||
-      Number(form.minutos) > 59 || Number(form.minutosExtra) > 59 ||
-      [minutos, extras, minutos + extras].some(
+      Number(tipoAjuste === "total" ? form.minutos : form.minutosExtra) > 59 ||
+      [tipoAjuste === "total" ? minutos : extras].some(
         (valor) => !Number.isInteger(valor) || valor < 0 || valor > 2147483647,
       )
     ) {
@@ -88,8 +99,10 @@ export default function EditarHorasModal({
       return;
     }
 
-    if (minutos > 480 || (extras > 0 && minutos !== 480)) {
-      setError("Las horas normales deben ser como máximo 8. Para registrar extras, deben ser 8 horas normales.");
+    if (tipoAjuste === "total" && !limiteValido) {
+      setError(
+        "No se recibió un límite ordinario válido. Recargá las asistencias antes de distribuir las horas.",
+      );
       return;
     }
 
@@ -97,21 +110,23 @@ export default function EditarHorasModal({
     setError("");
     try {
       // Una sola petición guarda ambos valores dentro de una transacción.
-      if (minutos !== guardados.current.minutos) {
+      if (tipoAjuste === "total" && minutos !== totalGuardado) {
         await ajustarMinutosAsistencia(asistencia.AsistenciaId, {
           // Este servicio recibe el total y separa las normales de las extras.
-          minutos: minutos + extras,
+          minutos,
           motivo: form.motivo,
         });
-        guardados.current.minutos = minutos;
-      } else if (extras !== guardados.current.extras) {
+      } else if (
+        tipoAjuste === "extras" &&
+        extras !== guardados.current.extras
+      ) {
         await actualizarHorasExtra(asistencia.AsistenciaId, {
           minutosAjustados: extras,
           motivo: form.motivo,
         });
-        guardados.current.extras = extras;
       }
-      onActualizada();
+      // La tabla vuelve a consultar los valores efectivos guardados por el servidor.
+      await onActualizada();
       onCerrar();
     } catch (err) {
       setError(err.message);
@@ -161,72 +176,114 @@ export default function EditarHorasModal({
       </header>
 
       <form onSubmit={handleSubmit}>
-        <fieldset disabled={guardando} aria-busy={guardando}>
-          <section aria-labelledby="editar-horas-total">
-            <h3 id="editar-horas-total">Horas normales</h3>
-            <p className="muted">Al ingresar más de 8 horas, el excedente pasa a horas extra.</p>
-            <div className="editar-horas-campos">
-              <label htmlFor="total-horas">
-                Horas
-                <input
-                  id="total-horas"
-                  name="horas"
-                  type="number"
-                  min="0"
-                  step="1"
-                  required
-                  value={form.horas}
-                  onChange={cambiarCampo}
-                />
-              </label>
-              <label htmlFor="total-minutos">
-                Minutos
-                <input
-                  id="total-minutos"
-                  name="minutos"
-                  type="number"
-                  min="0"
-                  max="59"
-                  step="1"
-                  required
-                  value={form.minutos}
-                  onChange={cambiarCampo}
-                />
-              </label>
-            </div>
-          </section>
-          <section aria-labelledby="editar-horas-extras">
-            <h3 id="editar-horas-extras">Horas extra</h3>
-            <div className="editar-horas-campos">
-              <label htmlFor="extras-horas">
-                Horas
-                <input
-                  id="extras-horas"
-                  name="horasExtra"
-                  type="number"
-                  min="0"
-                  step="1"
-                  required
-                  value={form.horasExtra}
-                  onChange={cambiarCampo}
-                />
-              </label>
-              <label htmlFor="extras-minutos">
-                Minutos
-                <input
-                  id="extras-minutos"
-                  name="minutosExtra"
-                  type="number"
-                  min="0"
-                  max="59"
-                  step="1"
-                  required
-                  value={form.minutosExtra}
-                  onChange={cambiarCampo}
-                />
-              </label>
-            </div>
-          </section>
+        <fieldset disabled={guardando || !puedeEditar} aria-busy={guardando}>
+          <label htmlFor="tipo-ajuste">
+            Modificar
+            <select
+              id="tipo-ajuste"
+              value={tipoAjuste}
+              onChange={(event) => {
+                setTipoAjuste(event.target.value);
+                setError("");
+              }}
+            >
+              <option value="total">Total de horas del día</option>
+              <option value="extras">Solo horas extra</option>
+            </select>
+          </label>
+          <p className="muted">
+            Jornada: {asistencia.TipoJornada ?? "Sin clasificar"} ·{" "}
+            {limiteValido
+              ? `Límite ordinario: ${mostrarDuracion(limiteOrdinario)}`
+              : "Límite ordinario no disponible"}
+          </p>
+          
+          {tipoAjuste === "total" ? (
+            <section aria-labelledby="editar-horas-total">
+              <h3 id="editar-horas-total">Horas totales del día</h3>
+              <p className="muted">
+                Incluí ordinarias y extras una sola vez. El servidor confirma la
+                distribución al guardar.
+              </p>
+              <div className="editar-horas-campos">
+                <label htmlFor="total-horas">
+                  Horas
+                  <input
+                    id="total-horas"
+                    name="horas"
+                    type="number"
+                    min="0"
+                    step="1"
+                    required
+                    value={form.horas}
+                    onChange={cambiarCampo}
+                  />
+                </label>
+                <label htmlFor="total-minutos">
+                  Minutos
+                  <input
+                    id="total-minutos"
+                    name="minutos"
+                    type="number"
+                    min="0"
+                    max="59"
+                    step="1"
+                    required
+                    value={form.minutos}
+                    onChange={cambiarCampo}
+                  />
+                </label>
+              </div>
+              <p
+                className="editar-horas-vista-previa"
+                role="status"
+                aria-live="polite"
+              >
+                {!limiteValido
+                  ? "No se recibió un límite ordinario válido. Recargá las asistencias antes de distribuir las horas."
+                  : vistaPrevia
+                    ? `Vista previa: ${mostrarDuracion(vistaPrevia.minutosOrdinarios)} ordinarias y ${mostrarDuracion(vistaPrevia.minutosExtras)} extras.`
+                    : "Ingresá horas y minutos válidos para ver la distribución."}
+              </p>
+            </section>
+          ) : (
+            <section aria-labelledby="editar-horas-extras">
+              <h3 id="editar-horas-extras">Horas extra</h3>
+              <p className="muted">
+                Este ajuste modifica las extras de forma independiente, según
+                las reglas del servidor.
+              </p>
+              <div className="editar-horas-campos">
+                <label htmlFor="extras-horas">
+                  Horas
+                  <input
+                    id="extras-horas"
+                    name="horasExtra"
+                    type="number"
+                    min="0"
+                    step="1"
+                    required
+                    value={form.horasExtra}
+                    onChange={cambiarCampo}
+                  />
+                </label>
+                <label htmlFor="extras-minutos">
+                  Minutos
+                  <input
+                    id="extras-minutos"
+                    name="minutosExtra"
+                    type="number"
+                    min="0"
+                    max="59"
+                    step="1"
+                    required
+                    value={form.minutosExtra}
+                    onChange={cambiarCampo}
+                  />
+                </label>
+              </div>
+            </section>
+          )}
           <label htmlFor="ajuste-motivo">
             Motivo del ajuste (opcional)
             <textarea

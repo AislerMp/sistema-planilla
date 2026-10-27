@@ -369,7 +369,7 @@ async function invalidarHorasTrabajadasAsistencia(
         );
       }
 
-      await sincronizarHorasExtras(newAsistencia, actorId, transaction, true);
+      await sincronizarHorasExtras(newAsistencia, actorId, transaction, 0);
 
       await registrarBitacora(
         {

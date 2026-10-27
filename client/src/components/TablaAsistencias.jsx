@@ -1,9 +1,40 @@
-import { obtenerDiasDelRango } from "../utils/fechaUtils.js";
+import { useState } from "react";
+import { obtenerDiasDelRango, obtenerFechaHoyCostaRica } from "../utils/fechaUtils.js";
+import { mostrarDuracion, puedeAjustarAsistencia, obtenerRangoAsistencias } from "../utils/asistenciaUtils.js";
+import Dialog from "./dialog.jsx";
+import AlertMessage from "./AlertMessage.jsx";
 import { Link } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 
-function agruparAsistencias(asistencias) {
+const jornadas = {
+  DIURNA: { nombre: "Diurna", color: "diurna", descripcion: "Trabajo dentro del rango diurno de referencia." },
+  MIXTA: { nombre: "Mixta", color: "mixta", descripcion: "Combina tiempo diurno y nocturno." },
+  NOCTURNA: { nombre: "Nocturna", color: "nocturna", descripcion: "Jornada clasificada como nocturna según la regla del sistema." },
+};
+
+const sinClasificar = {
+  nombre: "Sin clasificar", color: "sin-clasificar",
+  descripcion: "La asistencia todavía no tiene una jornada clasificada. El límite de compatibilidad lo proporciona el servidor.",
+};
+
+function agruparAsistencias(asistencias, listadoColaboradores, desde, hasta) {
   const colaboradores = {};
+
+  for (const colaborador of listadoColaboradores) {
+    const ingreso = colaborador.FechaIngreso?.slice(0, 10);
+    const salida = colaborador.FechaSalida?.slice(0, 10);
+    if ((ingreso && ingreso > hasta) || (salida && salida < desde)) continue;
+
+    if (colaborador.PuestoId === 1 || colaborador.PuestoId === 3) {
+      colaboradores[colaborador.ColaboradorId] = {
+        colaboradorId: colaborador.ColaboradorId,
+        nombres: colaborador.Nombres,
+        apellidos: colaborador.Apellidos,
+        identificacion: colaborador.Identificacion,
+        dias: {},
+      };
+    }
+  }
 
   for (const asistencia of asistencias) {
     const colaboradorId = asistencia.ColaboradorId;
@@ -44,17 +75,28 @@ function mostrarFecha(fecha) {
 
 export default function TablaAsistencias({
   asistencias = [],
+  colaboradores: listadoColaboradores = [],
   desde,
   hasta,
   nombreColaborador = "Mis asistencias",
   onSeleccionarAsistencia,
   puedeVerMarcas = false,
 }) {
-  if (asistencias.length === 0) return null;
+
+  const [jornadaSeleccionada, setJornadaSeleccionada] = useState(null);
+  const fechaHoy = obtenerFechaHoyCostaRica();
+  const detalleJornada = jornadas[jornadaSeleccionada?.TipoJornada] ?? sinClasificar;
+  const limiteDetalle = jornadaSeleccionada?.LimiteOrdinarioMinutos;
 
   const fechas = asistencias.map((asistencia) => asistencia.FechaAsignada.slice(0, 10)).sort();
-  const dias = obtenerDiasDelRango(desde || fechas[0], hasta || fechas.at(-1));
-  const colaboradores = agruparAsistencias(asistencias);
+  const semana = obtenerRangoAsistencias();
+  const inicio = desde || fechas[0] || semana.desde;
+  const fin = hasta || fechas.at(-1) || semana.hasta;
+  const dias = obtenerDiasDelRango(inicio, fin);
+  const colaboradores = agruparAsistencias(asistencias, listadoColaboradores, inicio, fin);
+  if (colaboradores.length === 0) {
+    return <AlertMessage type="info" title="Sin colaboradores">No hay colaboradores con vínculo laboral en este rango ni asistencias registradas.</AlertMessage>;
+  }
 
   return (
     <section className="data-panel asistencias-resultados" aria-label="Resultados de asistencias">
@@ -138,11 +180,16 @@ export default function TablaAsistencias({
                     </>
                   );
 
+                  const jornada = jornadas[asistencia.TipoJornada] ?? sinClasificar;
+                  const puedeEditar = puedeAjustarAsistencia(asistencia, fechaHoy);
+
                   return (
                     <td key={fecha}>
                       {onSeleccionarAsistencia ? (
                         <button
                           type="button"
+                          disabled={!puedeEditar}
+                          title={!puedeEditar ? "El período o su plazo de ajustes no permite editar." : undefined}
                           onClick={() =>
                             onSeleccionarAsistencia(asistencia)
                           }
@@ -153,6 +200,21 @@ export default function TablaAsistencias({
                       ) : (
                         contenido
                       )}
+                      <div>
+                        <button
+                          type="button"
+                          className={`jornada-etiqueta jornada-etiqueta--${jornada.color}`}
+                          aria-haspopup="dialog"
+                          aria-expanded={jornadaSeleccionada?.AsistenciaId === asistencia.AsistenciaId}
+                          aria-label={`Jornada ${jornada.nombre}, ${nombre}, ${mostrarFecha(fecha)}. Ver detalle`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setJornadaSeleccionada(asistencia);
+                          }}
+                        >
+                          {jornada.nombre}
+                        </button>
+                      </div>
                     </td>
                   );
                 })}
@@ -167,6 +229,25 @@ export default function TablaAsistencias({
         </tbody>
       </table>
       </div>
+      {jornadaSeleccionada && (
+        <Dialog
+          titulo={`Jornada ${detalleJornada.nombre.toLowerCase()}`}
+          subtitulo={mostrarFecha(jornadaSeleccionada.FechaAsignada.slice(0, 10))}
+          onCerrar={() => setJornadaSeleccionada(null)}
+        >
+          <div className="detalle-jornada">
+            <p><strong>Límite ordinario aplicado</strong><br />
+              {Number.isInteger(limiteDetalle) && limiteDetalle > 0
+                ? mostrarDuracion(limiteDetalle)
+                : "No se recibió un límite ordinario válido."}
+            </p>
+            <p>{detalleJornada.descripcion}</p>
+            <div className="table-actions">
+              <button type="button" className="button button-secondary" onClick={() => setJornadaSeleccionada(null)}>Cerrar</button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </section>
   );
 }

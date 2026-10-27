@@ -14,6 +14,7 @@ import {
   validarFechaResolucion,
 } from "../../shared/utils/solicitudUtils.js";
 import { validarDiasVacaciones } from "../vacaciones/services/vacaciones.service.js";
+import { obtenerLimiteOrdinarioMinutos } from "../../shared/utils/jornadaUtils.js";
 
 import { validarDiaSinPermisoAprobado } from "../permisosLaborales/permisosLaborales.service.js";
 import { validarDiaSinIncapacidad } from "../incapacidades/services/incapacidades.services.js";
@@ -202,19 +203,26 @@ export async function actualizarHorasExtra(
       fechaSQLComoTexto(asistencia.FechaAsignada),
       transaction,
     );
+
     await validarDiaSinIncapacidad(
       asistencia.ColaboradorId,
       asistencia.FechaAsignada,
       transaction,
     );
+
     await bloquearColaboradorSolicitudes(asistencia.ColaboradorId, transaction);
     await validarDiasVacaciones(
       asistencia.ColaboradorId, asistencia.FechaAsignada, asistencia.FechaAsignada, transaction,
     );
+
     // La asistencia guarda las horas normales; las extras se guardan aparte.
-    // Quitar extras de una jornada corta no debe convertirla en ocho horas.
+    // Quitar extras de una jornada corta no debe completar su límite ordinario.
+    const limiteOrdinario = obtenerLimiteOrdinarioMinutos(asistencia.TipoJornada);
     const minutosNormales =
-      minutosAjustados > 0 ? 480 : Math.min(asistencia.MinutosEfectivos, 480);
+      minutosAjustados > 0
+        ? limiteOrdinario
+        : Math.min(asistencia.MinutosEfectivos, limiteOrdinario);
+        
     validarMinutosDetectados(minutosNormales);
 
     if (minutosNormales !== asistencia.MinutosEfectivos) {
@@ -262,7 +270,7 @@ export async function actualizarHorasExtra(
       const registroCreado = await horasExtraRepository.createHorasExtras(
         {
           asistenciaId,
-          minutosDetectados: Math.max(0, asistencia.MinutosEfectivos - 480),
+          minutosDetectados: Math.max(0, asistencia.MinutosCalculados - limiteOrdinario),
         },
         transaction,
       );
@@ -338,7 +346,7 @@ export async function sincronizarHorasExtras(
   asistencia,
   usuarioActorId,
   transaction,
-  restablecerAjuste = false,
+  totalMinutosAjustados = null,
 ) {
   if (!transaction) {
     throw serviceError(
@@ -351,15 +359,17 @@ export async function sincronizarHorasExtras(
 
   const actorId = validateId(usuarioActorId, "UsuarioId");
 
-  // En marcas usamos el total calculado; en un ajuste manual, el total ingresado.
-  // MinutosAjustados puede contener ya las ocho horas normales de otra sincronización.
+  // El ajuste recibe su total explícito: MinutosAjustados puede estar ya recortado.
+  // Así se puede repetir la operación con la misma base sin perder las extras.
+  const restablecerAjuste = totalMinutosAjustados !== null;
   const minutosEfectivos = validarMinutosDetectados(
     restablecerAjuste
-      ? (asistencia.MinutosAjustados ?? asistencia.MinutosCalculados)
+      ? totalMinutosAjustados
       : asistencia.MinutosCalculados,
   );
 
-  const minutosExtras = Math.max(0, minutosEfectivos - 480);
+  const limiteOrdinario = obtenerLimiteOrdinarioMinutos(asistencia.TipoJornada);
+  const minutosExtras = Math.max(0, minutosEfectivos - limiteOrdinario);
   const minutosNormales = minutosEfectivos - minutosExtras;
 
   const registroAnterior =
@@ -369,7 +379,10 @@ export async function sincronizarHorasExtras(
     );
 
   // Separar las horas normales incluso si las extras ya estaban guardadas.
-  if (minutosExtras > 0 && asistencia.MinutosAjustados !== minutosNormales) {
+  if (
+    (minutosExtras > 0 || restablecerAjuste) &&
+    asistencia.MinutosAjustados !== minutosNormales
+  ) {
     const asistenciaActualizada =
       await asistenciasRepository.updateMinutosAsistencia(
         asistenciaId,
@@ -397,6 +410,7 @@ export async function sincronizarHorasExtras(
     // El llamador devuelve esta misma asistencia en su respuesta.
     asistencia.MinutosAjustados = minutosNormales;
   }
+  asistencia.MinutosEfectivos = asistencia.MinutosAjustados ?? asistencia.MinutosCalculados;
 
   // No necesitamos crear un registro sin horas extras.
   if (!registroAnterior && minutosExtras === 0) {

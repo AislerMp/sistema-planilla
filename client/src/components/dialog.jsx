@@ -13,6 +13,7 @@ export default function Dialog({
 
   useEffect(() => {
     const dialog = dialogRef.current;
+    const elementoAnterior = document.activeElement;
     const overflowAnterior = document.body.style.overflow;
 
     dialog.showModal();
@@ -21,6 +22,7 @@ export default function Dialog({
     return () => {
       dialog.close();
       document.body.style.overflow = overflowAnterior;
+      elementoAnterior?.focus();
     };
   }, []);
 

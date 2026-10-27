@@ -10,11 +10,14 @@ export default function useAsyncRequest(requestFn, deps = []) {
 
     const runFn = async () => {
       try {
-        if (mounted) { setIsLoading(true); setError(null); }
+        if (mounted) {
+          setIsLoading(true);
+          setError(null);
+        }
         const result = await requestFn();
-        if (mounted) setData(result); 
+        if (mounted) setData(result);
       } catch (err) {
-        if (mounted) setError(err.message); 
+        if (mounted) setError(err.message);
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -22,7 +25,9 @@ export default function useAsyncRequest(requestFn, deps = []) {
 
     runFn();
 
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, deps);
   return { data, isLoading, error };
 }

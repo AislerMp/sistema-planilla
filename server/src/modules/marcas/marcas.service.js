@@ -27,6 +27,8 @@ import { validarDiaSinIncapacidad } from "../incapacidades/services/incapacidade
 import { beginTransaction } from "../../shared/config/database.js";
 import { validarDiasVacaciones } from "../vacaciones/services/vacaciones.service.js";
 import { bloquearColaboradorSolicitudes } from "../solicitudes/solicitudes.repository.js";
+import { clasificarJornada } from "../../shared/utils/jornadaUtils.js";
+import { registrarBitacora, entidades, acciones } from "../bitacora/bitacora.service.js";
 
 export async function consultarMisMarcas(usuario, filtros = {}) {
   if (!usuario) throw serviceError("Debe iniciar sesion", 401);
@@ -281,18 +283,45 @@ export async function registrarSalida(usuario) {
     if (!marcaSalidaGuardada)
       throw serviceError("No se pudo marcar la salida", 409);
 
-    // 8. Consultar los intervalos y calcular el total diario.
-    const fechaHoraEntrada = marcaSalidaGuardada.FechaHoraEntrada;
-    const fechaHoraSalida = marcaSalidaGuardada.FechaHoraSalida;
+    // 8. Leer las marcas con la salida recién guardada. Los espacios no cuentan.
+    const intervalos = await marcasRepository.getMarcasByFechaAndColaborador(
+      fechaAsignada,
+      colaboradorId,
+      transaction,
+    );
+    
+    const totalMinutos = intervalos.reduce((total, intervalo) => {
+      if (intervalo.FechaHoraSalida == null) return total;
+      return total + Math.floor(
+        (intervalo.FechaHoraSalida - intervalo.FechaHoraEntrada) / 60_000,
+      );
+    }, 0);
 
-    const minutosDelIntervalo = Math.floor(
-      (fechaHoraSalida - fechaHoraEntrada) / 60000,
+    // Una segunda salida puede cambiar la clasificación del día completo.
+    const { tipoJornada } = clasificarJornada(intervalos);
+    const asistenciaClasificada = await asistenciasRepository.updateTipoJornada(
+      asistenciaDiariaExistente.AsistenciaId,
+      tipoJornada,
+      transaction,
     );
 
-    const minutosCalculadosActuales =
-      asistenciaDiariaExistente.MinutosCalculados ?? 0;
+    if (!asistenciaClasificada) {
+      throw serviceError("No se pudo guardar la clasificación de la jornada", 500);
+    }
 
-    const totalMinutos = minutosCalculadosActuales + minutosDelIntervalo;
+    if (asistenciaDiariaExistente.TipoJornada !== tipoJornada) {
+      await registrarBitacora(
+        {
+          usuarioId: usuario.UsuarioId,
+          entidad: entidades.ASISTENCIAS_DIARIAS,
+          registroId: asistenciaDiariaExistente.AsistenciaId,
+          accion: acciones.ACTUALIZAR,
+          datosAnteriores: { tipoJornada: asistenciaDiariaExistente.TipoJornada ?? null },
+          datosNuevos: { tipoJornada },
+        },
+        transaction,
+      );
+    }
 
     // 9. Actualizar minutos calculados y su bitácora.
     const asistenciaDiariaCalculada = await actualizarMinutosCalculados(
