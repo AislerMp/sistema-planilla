@@ -25,10 +25,11 @@ export async function getCalculosBySolicitud(
   return result.recordset;
 }
 
-export async function getCalculosByPeriodo(periodoId, transaction = null) {
+export async function getCalculosByPeriodo(periodoId, colaboradorId = null, transaction = null) {
   const request = await createRequest(transaction);
   const result = await request
     .input("periodoId", sql.Int, periodoId)
+    .input("colaboradorId", sql.Int, colaboradorId)
     .query(`
       SELECT
         cv.CalculoVacacionId,
@@ -55,6 +56,7 @@ export async function getCalculosByPeriodo(periodoId, transaction = null) {
       WHERE cv.PeriodoId = @periodoId
         AND s.TipoSolicitud = 'VACACIONES'
         AND s.Estado = 'APROBADA'
+        AND (@colaboradorId IS NULL OR s.ColaboradorId = @colaboradorId)
       ORDER BY
         s.ColaboradorId,
         cv.FechaInicioReconocida,

@@ -28,12 +28,14 @@ export async function getCalculosBySolicitud(
 // Obtener los cálculos que se reconocerán en una planilla.
 export async function getCalculosByPeriodo(
   periodoId,
+  colaboradorId = null,
   transaction = null,
 ) {
   const request = await createRequest(transaction);
 
   const result = await request
     .input("periodoId", sql.Int, periodoId)
+    .input("colaboradorId", sql.Int, colaboradorId)
     .query(`
       SELECT
         ci.CalculoId,
@@ -60,6 +62,7 @@ export async function getCalculosByPeriodo(
       WHERE ci.PeriodoId = @periodoId
         AND s.TipoSolicitud = 'INCAPACIDAD'
         AND s.Estado = 'APROBADA'
+        AND (@colaboradorId IS NULL OR s.ColaboradorId = @colaboradorId)
 
       ORDER BY s.ColaboradorId, i.FechaInicio, ci.CalculoId;
     `);

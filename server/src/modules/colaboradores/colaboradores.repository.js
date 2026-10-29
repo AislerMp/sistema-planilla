@@ -17,7 +17,7 @@ export async function getAllColaboradores(restauranteId = null) {
   const request = await createRequest();
   if (restauranteId !== null) request.input("restauranteId", sql.Int, restauranteId);
   const result = await request.query(`
-    SELECT c.*, p.Nombre AS NombrePuesto, r.Nombre AS NombreRestaurante
+    SELECT c.*, p.Nombre AS NombrePuesto, p.TarifaHora, r.Nombre AS NombreRestaurante
     FROM Colaboradores AS c
     LEFT JOIN Puestos AS p ON p.PuestoId = c.PuestoId
     LEFT JOIN Restaurantes AS r ON r.RestauranteId = c.RestauranteId

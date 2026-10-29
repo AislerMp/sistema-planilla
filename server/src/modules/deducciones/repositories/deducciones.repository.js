@@ -1,10 +1,7 @@
 import { createRequest, sql } from "../../../shared/config/database.js";
 import { serviceError } from "../../../shared/utils/serviceUtils.js";
 
-export async function getDeducciones(
-  filtros = {},
-  transaction = null,
-) {
+export async function getDeducciones(filtros = {}, transaction = null) {
   const { tipoDeduccion, codigo, fechaVigencia } = filtros;
 
   const request = await createRequest(transaction);
@@ -12,8 +9,7 @@ export async function getDeducciones(
   const result = await request
     .input("tipoDeduccion", sql.VarChar(15), tipoDeduccion ?? null)
     .input("codigo", sql.VarChar(50), codigo ?? null)
-    .input("fechaVigencia", sql.Date, fechaVigencia ?? null)
-    .query(`
+    .input("fechaVigencia", sql.Date, fechaVigencia ?? null).query(`
       SELECT
         DeduccionId,
         Nombre,
@@ -42,6 +38,37 @@ export async function getDeducciones(
   return result.recordset;
 }
 
+export async function getDeduccionesLegalesYVigentes(
+  fechaVigencia,
+  transaction = null,
+) {
+  const request = await createRequest(transaction);
+
+  const result = await request
+    .input("fechaVigencia", sql.Date, fechaVigencia)
+    .query(`
+      SELECT
+        DeduccionId,
+        Nombre,
+        Codigo,
+        TipoDeduccion,
+        Porcentaje,
+        FechaVigenciaInicio,
+        FechaVigenciaFin,
+        EntidadReceptora
+      FROM dbo.Deducciones
+      WHERE TipoDeduccion = 'LEGAL'
+        AND FechaVigenciaInicio <= @fechaVigencia
+        AND (
+          FechaVigenciaFin IS NULL
+          OR FechaVigenciaFin >= @fechaVigencia
+        )
+      ORDER BY Nombre, FechaVigenciaInicio DESC, DeduccionId DESC;
+    `);
+
+  return result.recordset ?? [];
+}
+
 export async function getTiposCodigos(transaction = null) {
   const request = await createRequest(transaction);
   const result = await request.query(`
@@ -52,11 +79,7 @@ export async function getTiposCodigos(transaction = null) {
   return result.recordset;
 }
 
-export async function existeNombreOCodigo(
-  nombre,
-  codigo,
-  transaction = null,
-) {
+export async function existeNombreOCodigo(nombre, codigo, transaction = null) {
   const request = await createRequest(transaction);
   const result = await request
     .input("nombre", sql.VarChar(100), nombre)
