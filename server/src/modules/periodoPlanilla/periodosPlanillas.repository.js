@@ -27,7 +27,11 @@ export async function getPeriodos(transaction = null) {
   return result.recordset || [];
 }
 
-export async function getPeriodoById(periodoId, transaction = null) {
+export async function getPeriodoById(
+  periodoId,
+  transaction = null,
+  bloquear = false,
+) {
   const request = await createRequest(transaction);
 
   const result = await request.input("PeriodoId", sql.Int, periodoId).query(`
@@ -41,6 +45,7 @@ export async function getPeriodoById(periodoId, transaction = null) {
         CreadoPorUsuarioId,
         FechaCreacion
       FROM dbo.PeriodosPlanilla
+        ${bloquear && transaction ? "WITH (UPDLOCK, HOLDLOCK)" : ""}
       WHERE PeriodoId = @PeriodoId;
     `);
 

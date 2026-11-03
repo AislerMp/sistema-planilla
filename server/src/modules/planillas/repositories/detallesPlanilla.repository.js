@@ -40,20 +40,22 @@ export async function getDetallesByPlanilla(planillaId, restauranteId = null, tr
 }
 
 // Esta funcion obtiene el detalle de un colaborador para un periodo específico seleccionado.
-export async function getDetalleColaboradorByPeriodo(periodoId, colaboradorId, transaction = null) {
+export async function getDetallesColaboradorByPeriodo(periodoId = null, colaboradorId, transaction = null) {
   const request = await createRequest(transaction);
 
   const result = await request.input("periodoId", sql.Int, periodoId)
     .input("colaboradorId", sql.Int, colaboradorId).query(`
     SELECT
       c.Nombres AS ColaboradorNombre, c.Apellidos AS ColaboradorApellido,
+      r.Nombre AS RestauranteNombre,
       dp.DetallePlanillaId, dp.PlanillaId, dp.ColaboradorId, dp.RestauranteId,
       dp.TarifaHoraAplicada, dp.TotalIngresos, dp.TotalDeducciones, dp.TotalNeto
     FROM dbo.DetallesPlanilla AS dp
     JOIN dbo.Colaboradores AS c ON dp.ColaboradorId = c.ColaboradorId
     JOIN dbo.Planillas AS p ON dp.PlanillaId = p.PlanillaId
-    WHERE p.PeriodoId = @periodoId
-      AND dp.ColaboradorId = @colaboradorId
+    JOIN dbo.Restaurantes AS r ON dp.RestauranteId = r.RestauranteId
+    WHERE dp.ColaboradorId = @colaboradorId
+      AND (@periodoId IS NULL OR p.PeriodoId = @periodoId)
     ORDER BY dp.ColaboradorId;
   `);
 
@@ -90,11 +92,13 @@ export async function getDetallesByRestaurante(restauranteId, periodoId = null, 
     .input("periodoId", sql.Int, periodoId).query(`
     SELECT
       c.Nombres AS ColaboradorNombre, c.Apellidos AS ColaboradorApellido,
+      r.Nombre AS RestauranteNombre,
       dp.DetallePlanillaId, dp.PlanillaId, dp.ColaboradorId, dp.RestauranteId,
       dp.TarifaHoraAplicada, dp.TotalIngresos, dp.TotalDeducciones, dp.TotalNeto
     FROM dbo.DetallesPlanilla AS dp
     JOIN dbo.Colaboradores AS c ON dp.ColaboradorId = c.ColaboradorId
     JOIN dbo.Planillas AS p ON dp.PlanillaId = p.PlanillaId
+    JOIN dbo.Restaurantes AS r ON dp.RestauranteId = r.RestauranteId
     WHERE (@periodoId IS NULL OR p.PeriodoId = @periodoId)
       AND dp.RestauranteId = @restauranteId
     ORDER BY dp.PlanillaId DESC;

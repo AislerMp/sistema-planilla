@@ -2,6 +2,24 @@ import Swal from "sweetalert2/dist/sweetalert2.js";
 import "sweetalert2/dist/sweetalert2.min.css";
 import { validarMotivoReversion } from "./reversionSolicitudes.js";
 
+export async function confirmarCalculoAguinaldo(anio) {
+  const resultado = await Swal.fire({
+    titleText: `¿Confirmar el aguinaldo ${anio}?`,
+    text: "Se recalculará y registrará el año completo para todos los restaurantes, sin aplicar los filtros de esta consulta. El cálculo quedará confirmado en el histórico.",
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonText: "Sí, confirmar y registrar",
+    cancelButtonText: "Cancelar",
+    reverseButtons: true,
+    focusCancel: true,
+    background: "var(--color-surface)",
+    color: "var(--color-text)",
+    confirmButtonColor: "var(--color-primary)",
+    customClass: { popup: "aguinaldo-confirmacion-alert" },
+  });
+  return resultado.isConfirmed;
+}
+
 export async function confirmarAprobacion(
   { tipoSolicitud, solicitudId, enviarARh = false },
   target,

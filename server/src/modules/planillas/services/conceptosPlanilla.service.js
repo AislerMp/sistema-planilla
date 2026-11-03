@@ -1,5 +1,6 @@
 import * as conceptosRepository from "../repositories/conceptosPlanilla.repository.js";
 import * as detallePlanillaRepository from "../repositories/detallesPlanilla.repository.js";
+import { getRestaurantePermitido } from "../../colaboradores/colaboradores.service.js";
 import { obtenerLimiteOrdinarioMinutos } from "../../../shared/utils/jornadaUtils.js";
 import {
   serviceError,
@@ -13,25 +14,41 @@ import {
 const FACTORES_HORAS = { ORDINARIA: 1, EXTRA: 1.5, FERIADO: 2 };
 const FACTORES_JORNADAS = { DIURNA: 8, NOCTURNA: 6, MIXTA: 7 };
 
-export async function obtenerConceptoPlanilla(
-  conceptoPlanillaId,
-  transaction = null,
-) {
-  const id = validateId(conceptoPlanillaId, "ConceptoPlanillaId");
-  const concepto = await conceptosRepository.getConceptoById(id, transaction);
-
-  if (!concepto) {
-    throw serviceError("El concepto de planilla no existe.", 404);
-  }
-
-  return concepto;
-}
-
 export async function listarConceptosPorDetalle(
   detallePlanillaId,
+  usuario,
   transaction = null,
 ) {
   const id = validateId(detallePlanillaId, "DetallePlanillaId");
+  const detalle = await detallePlanillaRepository.getDetalleById(
+    id,
+    transaction,
+  );
+
+  if (!detalle) {
+    throw serviceError("El detalle de planilla no existe.", 404);
+  }
+
+  if (
+    usuario.Rol === "COLABORADOR" &&
+    detalle.ColaboradorId !== validateId(usuario.ColaboradorId, "ColaboradorId")
+  ) {
+    throw serviceError(
+      "Solo podés consultar los conceptos de tu propia planilla.",
+      403,
+    );
+  }
+
+  if (usuario.Rol === "GERENTE") {
+    const restauranteId = await getRestaurantePermitido(usuario);
+    if (detalle.RestauranteId !== restauranteId) {
+      throw serviceError(
+        "Solo podés consultar planillas de tu restaurante asignado.",
+        403,
+      );
+    }
+  }
+
   return conceptosRepository.getConceptosByDetalle(id, transaction);
 }
 
@@ -58,7 +75,18 @@ export async function calcularConceptosColaborador(datosCalculo) {
       (feriado) => fechaSQLComoTexto(feriado.Fecha) === fechaAsignada,
     );
 
+    if (asistencia.MinutosEfectivos === 0 && asistencia.MinutosExtras === 0) {
+      continue;
+    }
+
     const tipoJornada = asistencia.TipoJornada;
+    const jornadaParaCalculo = tipoJornada ?? "DIURNA";
+    if (!FACTORES_JORNADAS[jornadaParaCalculo]) {
+      throw serviceError(
+        `La asistencia del ${fechaAsignada} tiene minutos reconocidos y no tiene una jornada válida.`,
+        409,
+      );
+    }
 
     // Una asistencia sin minutos no genera conceptos.
     if (asistencia.MinutosEfectivos === 0 && asistencia.MinutosExtras === 0) {
@@ -69,7 +97,7 @@ export async function calcularConceptosColaborador(datosCalculo) {
       ? FACTORES_HORAS.FERIADO
       : FACTORES_HORAS.ORDINARIA;
 
-    const valorTarifaHora = tarifaXDia / FACTORES_JORNADAS[tipoJornada];
+    const valorTarifaHora = tarifaXDia / FACTORES_JORNADAS[jornadaParaCalculo];
 
     // Las horas conservan su duración real.
     const horasEfectivas = asistencia.MinutosEfectivos / 60;
@@ -79,7 +107,7 @@ export async function calcularConceptosColaborador(datosCalculo) {
       {
         tipoConcepto: "INGRESO",
         codigoConcepto: esFeriado ? "ORDINARIAS_FERIADO" : "ORDINARIAS",
-        tipoJornada,
+        tipoJornada: jornadaParaCalculo,
         minutos: asistencia.MinutosEfectivos,
         factorAplicado: factor,
         monto: horasEfectivas * valorTarifaHora * factor,
@@ -87,7 +115,7 @@ export async function calcularConceptosColaborador(datosCalculo) {
       {
         tipoConcepto: "INGRESO",
         codigoConcepto: esFeriado ? "EXTRAS_FERIADO" : "EXTRAS",
-        tipoJornada,
+        tipoJornada: jornadaParaCalculo,
         minutos: asistencia.MinutosExtras,
         factorAplicado: FACTORES_HORAS.EXTRA * factor,
         monto: horasExtras * valorTarifaHora * FACTORES_HORAS.EXTRA * factor,
@@ -118,36 +146,59 @@ export async function calcularConceptosColaborador(datosCalculo) {
 
   // INICIO CALCULO VACACIONES
 
-  conceptosCalculados.push({
-    tipoConcepto: "INGRESO",
-    codigoConcepto: "VACACIONES",
-    tipoJornada: null,
-    minutos: vacaciones.reduce((total, v) => total + v.MinutosReconocidos, 0),
-    factorAplicado: 1,
-    monto: vacaciones.reduce(
-      (total, v) => total + (v.MinutosReconocidos / 60) * tarifaHora,
-      0,
-    ), // Aquí puedes calcular el monto correspondiente si es necesario
-  });
+  const minutosVacaciones = vacaciones.reduce(
+    (total, calculo) => total + calculo.MinutosReconocidos,
+    0,
+  );
+
+  if (minutosVacaciones > 0) {
+    conceptosCalculados.push({
+      tipoConcepto: "INGRESO",
+      codigoConcepto: "VACACIONES",
+      tipoJornada: null,
+      minutos: minutosVacaciones,
+      factorAplicado: 1,
+      monto: (minutosVacaciones / 60) * tarifaHora,
+    });
+  }
   // FIN CALCULO VACACIONES
 
-  // INICIO CALCULO DE INCAPACIDADES
+  // INICIO CÁLCULO DE INCAPACIDADES
+  for (const calculo of incapacidades) {
+    const minutosReconocidos = calculo.MinutosReconocidos;
 
-  conceptosCalculados.push({
-    tipoConcepto: "INGRESO",
-    codigoConcepto: "INCAPACIDADES",
-    tipoJornada: null,
-    minutos: incapacidades.reduce(
-      (total, i) => total + i.MinutosReconocidos,
-      0,
-    ),
-    factorAplicado: 1,
-    monto: incapacidades.reduce(
-      (total, i) => total + (i.MinutosReconocidos / 60) * tarifaHora,
-      0,
-    ),
-  });
-  // FIN CALCULO DE INCAPACIDADES
+    if (minutosReconocidos === 0) {
+      continue;
+    }
+
+    const codigoConcepto = calculo.CodigoTipoIncapacidad;
+    const monto = (minutosReconocidos / 60) * tarifaHora;
+
+    const conceptoExistente = conceptosCalculados.find(
+      (concepto) =>
+        concepto.tipoConcepto === "INGRESO" &&
+        concepto.codigoConcepto === codigoConcepto,
+    );
+
+    if (conceptoExistente) {
+      conceptoExistente.minutos += minutosReconocidos;
+      conceptoExistente.monto += monto;
+    } else {
+      conceptosCalculados.push({
+        tipoConcepto: "INGRESO",
+        codigoConcepto,
+        tipoJornada: null,
+        minutos: minutosReconocidos,
+        factorAplicado: 1,
+        monto,
+      });
+    }
+  }
+  // FIN CÁLCULO DE INCAPACIDADES
+
+  for (const concepto of conceptosCalculados) {
+    concepto.monto = Number(concepto.monto.toFixed(2));
+  }
 
   const salarioBruto = conceptosCalculados.reduce(
     (total, c) => total + c.monto,
@@ -156,6 +207,11 @@ export async function calcularConceptosColaborador(datosCalculo) {
 
   for (const deduccion of deducciones) {
     const factor = deduccion.Porcentaje / 100;
+
+    if (salarioBruto === 0 || factor === 0) {
+      continue;
+    }
+
     conceptosCalculados.push({
       tipoConcepto: "DEDUCCION",
       codigoConcepto: deduccion.Codigo,
@@ -186,7 +242,7 @@ export async function registrarConceptosPlanilla(
     detallePlanillaId,
     `ID de DetallePlanilla no válido`,
   );
-  
+
   const detallePlanillaActual = await detallePlanillaRepository.getDetalleById(
     idDetallePlanilla,
     transaction,

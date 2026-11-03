@@ -7,7 +7,9 @@
     "dev": "node --watch --env-file=.env src/server.js",
     "start": "node --env-file=.env src/server.js",
     "db:check": "node --env-file=.env scripts/check-database.js",
-    "test": "node --test"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
+    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --selectProjects servidor-unitarias",
+    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --selectProjects servidor-integracion"
   },
   "keywords": [],
   "author": "",
@@ -18,8 +20,10 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
-    "jest": "^30.5.2",
     "mssql": "^12.7.0",
     "multer": "^2.4.0"
+  },
+  "devDependencies": {
+    "jest": "^30.5.2"
   }
 }

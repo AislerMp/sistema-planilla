@@ -4,7 +4,21 @@ Prototipo académico desarrollado por Aisler Moreno Pérez para la Universidad I
 
 ## Estado del proyecto
 
-Etapa inicial: estructura de carpetas y documentación preparadas. React, Node.js/Express y la conexión con SQL Server se configurarán en el siguiente paso. Este machote todavía no contiene una aplicación ejecutable ni tablas creadas. No corresponde ejecutar `npm install` o `npm run dev` hasta incorporar los respectivos archivos `package.json`.
+El proyecto cuenta con una interfaz React/Vite, una API Node.js/Express y migraciones de SQL Server. Las pruebas automáticas del cliente y del servidor se ejecutan con Jest.
+
+## Pruebas automáticas
+
+Las dependencias y la configuración de Jest están dentro de `server` y `client`.
+Desde la raíz:
+
+```bash
+npm --prefix server install
+npm --prefix client install
+npm --prefix server test
+npm --prefix client test
+```
+
+Las pruebas están organizadas por módulo y separan casos unitarios de integración de la aplicación. Utilizan datos y transporte SQL simulados, sin conectarse a la base de desarrollo. La [guía de pruebas](docs/pruebas/README.md) explica la clasificación, los comandos y el alcance de las pruebas.
 
 ## Datos del repositorio
 

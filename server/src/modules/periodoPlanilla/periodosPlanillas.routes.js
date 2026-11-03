@@ -5,7 +5,9 @@ import { permitirRoles } from "../../shared/middlewares/auth.middleware.js";
 const router = Router();
 
 // Todos los roles operativos pueden consultar periodos para filtrar asistencias.
-router.use(permitirRoles("COLABORADOR", "GERENTE", "ADMINISTRADOR", "RECURSOS_HUMANOS"));
+router.use(
+  permitirRoles("COLABORADOR", "GERENTE", "ADMINISTRADOR", "RECURSOS_HUMANOS"),
+);
 
 router.get("/", periodosController.listarPeriodosController);
 
@@ -20,7 +22,5 @@ router.get("/:id", periodosController.obtenerPeriodoController);
 router.use(permitirRoles("ADMINISTRADOR", "RECURSOS_HUMANOS"));
 
 router.post("/", periodosController.crearPeriodoController);
-
-router.patch("/:id/estado", periodosController.cambiarEstadoPeriodoController);
 
 export default router;

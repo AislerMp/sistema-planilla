@@ -1,14 +1,27 @@
 import * as planillasRepository from "../repositories/planillas.repository.js";
 import * as detallesPlanillasService from "../services/detallesPlanilla.service.js";
 import * as periodosRepository from "../../periodoPlanilla/periodosPlanillas.repository.js";
-import { getAllColaboradores } from "../../colaboradores/colaboradores.repository.js";
+import { getAllColaboradores, getColaboradorById } from "../../colaboradores/colaboradores.repository.js";
+import { getRestaurantePermitido } from "../../colaboradores/colaboradores.service.js";
+import { getPuestoById } from "../../puestos/puestos.repository.js";
+import { beginTransaction } from "../../../shared/config/database.js";
 import {
   serviceError,
   validateId,
+  validateDate,
 } from "../../../shared/utils/serviceUtils.js";
-import { beginTransaction } from "../../../shared/config/database.js";
 
-// La generación, los cálculos y la bitácora de la planilla quedan pendientes.
+import {
+  obtenerCalendarioActual,
+  fechaSQLComoTexto,
+} from "../../../shared/utils/fechaUtils.js";
+
+import {
+  registrarBitacora,
+  entidades,
+  acciones,
+} from "../../bitacora/bitacora.service.js";
+
 export async function listarPlanillas(transaction = null) {
   return await planillasRepository.getPlanillas(transaction);
 }
@@ -67,13 +80,6 @@ export async function obtenerPlanillasConDetallesRestaurante(
     transaction,
   );
 
-  if (!detalles || detalles.length === 0) {
-    throw serviceError(
-      "No existen detalles de planilla para ese restaurante en el período seleccionado.",
-      404,
-    );
-  }
-
   return { planilla, detalles };
 }
 
@@ -82,8 +88,14 @@ export async function calcularPreplanilla(
   usuario,
   transaction = null,
 ) {
+  const periodoID = validateId(periodoId, "PeriodoId");
+
+  if (!["COLABORADOR", "GERENTE", "RECURSOS_HUMANOS", "ADMINISTRADOR"].includes(usuario?.Rol)) {
+    throw serviceError("No tenés permiso para consultar la preplanilla.", 403);
+  }
+
   const periodo = await periodosRepository.getPeriodoById(
-    periodoId,
+    periodoID,
     transaction,
   );
 
@@ -91,12 +103,36 @@ export async function calcularPreplanilla(
     throw serviceError("El período no existe.", 404);
   }
 
-  const todosColaboradores = await getAllColaboradores(null, transaction);
-  const colaboradores = todosColaboradores.filter(
-    (colaborador) => colaborador.Activo,
-  );
+  if (!["ABIERTO", "EN_REVISION", "CERRADO"].includes(periodo.Estado)) {
+    throw serviceError(
+      "La preplanilla solo puede calcularse para un período abierto, en revisión o cerrado. Si ya fue pagado, consulte la planilla guardada.",
+      409,
+    );
+  }
+
+  let colaboradores;
+  if (usuario.Rol === "COLABORADOR") {
+    const colaboradorId = validateId(usuario.ColaboradorId, "ColaboradorId");
+    const colaborador = await getColaboradorById(colaboradorId, transaction);
+    if (!colaborador) {
+      throw serviceError("El colaborador no existe.", 404);
+    }
+    const puesto = await getPuestoById(colaborador.PuestoId, transaction);
+    if (!puesto || puesto.TarifaHora == null || puesto.TarifaHora <= 0) {
+      throw serviceError("El colaborador no tiene una tarifa por hora válida en su puesto.", 409);
+    }
+
+    colaboradores = [{ ...colaborador, TarifaHora: puesto.TarifaHora }];
+  } else if (usuario.Rol === "GERENTE") {
+    const restaurantePermitido = await getRestaurantePermitido(usuario);
+    colaboradores = await getAllColaboradores(restaurantePermitido, transaction);
+  } else {
+    colaboradores = await getAllColaboradores(null, transaction);
+  }
+
 
   const detallesCalculados = [];
+
   for (const colaborador of colaboradores) {
     const detalleColaborador =
       await detallesPlanillasService.calcularDetalleColaborador(
@@ -104,7 +140,11 @@ export async function calcularPreplanilla(
         periodo,
         transaction,
       );
-    detallesCalculados.push(detalleColaborador);
+
+    // Puede tener ingresos pendientes aunque actualmente esté inactivo.
+    if (detalleColaborador.totalIngresos > 0) {
+      detallesCalculados.push(detalleColaborador);
+    }
   }
 
   const resumenGeneralPlanilla = {
@@ -129,65 +169,94 @@ export async function calcularPreplanilla(
 }
 
 export async function registrarPagoPlanilla(periodoId, usuario) {
+  if (!["RECURSOS_HUMANOS", "ADMINISTRADOR"].includes(usuario?.Rol)) {
+    throw serviceError("No tenés permiso para registrar el pago de la planilla.", 403);
+  }
+
   const periodoID = validateId(periodoId, "PeriodoId");
+  const usuarioId = validateId(usuario.UsuarioId, "UsuarioId");
 
   const transaction = await beginTransaction();
 
   try {
-    // Aquí iría la lógica para registrar el pago de la planilla
+    // El tercer parámetro activa el bloqueo únicamente para registrar el pago.
     const periodo = await periodosRepository.getPeriodoById(
-      periodoId,
+      periodoID,
       transaction,
+      true,
     );
 
-    if (periodo.Estado !== "CERRADO" || periodo.Estado === "PAGADO") {
+    if (!periodo) {
+      throw serviceError("El período no existe.", 404);
+    }
+
+    if (periodo.Estado !== "CERRADO") {
       throw serviceError(
-        "El período no está cerrado o ya ha sido pagado, no se puede registrar el pago.",
-        400,
+        "Solo se puede registrar el pago de un período cerrado y sin pagar.",
+        409,
       );
     }
 
-    const planillaInicializada = await planillasRepository.createPlanilla(
-      {
-        periodoId: periodoID,
-        fechaPago: new Date(),
-        registradoPorUsuarioId: usuario.UsuarioId,
-        totalIngresos: 0,
-        totalDeducciones: 0,
-        totalNeto: 0,
-      },
-      transaction,
-    );
+    const { fechaHoy } = obtenerCalendarioActual();
+
+    if (fechaHoy < fechaSQLComoTexto(periodo.FechaPago)) {
+      throw serviceError(
+        "Todavía no ha llegado la fecha de pago del período.",
+        409,
+      );
+    }
+
+    const planillaExistente =
+      await planillasRepository.getPlanillaByPeriodo(
+        periodoID,
+        transaction,
+      );
+
+    if (planillaExistente) {
+      throw serviceError(
+        "Este período ya tiene una planilla registrada.",
+        409,
+      );
+    }
+
+    // 1. Crear la cabecera con totales en cero.
+    const planillaInicializada =
+      await planillasRepository.createPlanilla(
+        {
+          periodoId: periodoID,
+          fechaPago: validateDate(fechaHoy, "Fecha de pago"),
+          registradoPorUsuarioId: usuarioId,
+          totalIngresos: 0,
+          totalDeducciones: 0,
+          totalNeto: 0,
+        },
+        transaction,
+      );
 
     if (!planillaInicializada) {
-      throw serviceError("No se pudo inicializar la planilla.", 500);
+      throw serviceError(
+        "No se pudo inicializar la planilla.",
+        500,
+      );
     }
 
-    const preplanilla = await calcularPreplanilla(
-      periodoID,
-      usuario,
-      transaction,
-    );
-
-    const { resumenGeneralPlanilla, detallesCalculados } = preplanilla;
-
-    const todosColaboradores = await getAllColaboradores(null, transaction);
-    const colaboradores = todosColaboradores.filter(
-      (colaborador) => colaborador.Activo,
-    );
-
-    for (const colaborador of colaboradores) {
-      const detalle = detallesCalculados.find(
-        (detalle) => detalle.colaboradorId === colaborador.ColaboradorId,
+    // 2. Calcular los detalles y conceptos de todos los colaboradores.
+    const { resumenGeneralPlanilla, detallesCalculados } =
+      await calcularPreplanilla(
+        periodoID,
+        usuario,
+        transaction,
       );
 
-      if (!detalle) {
-        throw serviceError(
-          `No se encontró el detalle calculado para el colaborador con ID ${colaborador.ColaboradorId}.`,
-          500,
-        );
-      }
+    if (detallesCalculados.length === 0) {
+      throw serviceError(
+        "No hay ingresos para registrar una planilla en este período.",
+        409,
+      );
+    }
 
+    // 3. Registrar cada detalle y sus conceptos.
+    for (const detalle of detallesCalculados) {
       await detallesPlanillasService.registrarDetallePlanilla(
         planillaInicializada.PlanillaId,
         detalle,
@@ -195,27 +264,76 @@ export async function registrarPagoPlanilla(periodoId, usuario) {
       );
     }
 
-    const planillaFinalizada = await planillasRepository.updateTotalesPlanilla(
-      planillaInicializada.PlanillaId,
-      resumenGeneralPlanilla,
+    // 4. Completar los totales de la cabecera.
+    const planillaFinalizada =
+      await planillasRepository.updateTotalesPlanilla(
+        planillaInicializada.PlanillaId,
+        resumenGeneralPlanilla,
+        transaction,
+      );
+
+    if (!planillaFinalizada) {
+      throw serviceError(
+        "No se pudieron actualizar los totales de la planilla.",
+        500,
+      );
+    }
+
+    // 5. Confirmar el estado del período dentro de la misma transacción.
+    const periodoActualizado =
+      await periodosRepository.updateEstadoPeriodo(
+        periodoID,
+        "CERRADO",
+        "PAGADO",
+        transaction,
+      );
+
+    if (!periodoActualizado) {
+      throw serviceError(
+        "El estado del período cambió durante el registro del pago.",
+        409,
+      );
+    }
+
+    // 6. Registrar la creación de la planilla.
+    await registrarBitacora(
+      {
+        usuarioId,
+        entidad: entidades.PLANILLAS,
+        registroId: planillaFinalizada.PlanillaId,
+        accion: acciones.CREAR,
+        datosAnteriores: null,
+        datosNuevos: planillaFinalizada,
+      },
       transaction,
     );
 
-    if (!planillaFinalizada) {
-      throw serviceError("No se pudo finalizar la planilla.", 500);
-    }
+    // 7. Registrar el cambio de estado del período.
+    await registrarBitacora(
+      {
+        usuarioId,
+        entidad: entidades.PERIODOS_PLANILLA,
+        registroId: periodoID,
+        accion: acciones.CAMBIAR_ESTADO,
+        datosAnteriores: periodo,
+        datosNuevos: periodoActualizado,
+      },
+      transaction,
+    );
 
     await transaction.commit();
+
     return planillaFinalizada;
   } catch (error) {
     try {
       await transaction.rollback();
     } catch (rollbackError) {
       console.error(
-        "Error al hacer rollback de la transacción:",
+        "No se pudo revertir el registro del pago de la planilla:",
         rollbackError,
       );
     }
+
     throw error;
   }
 }

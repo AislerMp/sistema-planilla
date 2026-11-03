@@ -11,6 +11,8 @@ coverage/
 
 # Archivos temporales
 *.log
+jest-results*.json
+jest-focus-results.json
 .DS_Store
 Thumbs.db
 

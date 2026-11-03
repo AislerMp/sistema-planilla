@@ -30,14 +30,14 @@ export default function Sidebar({ isOpen, onNavigate }) {
       </Link>
       <nav aria-label="Navegación principal">
         <NavLink to="/inicio" onClick={onNavigate} className={linkClass}>
-          <House size={19} />
-          Inicio
+          <House size={18} aria-hidden="true" />
+          <span>Inicio</span>
         </NavLink>
 
         {groupMenuItems(visibleItems).map((group) => (
           <div className="sidebar-group" key={group.id}>
             <p className="sidebar-section" id={`nav-${group.id}`}>
-              {user?.Rol === "COLABORADOR" && group.id === "administracion" ? "Mi jornada" : group.title}
+              {group.title}
             </p>
             <div className="sidebar-links" role="group" aria-labelledby={`nav-${group.id}`}>
               {group.items.map((item) => {
@@ -49,8 +49,8 @@ export default function Sidebar({ isOpen, onNavigate }) {
                     onClick={onNavigate}
                     className={linkClass}
                   >
-                    <Icon size={19} />
-                    {item.title}
+                    <Icon size={18} aria-hidden="true" />
+                    <span>{item.title}</span>
                   </NavLink>
                 );
               })}

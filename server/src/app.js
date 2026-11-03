@@ -17,6 +17,8 @@ import permisosLaboralesRoutes from "./modules/permisosLaborales/permisosLaboral
 import incapacidadesRoutes from "./modules/incapacidades/incapacidades.routes.js";
 import vacacionesRoutes from "./modules/vacaciones/vacaciones.routes.js";
 import deduccionesRoutes from "./modules/deducciones/deducciones.routes.js";
+import planillasRoutes from "./modules/planillas/planillas.routes.js";
+import aguinaldosRoutes from "./modules/aguinaldos/aguinaldo.routes.js";
 
 import { isAuthenticate } from "./shared/middlewares/auth.middleware.js";
 import { errorHandler } from "./shared/middlewares/error.middleware.js";
@@ -65,6 +67,8 @@ app.use("/api/permisos-laborales", permisosLaboralesRoutes);
 app.use("/api/incapacidades", incapacidadesRoutes);
 app.use("/api/vacaciones", vacacionesRoutes);
 app.use("/api/deducciones", deduccionesRoutes);
+app.use("/api/planillas", planillasRoutes);
+app.use("/api/aguinaldos", aguinaldosRoutes);
 
 app.use(errorHandler);
 

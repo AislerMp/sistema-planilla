@@ -2,9 +2,7 @@ import { createRequest, sql } from "../../shared/config/database.js";
 
 export async function getRestauranteDelUsuario(usuarioId) {
   const request = await createRequest();
-  const result = await request
-    .input("usuarioId", sql.Int, usuarioId)
-    .query(`
+  const result = await request.input("usuarioId", sql.Int, usuarioId).query(`
       SELECT c.RestauranteId
       FROM Usuarios AS u
       INNER JOIN Colaboradores AS c ON c.ColaboradorId = u.ColaboradorId
@@ -13,9 +11,15 @@ export async function getRestauranteDelUsuario(usuarioId) {
   return result.recordset[0]?.RestauranteId ?? null;
 }
 
-export async function getAllColaboradores(restauranteId = null) {
-  const request = await createRequest();
-  if (restauranteId !== null) request.input("restauranteId", sql.Int, restauranteId);
+export async function getAllColaboradores(
+  restauranteId = null,
+  transaction = null,
+) {
+  const request = await createRequest(transaction);
+
+  if (restauranteId !== null)
+    request.input("restauranteId", sql.Int, restauranteId);
+
   const result = await request.query(`
     SELECT c.*, p.Nombre AS NombrePuesto, p.TarifaHora, r.Nombre AS NombreRestaurante
     FROM Colaboradores AS c
@@ -24,22 +28,26 @@ export async function getAllColaboradores(restauranteId = null) {
     ${restauranteId !== null ? "WHERE c.RestauranteId = @restauranteId" : ""}
     ORDER BY FechaCreacion DESC;
   `);
+  
   return result.recordset || [];
 }
 
-export async function getColaboradorById(id, transaction=null, restauranteId=null) {
+export async function getColaboradorById(
+  id,
+  transaction = null,
+  restauranteId = null,
+) {
   const request = await createRequest(transaction);
-  if (restauranteId !== null) request.input("restauranteId", sql.Int, restauranteId);
-  const result = await request
-    .input("id", sql.Int, id)
-    .query(`
+  if (restauranteId !== null)
+    request.input("restauranteId", sql.Int, restauranteId);
+  const result = await request.input("id", sql.Int, id).query(`
       SELECT * FROM Colaboradores WHERE ColaboradorId = @id
       ${restauranteId !== null ? "AND RestauranteId = @restauranteId" : ""}
     `);
   return result.recordset[0] || null;
 }
 
-export async function createColaborador(colaborador, transaction=null) {
+export async function createColaborador(colaborador, transaction = null) {
   const request = await createRequest(transaction);
   const result = await request
     .input("Identificacion", sql.NVarChar(30), colaborador.identificacion)
@@ -61,7 +69,7 @@ export async function createColaborador(colaborador, transaction=null) {
   return result.recordset[0].ColaboradorId;
 }
 
-export async function updateColaborador(id, colaborador, transaction=null) {
+export async function updateColaborador(id, colaborador, transaction = null) {
   const request = await createRequest(transaction);
   const result = await request
     .input("id", sql.Int, id)
@@ -93,11 +101,17 @@ export async function updateColaborador(id, colaborador, transaction=null) {
   return result.rowsAffected[0] > 0;
 }
 
-export async function actualizarEstadoColaborador(id, activo, transaction=null) {
+export async function actualizarEstadoColaborador(
+  id,
+  activo,
+  transaction = null,
+) {
   const request = await createRequest(transaction);
   const result = await request
     .input("id", sql.Int, id)
     .input("activo", sql.Bit, activo)
-    .query("UPDATE Colaboradores SET Activo = @activo WHERE ColaboradorId = @id");
+    .query(
+      "UPDATE Colaboradores SET Activo = @activo WHERE ColaboradorId = @id",
+    );
   return result.rowsAffected[0] > 0;
 }

@@ -49,8 +49,11 @@ export async function getCalculosByPeriodo(
 
         i.TipoIncapacidadId,
         i.FechaInicio,
-        i.FechaFin
+        i.FechaFin,
 
+        ti.Codigo AS CodigoTipoIncapacidad,
+        ti.Nombre AS NombreTipoIncapacidad
+        
       FROM dbo.CalculosIncapacidad AS ci
 
       INNER JOIN dbo.Incapacidades AS i
@@ -58,6 +61,9 @@ export async function getCalculosByPeriodo(
 
       INNER JOIN dbo.Solicitudes AS s
         ON s.SolicitudId = i.SolicitudId
+
+      INNER JOIN dbo.TiposIncapacidad as ti
+        ON ti.TipoIncapacidadId = i.TipoIncapacidadId
 
       WHERE ci.PeriodoId = @periodoId
         AND s.TipoSolicitud = 'INCAPACIDAD'

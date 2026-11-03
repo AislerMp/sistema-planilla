@@ -4,6 +4,10 @@ import {
   serviceError,
   validateId,
 } from "../../../shared/utils/serviceUtils.js";
+import {
+  validarRestauranteSolicitudes,
+} from "../../../shared/utils/solicitudUtils.js";
+
 import { getAsistenciasByColaborador } from "../../asistenciasDiarias/asistenciasDiarias.repository.js";
 import { getFeriadosByRango } from "../../feriados/feriados.repository.js";
 import { getCalculosByPeriodo } from "../../vacaciones/repositorios/calculosVacaciones.repository.js";
@@ -31,51 +35,52 @@ export async function listarDetallesPorPlanilla(
   transaction = null,
 ) {
   const id = validateId(planillaId, "PlanillaId");
-  return detallesRepository.getDetallesByPlanilla(id, restauranteId, transaction);
+
+  return detallesRepository.getDetallesByPlanilla(
+    id,
+    restauranteId,
+    transaction,
+  );
 }
 
-export async function listarDetallesPorColaborador(
-  colaboradorId,
-  transaction = null,
-) {
-  const id = validateId(colaboradorId, "ColaboradorId");
-  return detallesRepository.getDetallesByColaborador(id, transaction);
-}
-
-export async function obtenerDetalleColaboradorByPeriodo(
+export async function obtenerDetallesColaboradorByPeriodo(
   periodoId,
   colaboradorId,
   transaction = null,
 ) {
-  const idPeriodo = validateId(periodoId, "PeriodoId");
+  const idPeriodo = validateId(periodoId, "PeriodoId", true);
   const idColaborador = validateId(colaboradorId, "ColaboradorId");
 
-  const detalle = await detallesRepository.getDetalleColaboradorByPeriodo(
+  const detalles = await detallesRepository.getDetallesColaboradorByPeriodo(
     idPeriodo,
     idColaborador,
     transaction,
   );
 
-  if (!detalle) {
+  if (!detalles || detalles.length === 0) {
     throw serviceError(
       "El colaborador no tiene detalle de planilla en ese período.",
       404,
     );
   }
 
-  return detalle;
+  return detalles;
 }
 
 export async function obtenerDetallesByRestaurante(
-  restauranteId,
+  usuario,
   periodoId = null,
   transaction = null,
 ) {
-  const idRestaurante = validateId(restauranteId, "RestauranteId");
   const idPeriodo = validateId(periodoId, "PeriodoId", true);
 
+  const restauranteConsultaId =
+    usuario.Rol !== "GERENTE"
+      ? null
+      : await validarRestauranteSolicitudes(null, usuario);
+
   return detallesRepository.getDetallesByRestaurante(
-    idRestaurante,
+    restauranteConsultaId,
     idPeriodo,
     transaction,
   );
@@ -89,21 +94,25 @@ export async function calcularDetalleColaborador(
   // Es de prueba, un ejemplo ilustrativo para acomodar funciones.
   const datosCalculos = {
     tarifaHora: colaborador.TarifaHora,
+    
     asistencias: await getAsistenciasByColaborador(
       colaborador.ColaboradorId,
       { periodoId: periodo.PeriodoId },
       transaction,
     ),
+
     feriados: await getFeriadosByRango(
       periodo.FechaInicio,
       periodo.FechaFin,
       transaction,
     ),
+
     vacaciones: await getCalculosByPeriodo(
       periodo.PeriodoId,
       colaborador.ColaboradorId,
       transaction,
     ),
+
     incapacidades: await getCalculosIncapacidadesByPeriodo(
       periodo.PeriodoId,
       colaborador.ColaboradorId,
@@ -115,6 +124,7 @@ export async function calcularDetalleColaborador(
     periodo.FechaPago,
     transaction,
   );
+
   const deduccionesSolicitadas = (
     await getSolicitudesByColaborador(
       colaborador.ColaboradorId,
@@ -154,6 +164,13 @@ export async function calcularDetalleColaborador(
 
   const totalNeto = Number((totalIngresos - totalDeducciones).toFixed(2));
 
+  if (totalNeto < 0) {
+    throw serviceError(
+      `Las deducciones del colaborador ${colaborador.ColaboradorId} superan sus ingresos.`,
+      409,
+    );
+  }
+
   const detalleCalculado = {
     colaboradorId: colaborador.ColaboradorId,
     restauranteId: colaborador.RestauranteId,
@@ -183,17 +200,13 @@ export async function registrarDetallePlanilla(
 
   const planillaID = validateId(planillaId, "PlanillaId");
 
-  const detallePlanillaCreado =
-    await detallesRepository.createDetallePlanilla(
-      { ...detalleCalculado, planillaId: planillaID },
-      transaction,
-    );
+  const detallePlanillaCreado = await detallesRepository.createDetallePlanilla(
+    { ...detalleCalculado, planillaId: planillaID },
+    transaction,
+  );
 
   if (!detallePlanillaCreado) {
-    throw serviceError(
-      "No se pudo registrar el detalle de la planilla.",
-      500,
-    );
+    throw serviceError("No se pudo registrar el detalle de la planilla.", 500);
   }
 
   const conceptosRegistrados =

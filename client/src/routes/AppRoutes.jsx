@@ -34,6 +34,12 @@ import GestionarDeduccion from "../pages/deducciones/mantenimiento/gestionarDedu
 import DeduccionesDashboard from "../pages/deducciones/solicitudes/deduccionesDashboard.jsx";
 import SolicitarDeduccion from "../pages/deducciones/solicitudes/solicitarDeduccion.jsx";
 import DetalleSolicitudDeduccion from "../pages/deducciones/solicitudes/detalleSolicitudDeduccion.jsx";
+import PreplanillaPage from "../pages/planillas/pages/PreplanillaPage.jsx";
+import RegistrarPagoPage from "../pages/planillas/pages/RegistrarPagoPage.jsx";
+import PlanillasPagadasPage from "../pages/planillas/pages/PlanillasPagadasPage.jsx";
+import DetallePagoPage from "../pages/planillas/pages/DetallePagoPage.jsx";
+import AguinaldoActualPage from "../pages/aguinaldos/AguinaldoActualPage.jsx";
+import HistorialAguinaldosPage from "../pages/aguinaldos/HistorialAguinaldosPage.jsx";
 
 export default function AppRoutes({ theme, onToggleTheme }) {
   return (
@@ -131,6 +137,15 @@ export default function AppRoutes({ theme, onToggleTheme }) {
             <Route element={<ProtectedRoute roles={["ADMINISTRADOR"]} />}>
               <Route path="/deducciones/crear" element={<CrearDeduccion />} />
               <Route path="/deducciones/:deduccionId" element={<GestionarDeduccion />} />
+            </Route>
+
+            <Route path="/planillas" element={<PreplanillaPage />} />
+            <Route path="/aguinaldos" element={<AguinaldoActualPage />} />
+            <Route path="/aguinaldos/historico" element={<HistorialAguinaldosPage />} />
+            <Route path="/planillas/pagadas" element={<PlanillasPagadasPage />} />
+            <Route path="/planillas/detalle/:detalleId" element={<DetallePagoPage />} />
+            <Route element={<ProtectedRoute roles={["RECURSOS_HUMANOS"]} />}>
+              <Route path="/planillas/registrar-pago/:periodoId" element={<RegistrarPagoPage />} />
             </Route>
 
             <Route path="*" element={<NotFoundPage />} />

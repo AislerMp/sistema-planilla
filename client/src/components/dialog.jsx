@@ -6,6 +6,7 @@ export default function Dialog({
   subtitulo,
   onCerrar,
   ocupado = false,
+  className = "",
   children,
 }) {
   const dialogRef = useRef(null);
@@ -29,7 +30,7 @@ export default function Dialog({
   return (
     <dialog
       ref={dialogRef}
-      className="data-panel solicitudes-modal"
+      className={`data-panel solicitudes-modal ${className}`.trim()}
       aria-labelledby={tituloId}
       onCancel={(event) => {
         event.preventDefault();

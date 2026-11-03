@@ -24,6 +24,8 @@ export const entidades = {
   SOLICITUDES_PERMISOS_LABORALES: "SolicitudesPermisosLaborales",
   SOLICITUDES_INCAPACIDADES: "SolicitudesIncapacidades",
   SOLICITUDES_DEDUCCIONES: "SolicitudesDeducciones",
+  PLANILLAS: "Planillas",
+  AGUINALDO: "Aguinaldo"
 };
 
 export const acciones = {
