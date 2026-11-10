@@ -23,6 +23,30 @@ export async function bloquearColaboradorSolicitudes(
     throw serviceError("Colaborador no encontrado", 404);
 }
 
+export async function getSolicitudesBaseById(solicitudId, transaction) {
+  const request = await createRequest(transaction);
+
+  const result = await request
+    .input("solicitudId", sql.Int, solicitudId)
+    .query(`
+      SELECT 
+        SolicitudId,
+        TipoSolicitud,
+        ColaboradorId,
+        RestauranteId,
+        RegistradoPorUsuarioId,
+        Motivo,
+        Estado,
+        Observacion,
+        RevisadoPorGerenteId,
+        RevisadoPorRhId
+      FROM dbo.Solicitudes
+      WHERE SolicitudId = @solicitudId;
+    `);
+
+  return result.recordset[0] ?? null;
+}
+
 export async function crearCabeceraSolicitud(
   datos,
   tipoSolicitud,

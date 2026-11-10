@@ -1,5 +1,6 @@
 import * as deduccionesService from "./services/deducciones.service.js";
 import * as solicitudesService from "./services/solicitudesDeducciones.service.js";
+import { notificarSolicitudGuardada } from "../notificaciones/notificaciones.service.js";
 
 function filtrosSolicitudes(query) {
   return { desde: query.desde, hasta: query.hasta, estado: query.estado };
@@ -86,6 +87,7 @@ export async function solicitarDeduccion(req, res) {
     req.body ?? {},
     req.user,
   );
+  await notificarSolicitudGuardada(solicitud);
   return res.status(201).json(solicitud);
 }
 
@@ -95,6 +97,7 @@ export async function resolverSolicitudRh(req, res) {
     req.body ?? {},
     req.user,
   );
+  await notificarSolicitudGuardada(solicitud);
   return res.status(200).json(solicitud);
 }
 

@@ -11,15 +11,21 @@ import LoadingState from "../../components/loadingState.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getRestaurantes } from "../../services/restaurantes.Service.js";
 import { getPeriodos } from "../../services/periodos.Service.js";
-import { getColaboradores, getColaborador } from "../../services/colaboradores.Service.js";
+import {
+  getColaboradores,
+  getColaborador,
+} from "../../services/colaboradores.Service.js";
 import { obtenerRangoAsistencias } from "../../utils/asistenciaUtils.js";
 import {
   getAsistenciasPorColaborador,
   getAsistenciasPorRestaurante,
 } from "../../services/asistenciasDiarias.Service.js";
 import useAsyncRequest from "../../hooks/useAsyncRequest.js";
-import { formatDate, obtenerSemanas, etiquetaSemana } from "../../utils/fechaUtils.js";
-
+import {
+  formatDate,
+  obtenerSemanas,
+  etiquetaSemana,
+} from "../../utils/fechaUtils.js";
 
 const emptyFilters = {
   restauranteId: null,
@@ -48,18 +54,28 @@ export default function GestionarAsistencias() {
   const [consultarPor, setConsultarPor] = useState({
     tipo: "Fechas",
   });
-  
+
   const { data, isLoading, error } = useAsyncRequest(async () => {
     if (!puedeConsultar) return { asistencias: [], colaboradores: [] };
 
     const [asistencias, colaboradores] = await Promise.all([
-      isColaborador ? getAsistenciasPorColaborador(filters) : getAsistenciasPorRestaurante(filters),
       isColaborador
-        ? getColaborador(user.ColaboradorId).then((colaborador) => [colaborador])
+        ? getAsistenciasPorColaborador(filters)
+        : getAsistenciasPorRestaurante(filters),
+      isColaborador
+        ? getColaborador(user.ColaboradorId).then((colaborador) => [
+            colaborador,
+          ])
         : getColaboradores({ restauranteId: filters.restauranteId }),
     ]);
     return { asistencias, colaboradores };
-  }, [filters, puedeConsultar, isColaborador, user?.UsuarioId, user?.ColaboradorId]);
+  }, [
+    filters,
+    puedeConsultar,
+    isColaborador,
+    user?.UsuarioId,
+    user?.ColaboradorId,
+  ]);
 
   const asistenciasDiarias = data?.asistencias ?? [];
   const colaboradores = data?.colaboradores ?? [];
@@ -86,8 +102,12 @@ export default function GestionarAsistencias() {
   const periodoAplicado = periodos.find(
     (periodo) => Number(periodo.PeriodoId) === Number(filters.periodoId),
   );
-  
-  const rangoAplicado = obtenerRangoAsistencias(filters, periodoAplicado, asistenciasDiarias);
+
+  const rangoAplicado = obtenerRangoAsistencias(
+    filters,
+    periodoAplicado,
+    asistenciasDiarias,
+  );
 
   // Derivar las semanas despues de inicializar el catalogo asincrono.
   const periodoSeleccionado = periodos.find(
@@ -95,19 +115,27 @@ export default function GestionarAsistencias() {
   );
 
   const restauranteSeleccionado = puedeElegirRestaurante
-    ? restaurantes.find((restaurante) => Number(restaurante.RestauranteId) === Number(form.restauranteId))?.Nombre
-      || "Seleccioná un restaurante"
-    : [...new Set(asistenciasDiarias
-        .filter((asistencia) => Number(asistencia.PeriodoId) === Number(form.periodoId))
-        .map((asistencia) => asistencia.Restaurante)
-        .filter(Boolean))].join(", ");
+    ? restaurantes.find(
+        (restaurante) =>
+          Number(restaurante.RestauranteId) === Number(form.restauranteId),
+      )?.Nombre || "Seleccioná un restaurante"
+    : [
+        ...new Set(
+          asistenciasDiarias
+            .filter(
+              (asistencia) =>
+                Number(asistencia.PeriodoId) === Number(form.periodoId),
+            )
+            .map((asistencia) => asistencia.Restaurante)
+            .filter(Boolean),
+        ),
+      ].join(", ");
 
   const semanas = obtenerSemanas(periodoSeleccionado);
 
   const semanaSeleccionada = semanas.findIndex(
     (semana) => semana.desde === form.desde && semana.hasta === form.hasta,
   );
-
 
   function handleFilters(e) {
     e.preventDefault();
@@ -152,7 +180,7 @@ export default function GestionarAsistencias() {
     setFilterError("");
   }
 
-  function onSeleccionarAsistencia(asistencia){
+  function onSeleccionarAsistencia(asistencia) {
     setAsistenciaSeleccionada(asistencia);
   }
 
@@ -399,10 +427,7 @@ export default function GestionarAsistencias() {
           )}
 
           <div className="table-actions">
-            <button
-              type="submit"
-              className="button button-primary"
-            >
+            <button type="submit" className="button button-primary">
               <Filter size={17} aria-hidden="true" />{" "}
               {isLoading ? "Consultando..." : "Aplicar filtros"}
             </button>
@@ -448,7 +473,9 @@ export default function GestionarAsistencias() {
           asistencias={asistenciasDiarias}
           colaboradores={colaboradores}
           puedeVerMarcas={isGerente || puedeElegirRestaurante}
-          onSeleccionarAsistencia={isGerente ? onSeleccionarAsistencia : undefined}
+          onSeleccionarAsistencia={
+            isGerente ? onSeleccionarAsistencia : undefined
+          }
         />
       )}
       {asistenciaSeleccionada && (

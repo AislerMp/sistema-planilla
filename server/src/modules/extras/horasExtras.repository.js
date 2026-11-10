@@ -189,7 +189,7 @@ export async function getSolicitudesByColaborador(
         s.RegistradoPorUsuarioId, s.Estado, s.Motivo,
         s.RevisadoPorGerenteId, s.RevisadoPorRhId, s.Observacion,
         d.FechaSolicitada, d.MinutosSolicitados, d.MinutosAutorizados,
-        c.Nombres, c.Apellidos
+        c.Nombres, c.Apellido1, c.Apellido2
       FROM dbo.SolicitudesHorasExtras AS d
       INNER JOIN dbo.Solicitudes AS s ON s.SolicitudId = d.SolicitudId
       INNER JOIN dbo.Colaboradores AS c ON c.ColaboradorId = s.ColaboradorId
@@ -218,7 +218,7 @@ export async function getSolicitudesByRestaurante(
         s.RegistradoPorUsuarioId, s.Estado, s.Motivo,
         s.RevisadoPorGerenteId, s.RevisadoPorRhId, s.Observacion,
         d.FechaSolicitada, d.MinutosSolicitados, d.MinutosAutorizados,
-        c.Nombres, c.Apellidos
+        c.Nombres, c.Apellido1, c.Apellido2
       FROM dbo.SolicitudesHorasExtras AS d
       INNER JOIN dbo.Solicitudes AS s ON s.SolicitudId = d.SolicitudId
       INNER JOIN dbo.Colaboradores AS c ON c.ColaboradorId = s.ColaboradorId

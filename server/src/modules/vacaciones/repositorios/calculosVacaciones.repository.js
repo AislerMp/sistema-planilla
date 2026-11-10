@@ -42,7 +42,7 @@ export async function getCalculosByPeriodo(periodoId, colaboradorId = null, tran
         s.ColaboradorId,
         s.RestauranteId,
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         v.FechaInicio,
         v.FechaFin,
         v.DiasSolicitados

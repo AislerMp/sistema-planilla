@@ -323,7 +323,7 @@ export default function VacacionesDashboard() {
                     {!esColaborador && (
                       <td>
                         {solicitud.Colaborador ||
-                          [solicitud.Nombres, solicitud.Apellidos]
+                          [solicitud.Nombres, solicitud.Apellido1, solicitud.Apellido2]
                             .filter(Boolean)
                             .join(" ") ||
                           `Colaborador #${solicitud.ColaboradorId}`}

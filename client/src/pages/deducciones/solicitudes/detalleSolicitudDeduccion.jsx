@@ -47,7 +47,7 @@ export default function DetalleSolicitudDeduccion() {
   const resuelta = solicitud.Estado !== "PENDIENTE";
   const estadoTexto = etiquetasEstado[solicitud.Estado] ?? solicitud.Estado;
   const colaborador =
-    [solicitud.Nombres, solicitud.Apellidos].filter(Boolean).join(" ") ||
+    [solicitud.Nombres, solicitud.Apellido1, solicitud.Apellido2].filter(Boolean).join(" ") ||
     `Colaborador #${solicitud.ColaboradorId}`;
   const restaurante =
     solicitud.Restaurante || `Restaurante #${solicitud.RestauranteId}`;

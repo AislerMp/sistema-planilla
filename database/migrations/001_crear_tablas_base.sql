@@ -75,7 +75,8 @@ CREATE TABLE dbo.Colaboradores (
     Identificacion NVARCHAR(30) NOT NULL CONSTRAINT UQ_Colaboradores_Identificacion UNIQUE,
     Correo NVARCHAR(100) NOT NULL CONSTRAINT UQ_Colaboradores_Correo UNIQUE,
     Nombres NVARCHAR(100) NOT NULL,
-    Apellidos NVARCHAR(100) NOT NULL,
+    Apellido1 NVARCHAR(100) NOT NULL,
+    Apellido2 NVARCHAR(100) NULL,
     FechaIngreso DATE NOT NULL,
     FechaSalida DATE NULL,
     RestauranteId INT NOT NULL,
@@ -93,7 +94,7 @@ CREATE TABLE dbo.Colaboradores (
         REFERENCES dbo.Distritos(DistritoId),
     CONSTRAINT CK_Colaboradores_Identificacion CHECK (LEN(LTRIM(RTRIM(Identificacion))) > 0),
     CONSTRAINT CK_Colaboradores_Nombres CHECK (LEN(LTRIM(RTRIM(Nombres))) > 0),
-    CONSTRAINT CK_Colaboradores_Apellidos CHECK (LEN(LTRIM(RTRIM(Apellidos))) > 0),
+    CONSTRAINT CK_Colaboradores_Apellidos CHECK (LEN(LTRIM(RTRIM(Apellido1))) > 0 AND (LEN(LTRIM(RTRIM(Apellido2))) > 0)),
     CONSTRAINT CK_Colaboradores_Fechas CHECK (FechaSalida IS NULL OR FechaSalida >= FechaIngreso)
 
 );

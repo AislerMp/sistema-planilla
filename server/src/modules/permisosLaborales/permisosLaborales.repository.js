@@ -78,7 +78,7 @@ export async function getPermisosByColaborador(
       SELECT s.SolicitudId, s.TipoSolicitud, s.ColaboradorId, s.RestauranteId,
         s.RegistradoPorUsuarioId, s.Estado, s.Motivo,
         s.RevisadoPorGerenteId, s.RevisadoPorRhId, s.Observacion,
-        d.FechaSolicitada, c.Nombres, c.Apellidos
+        d.FechaSolicitada, c.Nombres, c.Apellido1, c.Apellido2
       FROM dbo.PermisosLaborales AS d
       INNER JOIN dbo.Solicitudes AS s ON s.SolicitudId = d.SolicitudId
       INNER JOIN dbo.Colaboradores AS c ON c.ColaboradorId = s.ColaboradorId
@@ -106,7 +106,7 @@ export async function getPermisosByRestaurante(
       SELECT s.SolicitudId, s.TipoSolicitud, s.ColaboradorId, s.RestauranteId,
         s.RegistradoPorUsuarioId, s.Estado, s.Motivo,
         s.RevisadoPorGerenteId, s.RevisadoPorRhId, s.Observacion,
-        d.FechaSolicitada, c.Nombres, c.Apellidos
+        d.FechaSolicitada, c.Nombres, c.Apellido1, c.Apellido2
       FROM dbo.PermisosLaborales AS d
       INNER JOIN dbo.Solicitudes AS s ON s.SolicitudId = d.SolicitudId
       INNER JOIN dbo.Colaboradores AS c ON c.ColaboradorId = s.ColaboradorId

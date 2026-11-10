@@ -61,6 +61,14 @@ export const menuItems = [
     nonPermision: [],
   },
   {
+    title: "Liquidaciones",
+    path: "/liquidaciones",
+    group: "administracion",
+    icon: BriefcaseBusiness,
+    description: "Preparación de liquidaciones e histórico del personal.",
+    nonPermision: ["COLABORADOR", "GERENTE"],
+  },
+  {
     title: "Períodos de planilla",
     path: "/periodos",
     group: "administracion",

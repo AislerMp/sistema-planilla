@@ -1,9 +1,11 @@
 import { Link, NavLink } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Printer } from "lucide-react";
+import { createPortal } from "react-dom";
 import FiltrosPlanilla from "../components/FiltrosPlanilla.jsx";
 import InformacionPeriodo from "../components/InformacionPeriodo.jsx";
 import ResumenPlanilla from "../components/ResumenPlanilla.jsx";
 import TablaDetallesPlanilla from "../components/TablaDetallesPlanilla.jsx";
+import TablaConceptosPlanilla from "../components/TablaConceptosPlanilla.jsx";
 import { useState } from "react";
 import { useAuth } from "../../../context/AuthContext.jsx";
 import { getPeriodos } from "../../../services/periodos.Service.js";
@@ -12,6 +14,7 @@ import {
   getDetallesPlanillaRestaurante,
   getMisDetallesPlanilla,
   getPlanillas,
+  getConceptosPlanilla,
 } from "../../../services/planillas.Service.js";
 import { getRestaurantes } from "../../../services/restaurantes.Service.js";
 import useAsyncRequest from "../../../hooks/useAsyncRequest.js";
@@ -28,6 +31,7 @@ export default function PlanillasPagadasPage() {
   const { user } = useAuth();
   const consultaRestaurante =
     user?.Rol === "ADMINISTRADOR" || user?.Rol === "RECURSOS_HUMANOS";
+  const esColaborador = user?.Rol === "COLABORADOR";
 
   const [filters, setFilters] = useState(emptyFilters);
 
@@ -86,8 +90,6 @@ export default function PlanillasPagadasPage() {
           ? planillasPagadasData
           : [planillasPagadasData];
 
-  
-  console.log(detalles);
   // Los totales deben corresponder a los detalles visibles, incluso al filtrar restaurante.
   const resumenGeneralPlanilla = {
     totalIngresos: detalles.reduce(
@@ -118,7 +120,28 @@ export default function PlanillasPagadasPage() {
     return consultaRestaurante ? getPlanillas() : Promise.resolve([]);
   }, [consultaRestaurante]);
   const planillas = planillasData ?? [];
-  console.log(planillas);
+
+  const detalleIndividual = esColaborador ? detalles[0] : null;
+  const {
+    data: conceptosData,
+    isLoading: isLoadingConceptos,
+    error: errorConceptos,
+  } = useAsyncRequest(() => {
+    if (periodoSeleccionado?.Estado !== "PAGADO" || !detalleIndividual) return [];
+    return detalleIndividual.conceptos ?? getConceptosPlanilla(detalleIndividual.DetallePlanillaId);
+  }, [periodoSeleccionado?.Estado, detalleIndividual?.DetallePlanillaId]);
+  const conceptos = conceptosData ?? [];
+
+  const puedeImprimir =
+    periodoSeleccionado?.Estado === "PAGADO" && detalles.length > 0 &&
+    !isLoadingPeriodos && !errorPeriodos &&
+    !isLoadingRestaurantes && !errorRestaurantes &&
+    (!esColaborador || (!isLoadingConceptos && !errorConceptos && conceptos.length > 0));
+  const alcanceImpresion = consultaRestaurante && filters.restaurante === "todos"
+    ? "General · Todos los restaurantes"
+    : detalles[0]?.RestauranteNombre ?? "Restaurante asignado";
+  // FechaPago del período es programada; solo la planilla tiene el pago registrado.
+  const fechaPagoRegistrada = planillasPagadasData?.planilla?.FechaPago;
 
   return (
     <div className="planillas-page">
@@ -280,7 +303,19 @@ export default function PlanillasPagadasPage() {
             <span>
               P-{String(periodoSeleccionado.PeriodoId).padStart(4, "0")}
             </span>
+            {puedeImprimir && (
+              <button type="button" className="button button-secondary" onClick={() => window.print()}>
+                <Printer size={17} aria-hidden="true" />
+                Imprimir / Guardar como PDF
+              </button>
+            )}
           </div>
+          {esColaborador && isLoadingConceptos && (
+            <LoadingState mensaje="Preparando comprobante de pago..." compacto />
+          )}
+          <AlertMessage title="No se pudo preparar el comprobante para imprimir">
+            {esColaborador ? errorConceptos : null}
+          </AlertMessage>
           <InformacionPeriodo periodo={periodoSeleccionado} />
 
           <ResumenPlanilla
@@ -295,6 +330,61 @@ export default function PlanillasPagadasPage() {
           </div>
           <TablaDetallesPlanilla detalles={detalles} />
         </section>
+      )}
+      {puedeImprimir && createPortal(
+        <section className="planilla-impresion" aria-label="Reporte de planilla pagada">
+          <header className="planilla-impresion-encabezado">
+            <div>
+              <p className="planilla-impresion-marca">Gestión de planilla</p>
+              <h1>{esColaborador ? "Comprobante de pago" : "Reporte de pagos"}</h1>
+              <p>{esColaborador ? "Detalle de ingresos y deducciones" : "Pagos registrados por colaborador"}</p>
+            </div>
+            <div className="planilla-impresion-referencia">
+              <span>Período pagado</span>
+              <strong>P-{String(periodoSeleccionado.PeriodoId).padStart(4, "0")}</strong>
+              {esColaborador && <small>Comprobante #{detalleIndividual.DetallePlanillaId}</small>}
+            </div>
+          </header>
+
+          <dl className="planilla-impresion-datos">
+            {esColaborador && (
+              <div className="planilla-impresion-persona">
+                <dt>Colaborador</dt>
+                <dd>{[detalleIndividual.ColaboradorNombre, detalleIndividual.ColaboradorApellido1, detalleIndividual.ColaboradorApellido2].filter(Boolean).join(" ")}</dd>
+              </div>
+            )}
+            <div>
+              <dt>{esColaborador ? "Restaurante" : "Alcance"}</dt>
+              <dd>{alcanceImpresion}</dd>
+            </div>
+            <div>
+              <dt>Período</dt>
+              <dd>{formatDate(periodoSeleccionado.FechaInicio)} – {formatDate(periodoSeleccionado.FechaFin)}</dd>
+            </div>
+            {fechaPagoRegistrada && (
+              <div><dt>Fecha de pago registrada</dt><dd>{formatDate(fechaPagoRegistrada)}</dd></div>
+            )}
+          </dl>
+
+          <h2 className="planilla-impresion-titulo">{esColaborador ? "Conceptos del pago" : "Pagos por colaborador"}</h2>
+          {esColaborador
+            ? <TablaConceptosPlanilla conceptos={conceptos} />
+            : <TablaDetallesPlanilla detalles={detalles} />}
+
+          <div className="planilla-impresion-totales">
+            <h2 className="planilla-impresion-titulo">{esColaborador ? "Resumen del comprobante" : "Totales del alcance seleccionado"}</h2>
+            <ResumenPlanilla
+              resumenGeneralPlanilla={resumenGeneralPlanilla}
+              tituloIngresos="Salario bruto"
+              tituloNeto="Neto pagado"
+            />
+          </div>
+          <footer className="planilla-impresion-pie">
+            <span>Importes guardados al registrar la planilla · Montos en colones (CRC).</span>
+            {!esColaborador && <strong>{detalles.length} {detalles.length === 1 ? "colaborador" : "colaboradores"}</strong>}
+          </footer>
+        </section>,
+        document.body,
       )}
     </div>
   );

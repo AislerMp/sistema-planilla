@@ -144,6 +144,36 @@ export async function calcularConceptosColaborador(datosCalculo) {
   }
   // FIN CALCULO DE ASISTENCIAS
 
+  // DESCANSO SEMANAL
+  let horasOrdinariasEquivalentes = 0;
+
+  for (const concepto of conceptosCalculados) {
+    const esOrdinario =
+      concepto.codigoConcepto === "ORDINARIAS" ||
+      concepto.codigoConcepto === "ORDINARIAS_FERIADO";
+
+    if (!esOrdinario) continue;
+
+    const horasOrdinarias = concepto.minutos / 60;
+    const horasJornada = FACTORES_JORNADAS[concepto.tipoJornada];
+
+    horasOrdinariasEquivalentes +=
+      (horasOrdinarias / horasJornada) * FACTORES_JORNADAS.DIURNA;
+  }
+
+  const horasDescanso = horasOrdinariasEquivalentes / 6;
+
+  if (horasDescanso > 0) {
+    conceptosCalculados.push({
+      tipoConcepto: "INGRESO",
+      codigoConcepto: "DESCANSO_SEMANAL",
+      tipoJornada: null,
+      minutos: null,
+      factorAplicado: 1 / 6,
+      monto: horasDescanso * tarifaHora,
+    });
+  }
+
   // INICIO CALCULO VACACIONES
 
   const minutosVacaciones = vacaciones.reduce(

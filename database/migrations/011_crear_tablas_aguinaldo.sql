@@ -30,20 +30,6 @@ IF OBJECT_ID(N'dbo.Aguinaldos', N'U') IS NOT NULL
 BEGIN TRY
     BEGIN TRANSACTION;
 
-    -- 1. Mes al que corresponde cada concepto.
-    -- 2026-11-01 representa noviembre de 2026.
-    -- Los registros anteriores quedan en NULL.
-    IF COL_LENGTH(N'dbo.ConceptosPlanilla', N'MesDevengo') IS NULL
-    BEGIN
-        ALTER TABLE dbo.ConceptosPlanilla
-        ADD MesDevengo DATE NULL
-            CONSTRAINT CK_ConceptosPlanilla_MesDevengo
-            CHECK (
-                MesDevengo IS NULL
-                OR DAY(MesDevengo) = 1
-            );
-    END;
-
     -- 2. Cabecera del cálculo anual.
     CREATE TABLE dbo.Aguinaldos (
         AguinaldoId INT IDENTITY(1,1) NOT NULL,

@@ -29,7 +29,7 @@ function agruparAsistencias(asistencias, listadoColaboradores, desde, hasta) {
       colaboradores[colaborador.ColaboradorId] = {
         colaboradorId: colaborador.ColaboradorId,
         nombres: colaborador.Nombres,
-        apellidos: colaborador.Apellidos,
+        apellidos: [colaborador.Apellido1, colaborador.Apellido2].filter(Boolean).join(" "),
         identificacion: colaborador.Identificacion,
         dias: {},
       };
@@ -44,7 +44,7 @@ function agruparAsistencias(asistencias, listadoColaboradores, desde, hasta) {
       colaboradores[colaboradorId] = {
         colaboradorId,
         nombres: asistencia.Nombres,
-        apellidos: asistencia.Apellidos,
+        apellidos: [asistencia.Apellido1, asistencia.Apellido2].filter(Boolean).join(" "),
         identificacion: asistencia.Identificacion,
         dias: {},
       };

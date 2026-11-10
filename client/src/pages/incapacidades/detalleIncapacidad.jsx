@@ -267,7 +267,7 @@ export default function DetalleIncapacidad() {
                 <div>
                   <dt>Colaborador</dt>
                   <dd>
-                    {incapacidad.Nombres} {incapacidad.Apellidos}
+                    {[incapacidad.Nombres, incapacidad.Apellido1, incapacidad.Apellido2].filter(Boolean).join(" ")}
                   </dd>
                 </div>
                 <div>

@@ -157,7 +157,7 @@ export function TablaAguinaldo({
             {detalles.map((detalle) => (
               <tr key={detalle.id ?? detalle.colaboradorId}>
                 <td>
-                  <strong>{detalle.nombres} - {detalle.apellidos}</strong>
+                  <strong>{[detalle.nombres, detalle.apellido1, detalle.apellido2].filter(Boolean).join(" ")}</strong>
                   <small>{detalle.identificacion ?? detalle.colaboradorId}</small>
                 </td>
                 <td>{detalle.restaurante}</td>

@@ -19,6 +19,8 @@ import vacacionesRoutes from "./modules/vacaciones/vacaciones.routes.js";
 import deduccionesRoutes from "./modules/deducciones/deducciones.routes.js";
 import planillasRoutes from "./modules/planillas/planillas.routes.js";
 import aguinaldosRoutes from "./modules/aguinaldos/aguinaldo.routes.js";
+import liquidacionesRoutes from "./modules/liquidaciones/liquidaciones.routes.js";
+import notificacionesRoutes from "./modules/notificaciones/notificaciones.routes.js";
 
 import { isAuthenticate } from "./shared/middlewares/auth.middleware.js";
 import { errorHandler } from "./shared/middlewares/error.middleware.js";
@@ -69,6 +71,8 @@ app.use("/api/vacaciones", vacacionesRoutes);
 app.use("/api/deducciones", deduccionesRoutes);
 app.use("/api/planillas", planillasRoutes);
 app.use("/api/aguinaldos", aguinaldosRoutes);
+app.use("/api/liquidaciones", liquidacionesRoutes);
+app.use("/api/notificaciones", notificacionesRoutes);
 
 app.use(errorHandler);
 

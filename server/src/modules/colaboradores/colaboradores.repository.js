@@ -28,7 +28,7 @@ export async function getAllColaboradores(
     ${restauranteId !== null ? "WHERE c.RestauranteId = @restauranteId" : ""}
     ORDER BY FechaCreacion DESC;
   `);
-  
+
   return result.recordset || [];
 }
 
@@ -38,12 +38,18 @@ export async function getColaboradorById(
   restauranteId = null,
 ) {
   const request = await createRequest(transaction);
+
   if (restauranteId !== null)
     request.input("restauranteId", sql.Int, restauranteId);
+
   const result = await request.input("id", sql.Int, id).query(`
-      SELECT * FROM Colaboradores WHERE ColaboradorId = @id
-      ${restauranteId !== null ? "AND RestauranteId = @restauranteId" : ""}
+      SELECT c.*, p.Nombre AS NombrePuesto, p.TarifaHora
+      FROM Colaboradores AS c
+      JOIN dbo.Puestos AS p ON p.PuestoId = c.PuestoId
+      WHERE c.ColaboradorId = @id
+      ${restauranteId !== null ? "AND c.RestauranteId = @restauranteId" : ""}
     `);
+
   return result.recordset[0] || null;
 }
 
@@ -53,7 +59,8 @@ export async function createColaborador(colaborador, transaction = null) {
     .input("Identificacion", sql.NVarChar(30), colaborador.identificacion)
     .input("Correo", sql.NVarChar(100), colaborador.correo)
     .input("Nombres", sql.NVarChar(100), colaborador.nombre)
-    .input("Apellidos", sql.NVarChar(100), colaborador.apellido)
+    .input("Apellido1", sql.NVarChar(100), colaborador.apellido1)
+    .input("Apellido2", sql.NVarChar(100), colaborador.apellido2 ?? null)
     .input("FechaIngreso", sql.Date, colaborador.fechaIngreso)
     .input("FechaSalida", sql.Date, colaborador.fechaSalida ?? null)
     .input("RestauranteId", sql.Int, colaborador.restauranteId)
@@ -61,8 +68,8 @@ export async function createColaborador(colaborador, transaction = null) {
     .input("DistritoId", sql.Int, colaborador?.distritoId)
     .input("DetalleDireccion", sql.NVarChar(300), colaborador.detalleDireccion)
     .query(
-      `INSERT INTO Colaboradores (Identificacion, Correo, Nombres, Apellidos, FechaIngreso, FechaSalida, RestauranteId, PuestoId, DistritoId, DetalleDireccion)
-       VALUES (@Identificacion, @Correo, @Nombres, @Apellidos, @FechaIngreso, @FechaSalida, @RestauranteId, @PuestoId, @DistritoId, @DetalleDireccion);
+      `INSERT INTO Colaboradores (Identificacion, Correo, Nombres, Apellido1, Apellido2, FechaIngreso, FechaSalida, RestauranteId, PuestoId, DistritoId, DetalleDireccion)
+       VALUES (@Identificacion, @Correo, @Nombres, @Apellido1, @Apellido2, @FechaIngreso, @FechaSalida, @RestauranteId, @PuestoId, @DistritoId, @DetalleDireccion);
        SELECT CAST(SCOPE_IDENTITY() AS INT) AS ColaboradorId;
        `,
     );
@@ -76,7 +83,8 @@ export async function updateColaborador(id, colaborador, transaction = null) {
     .input("Identificacion", sql.NVarChar(30), colaborador.identificacion)
     .input("Correo", sql.NVarChar(100), colaborador.correo)
     .input("Nombres", sql.NVarChar(100), colaborador.nombre)
-    .input("Apellidos", sql.NVarChar(100), colaborador.apellido)
+    .input("Apellido1", sql.NVarChar(100), colaborador.apellido1)
+    .input("Apellido2", sql.NVarChar(100), colaborador.apellido2 ?? null)
     .input("FechaIngreso", sql.Date, colaborador.fechaIngreso)
     .input("FechaSalida", sql.Date, colaborador.fechaSalida ?? null)
     .input("RestauranteId", sql.Int, colaborador.restauranteId)
@@ -88,7 +96,8 @@ export async function updateColaborador(id, colaborador, transaction = null) {
        SET Identificacion = @Identificacion,
            Correo = @Correo,
            Nombres = @Nombres,
-           Apellidos = @Apellidos,
+           Apellido1 = @Apellido1,
+           Apellido2 = @Apellido2,
            FechaIngreso = @FechaIngreso,
            FechaSalida = @FechaSalida,
            RestauranteId = @RestauranteId,
@@ -99,6 +108,30 @@ export async function updateColaborador(id, colaborador, transaction = null) {
        `,
     );
   return result.rowsAffected[0] > 0;
+}
+
+export async function liquidarColaborador(
+  id,
+  fechaSalida,
+  transaction = null,
+) {
+  const request = await createRequest(transaction);
+
+  const result = await request
+    .input("id", sql.Int, id)
+    .input("FechaSalida", sql.Date, fechaSalida)
+    .query(`
+      UPDATE dbo.Colaboradores
+      SET FechaSalida = @FechaSalida,
+          Activo = 0
+      WHERE ColaboradorId = @id;
+
+      UPDATE dbo.Usuarios
+      SET Activo = 0
+      WHERE ColaboradorId = @id;
+    `);
+
+  return (result.rowsAffected[0] ?? 0) > 0;
 }
 
 export async function actualizarEstadoColaborador(

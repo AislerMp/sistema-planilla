@@ -136,15 +136,11 @@ export async function getUser(id) {
 }
 
 // El controlador debe tomar el ID de la identidad autenticada.
-export async function changePassword(
-  id,
-  currentPassword,
-  newPassword,
-) {
+export async function changePassword(id, currentPassword, newPassword) {
   const usuarioId = validateId(id);
   validatePassword(currentPassword);
   validatePassword(newPassword);
-
+  
   const user = await authRepository.getUserById(usuarioId);
   if (!user) {
     throw serviceError("Usuario no encontrado", 404);
@@ -162,21 +158,27 @@ export async function changePassword(
     const actualizado = await authRepository.updatePassword(
       usuarioId,
       passwordHash,
-      transaction
+      transaction,
     );
 
     if (!actualizado) {
       throw serviceError("Usuario no encontrado o inactivo", 404);
     }
 
-    await registrarBitacora({
-      usuarioId: usuarioId,
-      entidad: "Usuarios",
-      registroId: usuarioId,
-      accion: acciones.CAMBIAR_CONTRASENA,
-      datosAnteriores: { nombreUsuario: user.NombreUsuario },
-      datosNuevos: { nombreUsuario: user.NombreUsuario, passwordActualizada: true },
-    }, transaction);
+    await registrarBitacora(
+      {
+        usuarioId: usuarioId,
+        entidad: "Usuarios",
+        registroId: usuarioId,
+        accion: acciones.CAMBIAR_CONTRASENA,
+        datosAnteriores: { nombreUsuario: user.NombreUsuario },
+        datosNuevos: {
+          nombreUsuario: user.NombreUsuario,
+          passwordActualizada: true,
+        },
+      },
+      transaction,
+    );
 
     await transaction.commit();
     return actualizado;
@@ -247,47 +249,83 @@ export async function activarUsuario(id, usuarioActorId) {
 export async function updateUser(id, user, usuarioActorId) {
   const usuarioId = validateId(id);
   const actorId = validateId(usuarioActorId, "usuarioActorId");
+
   const data = {
     nombreUsuario: validateText(user?.nombreUsuario, "Nombre de usuario", 60),
     rolId: validateId(user?.rolId, "rolId"),
     colaboradorId: validateId(user?.colaboradorId, "colaboradorId"),
   };
+
   await getRol(data.rolId);
   const transaction = await beginTransaction();
   try {
-    const previous = await authRepository.getUserByIdForUpdate(usuarioId, transaction);
+    const previous = await authRepository.getUserByIdForUpdate(
+      usuarioId,
+      transaction,
+    );
+
     if (!previous) throw serviceError("Usuario no encontrado", 404);
-    if (!previous.Activo) throw serviceError("Activá el usuario antes de actualizarlo", 409);
-    const duplicate = await authRepository.getUserByUsername(data.nombreUsuario, true, transaction);
+    if (!previous.Activo)
+      throw serviceError("Activá el usuario antes de actualizarlo", 409);
+
+    const duplicate = await authRepository.getUserByUsername(
+      data.nombreUsuario,
+      true,
+      transaction,
+    );
+
     if (duplicate && duplicate.UsuarioId !== usuarioId) {
       throw serviceError("El nombre de usuario ya está en uso", 409);
     }
-    const colaborador = await getColaboradorById(data.colaboradorId, transaction);
+
+    const colaborador = await getColaboradorById(
+      data.colaboradorId,
+      transaction,
+    );
+
     if (!colaborador) throw serviceError("Colaborador no encontrado", 404);
-    if (!colaborador.Activo) throw serviceError("Colaborador está inactivo", 409);
-    const linked = await authRepository.getUserByColaboradorId(data.colaboradorId, transaction);
+    if (!colaborador.Activo)
+      throw serviceError("Colaborador está inactivo", 409);
+    const linked = await authRepository.getUserByColaboradorId(
+      data.colaboradorId,
+      transaction,
+    );
+
     if (linked && linked.UsuarioId !== usuarioId) {
       throw serviceError("El colaborador ya tiene una cuenta vinculada", 409);
     }
-    const updated = await authRepository.updateUser(usuarioId, data, transaction);
+
+    const updated = await authRepository.updateUser(
+      usuarioId,
+      data,
+      transaction,
+    );
     if (!updated) throw serviceError("Usuario no encontrado o inactivo", 404);
-    await registrarBitacora({
-      usuarioId: actorId,
-      entidad: "Usuarios",
-      registroId: usuarioId,
-      accion: acciones.ACTUALIZAR,
-      datosAnteriores: {
-        nombreUsuario: previous.NombreUsuario,
-        rolId: previous.RolId,
-        colaboradorId: previous.ColaboradorId,
+
+    await registrarBitacora(
+      {
+        usuarioId: actorId,
+        entidad: "Usuarios",
+        registroId: usuarioId,
+        accion: acciones.ACTUALIZAR,
+        datosAnteriores: {
+          nombreUsuario: previous.NombreUsuario,
+          rolId: previous.RolId,
+          colaboradorId: previous.ColaboradorId,
+        },
+        datosNuevos: data,
       },
-      datosNuevos: data,
-    }, transaction);
+      transaction,
+    );
+
     await transaction.commit();
     return updated;
   } catch (error) {
-    try { await transaction.rollback(); }
-    catch { console.error("No se pudo completar el rollback."); }
+    try {
+      await transaction.rollback();
+    } catch {
+      console.error("No se pudo completar el rollback.");
+    }
     throw error;
   }
 }

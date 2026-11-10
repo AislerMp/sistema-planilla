@@ -135,7 +135,7 @@ export default function EditarHorasModal({
     }
   }
 
-  const nombre = [asistencia.Nombres, asistencia.Apellidos]
+  const nombre = [asistencia.Nombres, asistencia.Apellido1, asistencia.Apellido2]
     .filter(Boolean)
     .join(" ");
   const fecha = asistencia.FechaAsignada.slice(0, 10);

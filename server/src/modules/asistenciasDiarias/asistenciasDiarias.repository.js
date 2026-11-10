@@ -109,7 +109,7 @@ export async function getAsistenciasByColaborador(
 
         a.ColaboradorId,
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         c.Identificacion,
 
         p.TarifaHora,
@@ -183,7 +183,7 @@ export async function getAsistenciasByRestaurante(
 
         a.ColaboradorId,
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         c.Identificacion,
 
         p.TarifaHora,
@@ -229,7 +229,7 @@ export async function getAsistenciasByRestaurante(
 
       ORDER BY
           c.Nombres,
-          c.Apellidos,
+          c.Apellido1, c.Apellido2,
           a.ColaboradorId,
           a.FechaAsignada;
     `);

@@ -1,5 +1,6 @@
 import * as vacacionesServices from "./services/vacaciones.service.js";
 import { obtenerSaldoVacaciones } from "./services/saldosVacaciones.service.js";
+import { notificarSolicitudGuardada } from "../notificaciones/notificaciones.service.js";
 
 export async function getVacacionController(req, res) {
   const vacacion = await vacacionesServices.getVacacionesById(
@@ -47,6 +48,7 @@ export async function crearVacacionesController(req, res) {
     req.body ?? {},
     req.user,
   );
+  await notificarSolicitudGuardada(vacacion);
   return res.status(201).json(vacacion);
 }
 
@@ -56,6 +58,7 @@ export async function revisarVacacionesGerenteController(req, res) {
     req.body ?? {},
     req.user,
   );
+  await notificarSolicitudGuardada(vacacion);
   return res.status(200).json(vacacion);
 }
 
@@ -65,6 +68,7 @@ export async function resolverVacacionesRhController(req, res) {
     req.body ?? {},
     req.user,
   );
+  await notificarSolicitudGuardada(resultado.vacacionActualizada);
   return res.status(200).json(resultado);
 }
 
@@ -79,6 +83,7 @@ export async function revertirVacacionesController(req, res) {
     req.body ?? {},
     req.user,
   );
+  await notificarSolicitudGuardada(vacacion);
   return res.status(200).json(vacacion);
 }
 

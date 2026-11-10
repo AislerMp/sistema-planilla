@@ -5,6 +5,7 @@ import {
   obtenerRutaComprobante,
 } from "./incapacidades.upload.js";
 import { serviceError } from "../../shared/utils/serviceUtils.js";
+import { notificarSolicitudGuardada } from "../notificaciones/notificaciones.service.js";
 
 export async function getTiposIncapacidadesController(req, res) {
   const incapacidades = await incapacidadesServices.listarTiposIncapacidad();
@@ -78,6 +79,7 @@ export async function crearIncapacidadController(req, res) {
     throw error;
   }
 
+  await notificarSolicitudGuardada(incapacidad);
   return res.status(201).json(incapacidad);
 }
 
@@ -87,6 +89,7 @@ export async function revisarIncapacidadGerenteController(req, res) {
     req.body ?? {},
     req.user,
   );
+  await notificarSolicitudGuardada(incapacidad);
   return res.status(200).json(incapacidad);
 }
 
@@ -96,6 +99,7 @@ export async function resolverIncapacidadRhController(req, res) {
     req.body ?? {},
     req.user,
   );
+  await notificarSolicitudGuardada(resultado.incapacidadActualizada);
   return res.status(200).json(resultado);
 }
 
@@ -126,5 +130,6 @@ export async function revertirIncapacidadController(req, res) {
     req.user,
   );
 
+  await notificarSolicitudGuardada(incapacidad);
   return res.status(200).json(incapacidad);
 }

@@ -67,6 +67,7 @@ export default function PuestosDashboard() {
     setBusy(true);
     setActionError(null);
     setMessage("");
+    
     try {
       const payload = {
         nombre: form.nombre.trim(),
@@ -150,9 +151,7 @@ export default function PuestosDashboard() {
       )}
       {isAdmin && showForm && (
         <form className="catalog-form data-panel" onSubmit={save}>
-          <h2>
-            {editing ? "Actualizar tarifa" : "Registrar puesto"}
-          </h2>
+          <h2>{editing ? "Actualizar tarifa" : "Registrar puesto"}</h2>
           <fieldset disabled={busy}>
             <label>
               Nombre
@@ -214,12 +213,14 @@ export default function PuestosDashboard() {
             </select>
           </div>
         </div>
-        
+
         {isLoading || (!data && !error) ? (
           <LoadingState entidad="puestos" />
         ) : error ? (
           <div className="catalog-message">
-            <AlertMessage title="No se pudieron cargar los puestos">{error}</AlertMessage>
+            <AlertMessage title="No se pudieron cargar los puestos">
+              {error}
+            </AlertMessage>
             <button
               className="button button-secondary"
               onClick={() => setReloadKey((current) => current + 1)}

@@ -29,11 +29,20 @@ export async function getConceptosByDetalle(
     detallePlanillaId,
   ).query(`
       SELECT
-        ConceptoPlanillaId, DetallePlanillaId, TipoConcepto, CodigoConcepto,
-        TipoJornada, Minutos, FactorAplicado, Monto
-      FROM dbo.ConceptosPlanilla
-      WHERE DetallePlanillaId = @detallePlanillaId
-      ORDER BY ConceptoPlanillaId;
+        cp.ConceptoPlanillaId, cp.DetallePlanillaId, cp.TipoConcepto, cp.CodigoConcepto,
+        cp.TipoJornada, cp.Minutos, cp.FactorAplicado, cp.Monto,
+        dp.TotalIngresos, dp.TotalDeducciones, dp.TotalNeto,
+        c.Nombres AS ColaboradorNombre, c.Apellido1 AS ColaboradorApellido1, c.Apellido2 AS ColaboradorApellido2,
+        r.Nombre AS RestauranteNombre,
+        p.FechaPago, pp.PeriodoId, pp.FechaInicio, pp.FechaFin, pp.Estado AS EstadoPeriodo
+      FROM dbo.ConceptosPlanilla AS cp
+      JOIN dbo.DetallesPlanilla AS dp ON dp.DetallePlanillaId = cp.DetallePlanillaId
+      JOIN dbo.Colaboradores AS c ON c.ColaboradorId = dp.ColaboradorId
+      JOIN dbo.Restaurantes AS r ON r.RestauranteId = dp.RestauranteId
+      JOIN dbo.Planillas AS p ON p.PlanillaId = dp.PlanillaId
+      JOIN dbo.PeriodosPlanilla AS pp ON pp.PeriodoId = p.PeriodoId
+      WHERE cp.DetallePlanillaId = @detallePlanillaId
+      ORDER BY cp.ConceptoPlanillaId;
     `);
 
   return result.recordset;

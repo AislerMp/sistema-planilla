@@ -1,4 +1,5 @@
 import * as permisosServices from "./permisosLaborales.service.js";
+import { notificarSolicitudGuardada } from "../notificaciones/notificaciones.service.js";
 
 export async function obtenerPermisoPorId(req, res) {
   const permiso = await permisosServices.obtenerPermisoPorId(
@@ -35,6 +36,7 @@ export async function crearPermisoLaboralController(req, res) {
     req.body ?? {},
     req.user,
   );
+  await notificarSolicitudGuardada(permisoCreado);
   res.status(201).json(permisoCreado);
 }
 
@@ -44,7 +46,7 @@ export async function resolverPermisoLaboralController(req, res) {
     req.body ?? {},
     req.user,
   );
-  
+  await notificarSolicitudGuardada(permisoResuelto);
   res.status(200).json(permisoResuelto);
 }
 
@@ -55,5 +57,6 @@ export async function revertirPermisoLaboralController(req, res) {
     req.user,
   );
 
+  await notificarSolicitudGuardada(permisoRevertido);
   return res.status(200).json(permisoRevertido);
 }

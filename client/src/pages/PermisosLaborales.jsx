@@ -101,7 +101,7 @@ export default function PermisosLaborales() {
   const fechaMinimaSolicitud = obtenerFechaManana(fechaHoy);
 
   const nombreColaborador = (permiso) =>
-    [permiso.Nombres, permiso.Apellidos].filter(Boolean).join(" ") ||
+    [permiso.Nombres, permiso.Apellido1, permiso.Apellido2].filter(Boolean).join(" ") ||
     `Colaborador #${permiso.ColaboradorId}`;
 
   const nombreRestaurante = (permiso) =>

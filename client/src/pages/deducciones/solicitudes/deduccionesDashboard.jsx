@@ -178,7 +178,7 @@ export default function DeduccionesDashboard() {
                   <td>#{solicitud.SolicitudId}</td>
                   {!esColaborador && (
                     <td>
-                      <strong>{[solicitud.Nombres, solicitud.Apellidos].filter(Boolean).join(" ") || `Colaborador #${solicitud.ColaboradorId}`}</strong>
+                      <strong>{[solicitud.Nombres, solicitud.Apellido1, solicitud.Apellido2].filter(Boolean).join(" ") || `Colaborador #${solicitud.ColaboradorId}`}</strong>
                       <small className="deduccion-solicitudes-small">
                         {solicitud.Restaurante || `Restaurante #${solicitud.RestauranteId}`}
                       </small>

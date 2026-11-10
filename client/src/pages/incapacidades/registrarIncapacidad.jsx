@@ -136,7 +136,7 @@ export default function RegistrarIncapacidad() {
             <dl className="solicitud-details">
               <div>
                 <dt>Colaborador</dt>
-                <dd>{`${colaborador.Nombres} ${colaborador.Apellidos}`}</dd>
+                <dd>{[colaborador.Nombres, colaborador.Apellido1, colaborador.Apellido2].filter(Boolean).join(" ")}</dd>
               </div>
               <div>
                 <dt>{restaurante.Nombre}</dt>

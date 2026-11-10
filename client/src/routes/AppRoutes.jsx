@@ -40,6 +40,9 @@ import PlanillasPagadasPage from "../pages/planillas/pages/PlanillasPagadasPage.
 import DetallePagoPage from "../pages/planillas/pages/DetallePagoPage.jsx";
 import AguinaldoActualPage from "../pages/aguinaldos/AguinaldoActualPage.jsx";
 import HistorialAguinaldosPage from "../pages/aguinaldos/HistorialAguinaldosPage.jsx";
+import ColaboradoresLiquidacionesPage from "../pages/liquidaciones/ColaboradoresLiquidacionesPage.jsx";
+import NuevaLiquidacionPage from "../pages/liquidaciones/NuevaLiquidacionPage.jsx";
+import HistorialLiquidacionesPage from "../pages/liquidaciones/HistorialLiquidacionesPage.jsx";
 
 export default function AppRoutes({ theme, onToggleTheme }) {
   return (
@@ -125,27 +128,73 @@ export default function AppRoutes({ theme, onToggleTheme }) {
             <Route path="/vacaciones" element={<VacacionesDashboard />} />
             <Route path="/vacaciones/:id" element={<DetalleVacaciones />} />
 
-            <Route path="/solicitudes-deducciones" element={<DeduccionesDashboard />} />
+            <Route
+              path="/solicitudes-deducciones"
+              element={<DeduccionesDashboard />}
+            />
             <Route element={<ProtectedRoute roles={["COLABORADOR"]} />}>
-              <Route path="/solicitudes-deducciones/nueva" element={<SolicitarDeduccion />} />
+              <Route
+                path="/solicitudes-deducciones/nueva"
+                element={<SolicitarDeduccion />}
+              />
             </Route>
-            <Route path="/solicitudes-deducciones/:solicitudId" element={<DetalleSolicitudDeduccion />} />
+            <Route
+              path="/solicitudes-deducciones/:solicitudId"
+              element={<DetalleSolicitudDeduccion />}
+            />
 
-            <Route element={<ProtectedRoute roles={["ADMINISTRADOR", "RECURSOS_HUMANOS"]} />}>
+            <Route
+              element={
+                <ProtectedRoute roles={["ADMINISTRADOR", "RECURSOS_HUMANOS"]} />
+              }
+            >
               <Route path="/deducciones" element={<ConsultarDeducciones />} />
             </Route>
             <Route element={<ProtectedRoute roles={["ADMINISTRADOR"]} />}>
               <Route path="/deducciones/crear" element={<CrearDeduccion />} />
-              <Route path="/deducciones/:deduccionId" element={<GestionarDeduccion />} />
+              <Route
+                path="/deducciones/:deduccionId"
+                element={<GestionarDeduccion />}
+              />
             </Route>
 
             <Route path="/planillas" element={<PreplanillaPage />} />
             <Route path="/aguinaldos" element={<AguinaldoActualPage />} />
-            <Route path="/aguinaldos/historico" element={<HistorialAguinaldosPage />} />
-            <Route path="/planillas/pagadas" element={<PlanillasPagadasPage />} />
-            <Route path="/planillas/detalle/:detalleId" element={<DetallePagoPage />} />
+            <Route
+              path="/aguinaldos/historico"
+              element={<HistorialAguinaldosPage />}
+            />
+            <Route
+              element={
+                <ProtectedRoute roles={["ADMINISTRADOR", "RECURSOS_HUMANOS"]} />
+              }
+            >
+              <Route
+                path="/liquidaciones"
+                element={<ColaboradoresLiquidacionesPage />}
+              />
+              <Route
+                path="/liquidaciones/nueva/:colaboradorId"
+                element={<NuevaLiquidacionPage />}
+              />
+              <Route
+                path="/liquidaciones/historico"
+                element={<HistorialLiquidacionesPage />}
+              />
+            </Route>
+            <Route
+              path="/planillas/pagadas"
+              element={<PlanillasPagadasPage />}
+            />
+            <Route
+              path="/planillas/detalle/:detalleId"
+              element={<DetallePagoPage />}
+            />
             <Route element={<ProtectedRoute roles={["RECURSOS_HUMANOS"]} />}>
-              <Route path="/planillas/registrar-pago/:periodoId" element={<RegistrarPagoPage />} />
+              <Route
+                path="/planillas/registrar-pago/:periodoId"
+                element={<RegistrarPagoPage />}
+              />
             </Route>
 
             <Route path="*" element={<NotFoundPage />} />

@@ -22,6 +22,7 @@ export default function CreateUsuario() {
       getColaboradores(),
       getUsers(),
     ]);
+
     return { roles, colaboradores, usuarios };
   }, [reloadKey]);
 
@@ -30,7 +31,9 @@ export default function CreateUsuario() {
   if (error)
     return (
       <div className="data-panel catalog-message">
-        <AlertMessage title="No se pudo cargar el formulario">{error}</AlertMessage>
+        <AlertMessage title="No se pudo cargar el formulario">
+          {error}
+        </AlertMessage>
         <button
           className="button button-secondary"
           onClick={() => setReloadKey((value) => value + 1)}
@@ -43,10 +46,7 @@ export default function CreateUsuario() {
       </div>
     );
 
-  if (!data)
-    return (
-      <LoadingState entidad="formulario" />
-    );
+  if (!data) return <LoadingState entidad="formulario" />;
 
   return <UsuarioForm data={data} />;
 }
@@ -55,6 +55,7 @@ function UsuarioForm({ data }) {
   const navigate = useNavigate();
   const [submitError, setSubmitError] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  
   const {
     register,
     handleSubmit,
@@ -69,7 +70,7 @@ function UsuarioForm({ data }) {
       confirmarPassword: "",
     },
   });
-  
+
   const disponibles = data.colaboradores.filter(
     (colaborador) =>
       colaborador.Activo &&
@@ -165,7 +166,10 @@ function UsuarioForm({ data }) {
                   value={row.ColaboradorId}
                   disabled={!row.Activo}
                 >
-                  {row.Nombres} {row.Apellidos} — {row.Identificacion}
+                  {[row.Nombres, row.Apellido1, row.Apellido2]
+                    .filter(Boolean)
+                    .join(" ")}{" "}
+                  — {row.Identificacion}
                   {!row.Activo ? " (inactivo)" : ""}
                 </option>
               ))}
@@ -239,9 +243,7 @@ function UsuarioForm({ data }) {
             <button
               className="button button-primary"
               type="submit"
-              disabled={
-                isSubmitting || !disponibles.length
-              }
+              disabled={isSubmitting || !disponibles.length}
             >
               <Save size={18} />
               {isSubmitting ? "Guardando..." : "Registrar usuario"}

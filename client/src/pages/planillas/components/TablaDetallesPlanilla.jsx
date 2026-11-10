@@ -82,9 +82,9 @@ export default function TablaDetallesPlanilla({
                 (c) => c.ColaboradorId === Number(colaboradorId),
               );
               const nombre = detalle.ColaboradorNombre
-                ? `${detalle.ColaboradorNombre} ${detalle.ColaboradorApellido ?? ""}`.trim()
+                ? [detalle.ColaboradorNombre, detalle.ColaboradorApellido1, detalle.ColaboradorApellido2].filter(Boolean).join(" ")
                 : colaborador
-                  ? `${colaborador.Nombres} ${colaborador.Apellidos}`.trim()
+                  ? [colaborador.Nombres, colaborador.Apellido1, colaborador.Apellido2].filter(Boolean).join(" ")
                   : `Colaborador #${colaboradorId}`;
 
               return (

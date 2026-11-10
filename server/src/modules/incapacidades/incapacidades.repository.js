@@ -52,7 +52,7 @@ export async function getSolicitudById(solicitudId, transaction = null) {
         s.RevisadoPorRhId,
         s.Observacion,
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         r.Nombre AS Restaurante,
 
         i.TipoIncapacidadId,
@@ -160,7 +160,7 @@ export async function getIncapacidadesByRestaurante(
        SELECT s.SolicitudId, s.TipoSolicitud, s.ColaboradorId, s.RestauranteId,
         s.RegistradoPorUsuarioId, s.Estado, s.Motivo,
         s.RevisadoPorGerenteId, s.RevisadoPorRhId, s.Observacion,
-        i.NumeroDocumento, i.FechaInicio, i.FechaFin, c.Nombres, c.Apellidos,
+        i.NumeroDocumento, i.FechaInicio, i.FechaFin, c.Nombres, c.Apellido1, c.Apellido2,
         t.Nombre AS TipoIncapacidad, t.EntidadEmisora
       FROM dbo.Incapacidades AS i
       INNER JOIN dbo.TiposIncapacidad AS t ON t.TipoIncapacidadId = i.TipoIncapacidadId

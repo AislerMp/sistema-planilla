@@ -115,10 +115,21 @@ export async function calcularAguinaldo(
   }
 
   const fechaInicio = `${anioValidado - 1}-12-01`;
-  const fechaFin = `${anioValidado}-11-30`;
+  const fechaFinCiclo = `${anioValidado}-11-30`;
+  const fechaFin = filtros.fechaCorte ?? fechaFinCiclo;
 
   const desde = validateDate(fechaInicio, "Fecha inicial");
   const hasta = validateDate(fechaFin, "Fecha final");
+
+  if (
+    hasta < desde ||
+    hasta > validateDate(fechaFinCiclo, "Fecha final del ciclo")
+  ) {
+    throw serviceError(
+      "La fecha de corte debe estar dentro del ciclo de aguinaldo.",
+      400,
+    );
+  }
 
   const filtrosConsulta = {
     ...filtrosValidados,
@@ -147,7 +158,8 @@ export async function calcularAguinaldo(
       colaboradorId: salario.ColaboradorId,
       restauranteId: salario.RestauranteId,
       nombres: salario.Nombres,
-      apellidos: salario.Apellidos,
+      apellido1: salario.Apellido1,
+      apellido2: salario.Apellido2,
       restaurante: salario.Restaurante,
       salarioAcumulado: salario.SalarioAcumulado,
     });
@@ -190,7 +202,8 @@ export async function calcularAguinaldo(
         colaboradorId: maternidad.ColaboradorId,
         restauranteId: maternidad.RestauranteId,
         nombres: maternidad.Nombres,
-        apellidos: maternidad.Apellidos,
+        apellido1: maternidad.Apellido1,
+        apellido2: maternidad.Apellido2,
         restaurante: maternidad.Restaurante,
         salarioAcumulado: baseMaternidad,
       });
@@ -282,15 +295,11 @@ export async function confirmarAguinaldo(anio, usuario) {
       );
 
       if (!detalleGuardado) {
-        throw serviceError(
-          "No se pudo guardar el detalle del aguinaldo.",
-          500,
-        );
+        throw serviceError("No se pudo guardar el detalle del aguinaldo.", 500);
       }
     }
     await transaction.commit();
     return aguinaldoDetalles;
-    
   } catch (error) {
     try {
       await transaction.rollback();

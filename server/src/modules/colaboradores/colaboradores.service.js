@@ -17,6 +17,12 @@ import {
 } from "../bitacora/bitacora.service.js";
 import { inicializarSaldoVacaciones } from "../vacaciones/services/saldosVacaciones.service.js";
 async function validateColaboradorData(colaborador) {
+
+  const apellido2 =
+    typeof colaborador?.apellido2 === "string"
+      ? colaborador.apellido2.trim()
+      : colaborador?.apellido2;
+      
   const data = {
     identificacion: validateText(
       colaborador?.identificacion,
@@ -25,7 +31,8 @@ async function validateColaboradorData(colaborador) {
     ),
     correo: validateText(colaborador?.correo, "Correo", 100),
     nombre: validateText(colaborador?.nombre, "Nombre", 100),
-    apellido: validateText(colaborador?.apellido, "Apellido", 100),
+    apellido1: validateText(colaborador?.apellido1, "Primer apellido", 100),
+    apellido2: validateText(apellido2, "Segundo apellido", 100, true),
     fechaIngreso: validateDate(colaborador?.fechaIngreso, "Fecha de ingreso"),
     fechaSalida: validateDate(
       colaborador?.fechaSalida,
@@ -84,7 +91,11 @@ export async function getRestaurantePermitido(usuario) {
 }
 
 export async function getColaboradores(usuario, filtros = {}) {
-  const restauranteSolicitado = validateId(filtros.restauranteId, "restauranteId", true);
+  const restauranteSolicitado = validateId(
+    filtros.restauranteId,
+    "restauranteId",
+    true,
+  );
   const restaurantePermitido = await getRestaurantePermitido(usuario);
 
   if (
@@ -92,7 +103,10 @@ export async function getColaboradores(usuario, filtros = {}) {
     restauranteSolicitado !== null &&
     restauranteSolicitado !== restaurantePermitido
   ) {
-    throw serviceError("Solo podés consultar colaboradores de tu restaurante asignado.", 403);
+    throw serviceError(
+      "Solo podés consultar colaboradores de tu restaurante asignado.",
+      403,
+    );
   }
 
   // El filtro elige el restaurante; los permisos limitan cuáles se pueden consultar.
@@ -103,8 +117,11 @@ export async function getColaboradores(usuario, filtros = {}) {
 export async function getColaborador(id, usuario) {
   const colaboradorId = validateId(id);
   const restauranteId = await getRestaurantePermitido(usuario);
-  const colaborador =
-    await colaboradorRepository.getColaboradorById(colaboradorId, null, restauranteId);
+  const colaborador = await colaboradorRepository.getColaboradorById(
+    colaboradorId,
+    null,
+    restauranteId,
+  );
   if (!colaborador) {
     throw serviceError("Colaborador no encontrado", 404);
   }
@@ -134,8 +151,8 @@ export async function createNewColaborador(colaborador, usuarioActorId) {
       transaction,
     );
 
-    await inicializarSaldoVacaciones(colaboradorCreadoId, actorId);
-    
+    await inicializarSaldoVacaciones(colaboradorCreadoId, actorId, transaction);
+
     await transaction.commit();
     return colaboradorCreadoId;
   } catch (error) {

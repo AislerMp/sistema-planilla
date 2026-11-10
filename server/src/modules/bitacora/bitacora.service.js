@@ -19,13 +19,13 @@ export const entidades = {
   VACACIONES: "Vacaciones",
   DEDUCCIONES: "Deducciones",
   SOLICITUDES: "Solicitudes",
-  // Se conservan para consultar bitácoras anteriores a la migración 005.
   SOLICITUDES_HORAS_EXTRAS: "SolicitudesHorasExtras",
   SOLICITUDES_PERMISOS_LABORALES: "SolicitudesPermisosLaborales",
   SOLICITUDES_INCAPACIDADES: "SolicitudesIncapacidades",
   SOLICITUDES_DEDUCCIONES: "SolicitudesDeducciones",
   PLANILLAS: "Planillas",
-  AGUINALDO: "Aguinaldo"
+  AGUINALDO: "Aguinaldo",
+  LIQUIDACIONES: "Liquidaciones",
 };
 
 export const acciones = {

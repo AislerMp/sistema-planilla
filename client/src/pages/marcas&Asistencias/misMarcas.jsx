@@ -65,6 +65,20 @@ export default function MisMarcas() {
     setFilterError("");
   }
 
+  function obtenerDiferenciaHoras(fechaInicio, fechaFin) {
+    const inicio = new Date(fechaInicio);
+    const fin = new Date(fechaFin);
+
+    if (isNaN(fin) || isNaN(inicio)) {
+      return null;
+    }
+
+    const diferencia = fin - inicio;
+    const horas = Math.floor(diferencia / (1000 * 60 * 60));
+    const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60));
+    return `${horas}h ${minutos}m`;
+  }
+
   return (
     <>
       <div className="breadcrumb">
@@ -213,6 +227,7 @@ export default function MisMarcas() {
                         <th scope="col">Entrada</th>
                         <th scope="col">Salida</th>
                         <th scope="col">Estado</th>
+                        <th scope="col">Horas</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -241,6 +256,14 @@ export default function MisMarcas() {
                                 ? "Completada"
                                 : "Sin salida"}
                             </span>
+                          </td>
+                          <td>
+                            {marca.FechaHoraSalida
+                              ? obtenerDiferenciaHoras(
+                                  marca.FechaHoraEntrada,
+                                  marca.FechaHoraSalida,
+                                )
+                              : "-"}
                           </td>
                         </tr>
                       ))}

@@ -244,6 +244,24 @@ test("consultar un período sin planilla registrada mantiene el 404", async () =
   expect(consultas.length).toBe(1);
 });
 test("los conceptos se pueden consultar por el propietario, su gerente, RH y administración", async () => {
+  const concepto = {
+    ConceptoPlanillaId: 1,
+    DetallePlanillaId: 70,
+    CodigoConcepto: "ORDINARIAS",
+    Monto: 8000,
+    ColaboradorNombre: "Ana",
+    ColaboradorApellido1: "Pérez",
+    ColaboradorApellido2: null,
+    RestauranteNombre: "Central",
+    PeriodoId: 22,
+    EstadoPeriodo: "PAGADO",
+    FechaInicio: "2026-10-12",
+    FechaFin: "2026-10-25",
+    FechaPago: "2026-10-31",
+    TotalIngresos: 8000,
+    TotalDeducciones: 400,
+    TotalNeto: 7600,
+  };
   for (const Rol of roles) {
     identidad = {
       Rol
@@ -252,16 +270,14 @@ test("los conceptos se pueden consultar por el propietario, su gerente, RH y adm
     if (Rol === "GERENTE") responder(/FROM Usuarios AS u/, [{
       RestauranteId: 2
     }]);
-    responder(/FROM dbo.ConceptosPlanilla/, [{
-      CodigoConcepto: "ORDINARIAS",
-      Monto: 8000
-    }]);
+    responder(/FROM dbo.ConceptosPlanilla/, [concepto]);
     const response = await request("GET", "/detalles/70/conceptos");
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual([{
-      CodigoConcepto: "ORDINARIAS",
-      Monto: 8000
-    }]);
+    expect(await response.json()).toEqual([concepto]);
+    expect(consultas.at(-1).query).toContain("dp.TotalIngresos, dp.TotalDeducciones, dp.TotalNeto");
+    expect(consultas.at(-1).query).toContain("p.FechaPago");
+    expect(consultas.at(-1).query).toContain("pp.Estado AS EstadoPeriodo");
+    expect(consultas.at(-1).parametros.detallePlanillaId).toBe(70);
   }
 });
 test("los conceptos de otro colaborador o restaurante se rechazan antes de consultarlos", async () => {

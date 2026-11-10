@@ -7,6 +7,7 @@ import {
   resolverSolicitudHorasExtras,
   revertirSolicitudHorasExtras
 } from "./horasExtras.service.js";
+import { notificarSolicitudGuardada } from "../notificaciones/notificaciones.service.js";
 
 export async function actualizarHorasExtraController(req, res) {
   const { minutosAjustados, motivo } = req.body ?? {};
@@ -60,6 +61,7 @@ export async function listarSolicitudesRestauranteController(req, res) {
 export async function crearSolicitudController(req, res) {
   const solicitud = await crearSolicitudHorasExtras(req.user, req.body ?? {});
 
+  await notificarSolicitudGuardada(solicitud);
   return res.status(201).json({
     message: "Solicitud de horas extras creada correctamente.",
     solicitud,
@@ -73,6 +75,7 @@ export async function resolverSolicitudController(req, res) {
     req.user,
   );
 
+  await notificarSolicitudGuardada(solicitud);
   return res.status(200).json({
     message: "Solicitud de horas extras resuelta correctamente.",
     solicitud,
@@ -86,6 +89,7 @@ export async function revertirSolicitudController(req, res) {
     req.user,
   );
 
+  await notificarSolicitudGuardada(solicitud);
   return res.status(200).json({
     message: "Solicitud de horas extras revertida correctamente.",
     solicitud,

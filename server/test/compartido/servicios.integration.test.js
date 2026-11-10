@@ -72,6 +72,7 @@ const {
 } = await import("../../src/shared/config/database.js");
 const auth = await import("../../src/modules/auth/auth.service.js");
 const colaboradores = await import("../../src/modules/colaboradores/colaboradores.service.js");
+const saldosVacaciones = await import("../../src/modules/vacaciones/services/saldosVacaciones.service.js");
 const puestos = await import("../../src/modules/puestos/puestos.service.js");
 const restaurantes = await import("../../src/modules/restaurantes/restaurantes.service.js");
 const roles = await import("../../src/modules/roles/roles.service.js");
@@ -816,7 +817,8 @@ const colaborador = {
   identificacion: "123456789",
   correo: "persona@example.com",
   nombre: "Ana",
-  apellido: "Mora",
+  apellido1: "Mora",
+  apellido2: null,
   fechaIngreso: "2026-01-10",
   restauranteId: 1,
   puestoId: 2
@@ -1031,6 +1033,10 @@ test("activar y desactivar exigen IDs y actores válidos antes de consultar", as
   expect(calls.length).toBe(0);
 });
 test("crear colaborador incluye correo, tipos correctos y opcionales nulos", async () => {
+  sql.Transaction.prototype.begin.mockClear();
+  sql.Transaction.prototype.commit.mockClear();
+  sql.Transaction.prototype.rollback.mockClear();
+  sql.Transaction.prototype.request.mockClear();
   activeReferences();
   respond(/INSERT INTO Colaboradores \(Identificacion, Correo,/, [{
     ColaboradorId: 12
@@ -1038,17 +1044,71 @@ test("crear colaborador incluye correo, tipos correctos y opcionales nulos", asy
   respond(/INSERT INTO dbo.Bitacora/);
   esperarSaldoInicial(respond);
   expect(await colaboradores.createNewColaborador(colaborador, 3)).toBe(12);
+  expect(sql.Transaction.prototype.begin).toHaveBeenCalledTimes(1);
+  expect(sql.Transaction.prototype.commit).toHaveBeenCalledTimes(1);
+  expect(sql.Transaction.prototype.rollback).not.toHaveBeenCalled();
+  const transacciones = sql.Transaction.prototype.request.mock.contexts;
+  expect(transacciones.length).toBe(6);
+  expect(transacciones.every((transaction) => transaction === transacciones[0])).toBe(true);
   const parameters = calls.find(c => c.query.includes("INSERT INTO Colaboradores")).parameters;
   expect(parameters.Correo.value).toBe(colaborador.correo);
   expect(parameters.Correo.type.length).toBe(100);
   expect(parameters.Identificacion.type.length).toBe(30);
   expect(parameters.Nombres.type.length).toBe(100);
-  expect(parameters.Apellidos.type.length).toBe(100);
+  expect(parameters.Apellido1.type.length).toBe(100);
+  expect(parameters.Apellido1.value).toBe(colaborador.apellido1);
+  expect(parameters.Apellido2.type.length).toBe(100);
+  expect(parameters.Apellido2.value).toBeNull();
   expect(parameters.FechaIngreso.type).toBe(sql.Date);
   expect(parameters.FechaIngreso.value.toISOString()).toBe("2026-01-10T00:00:00.000Z");
   expect(parameters.FechaSalida.value).toBe(null);
   expect(parameters.DistritoId.value).toBe(null);
   expect(parameters.DetalleDireccion.value).toBe(null);
+});
+test("crear colaborador revierte toda la transacción si falla el saldo inicial", async () => {
+  sql.Transaction.prototype.begin.mockClear();
+  sql.Transaction.prototype.commit.mockClear();
+  sql.Transaction.prototype.rollback.mockClear();
+  activeReferences();
+  respond(/INSERT INTO Colaboradores \(Identificacion, Correo,/, [{ ColaboradorId: 12 }]);
+  respond(/INSERT INTO dbo.Bitacora/);
+  respond(/FROM Colaboradores/, [{ ColaboradorId: 12, FechaIngreso: new Date("2026-01-10T00:00:00Z") }]);
+  respond(/FROM dbo.SaldosVacaciones/, []);
+  const error = new Error("Error al crear saldo");
+  expected.push({ pattern: /INSERT INTO dbo.SaldosVacaciones/, error });
+
+  await expect(colaboradores.createNewColaborador(colaborador, 3)).rejects.toBe(error);
+  expect(sql.Transaction.prototype.begin).toHaveBeenCalledTimes(1);
+  expect(sql.Transaction.prototype.commit).not.toHaveBeenCalled();
+  expect(sql.Transaction.prototype.rollback).toHaveBeenCalledTimes(1);
+});
+
+test("inicializar saldo independiente confirma su propia transacción", async () => {
+  sql.Transaction.prototype.begin.mockClear();
+  sql.Transaction.prototype.commit.mockClear();
+  sql.Transaction.prototype.rollback.mockClear();
+  esperarSaldoInicial(respond);
+
+  const saldo = await saldosVacaciones.inicializarSaldoVacaciones(12, 3);
+  expect(saldo.ColaboradorId).toBe(12);
+  expect(sql.Transaction.prototype.begin).toHaveBeenCalledTimes(1);
+  expect(sql.Transaction.prototype.commit).toHaveBeenCalledTimes(1);
+  expect(sql.Transaction.prototype.rollback).not.toHaveBeenCalled();
+});
+
+test("inicializar saldo independiente revierte su transacción si falla", async () => {
+  sql.Transaction.prototype.begin.mockClear();
+  sql.Transaction.prototype.commit.mockClear();
+  sql.Transaction.prototype.rollback.mockClear();
+  respond(/FROM Colaboradores/, [{ ColaboradorId: 12, FechaIngreso: new Date("2026-01-10T00:00:00Z") }]);
+  respond(/FROM dbo.SaldosVacaciones/, []);
+  const error = new Error("Error al crear saldo");
+  expected.push({ pattern: /INSERT INTO dbo.SaldosVacaciones/, error });
+
+  await expect(saldosVacaciones.inicializarSaldoVacaciones(12, 3)).rejects.toBe(error);
+  expect(sql.Transaction.prototype.begin).toHaveBeenCalledTimes(1);
+  expect(sql.Transaction.prototype.commit).not.toHaveBeenCalled();
+  expect(sql.Transaction.prototype.rollback).toHaveBeenCalledTimes(1);
 });
 test("editar colaborador también actualiza el correo", async () => {
   activeReferences();
@@ -1060,6 +1120,58 @@ test("editar colaborador también actualiza el correo", async () => {
   respond(/INSERT INTO dbo.Bitacora/);
   expect(await colaboradores.updateExistingColaborador("12", colaborador, 3)).toBe(true);
   expect(calls.at(-1).parameters.id.value).toBe(12);
+});
+
+test.each([
+  ["Mora", null, "Mora", null],
+  ["Mora", "Pérez", "Mora", "Pérez"],
+  ["de la Cruz", "Del Valle", "de la Cruz", "Del Valle"],
+  ["Mora", undefined, "Mora", null],
+  ["Mora", "", "Mora", null],
+  ["  de la Cruz  ", "   ", "de la Cruz", null],
+  ["Mora", "  Del Valle  ", "Mora", "Del Valle"],
+  ["a".repeat(100), "b".repeat(100), "a".repeat(100), "b".repeat(100)],
+])("crear colaborador conserva y normaliza sus apellidos: %#", async (apellido1, apellido2, esperado1, esperado2) => {
+  activeReferences();
+  respond(/INSERT INTO Colaboradores/, [{ ColaboradorId: 12 }]);
+  respond(/INSERT INTO dbo.Bitacora/);
+  esperarSaldoInicial(respond);
+  await colaboradores.createNewColaborador({ ...colaborador, apellido1, apellido2 }, 3);
+  const { query, parameters } = calls.find((c) => c.query.includes("INSERT INTO Colaboradores"));
+  expect(query).toContain("Nombres, Apellido1, Apellido2");
+  expect(parameters.Apellido1.value).toBe(esperado1);
+  expect(parameters.Apellido2.value).toBe(esperado2);
+  expect(parameters.Apellido1.type.length).toBe(100);
+  expect(parameters.Apellido2.type.length).toBe(100);
+});
+
+test.each([
+  ["Mora", "Pérez", "Pérez"],
+  ["de la Cruz", null, null],
+  ["de la Cruz", "", null],
+  ["de la Cruz", "   ", null],
+  ["de la Cruz", undefined, null],
+])("editar colaborador guarda ambos campos y permite quitar el segundo: %#", async (apellido1, apellido2, esperado2) => {
+  activeReferences();
+  respond(/FROM Colaboradores/, [{ ColaboradorId: 12, Apellido1: "Mora", Apellido2: "Pérez", Activo: true }]);
+  respond(/UPDATE Colaboradores/);
+  respond(/INSERT INTO dbo.Bitacora/);
+  await colaboradores.updateExistingColaborador(12, { ...colaborador, apellido1, apellido2 }, 3);
+  const { query, parameters } = calls.find((c) => c.query.includes("UPDATE Colaboradores"));
+  expect(query).toContain("Apellido1 = @Apellido1");
+  expect(query).toContain("Apellido2 = @Apellido2");
+  expect(parameters.Apellido1.value).toBe(apellido1);
+  expect(parameters.Apellido2.value).toBe(esperado2);
+});
+
+test.each([
+  { apellido1: undefined }, { apellido1: null }, { apellido1: "" }, { apellido1: "   " },
+  { apellido1: "a".repeat(101) }, { apellido2: "a".repeat(101) },
+  { apellido2: false }, { apellido2: 123 }, { apellido2: {} },
+])("apellidos inválidos se rechazan antes de consultar o guardar: %#", async (cambios) => {
+  await assert.rejects(colaboradores.createNewColaborador({ ...colaborador, ...cambios }, 3), { status: 400 });
+  await assert.rejects(colaboradores.updateExistingColaborador(12, { ...colaborador, ...cambios }, 3), { status: 400 });
+  expect(calls).toEqual([]);
 });
 test("colaboradores rechazan correo inválido, fechas imposibles e intervalos invertidos", async () => {
   for (const changes of [{

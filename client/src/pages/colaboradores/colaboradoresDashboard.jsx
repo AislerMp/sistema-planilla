@@ -37,7 +37,7 @@ export default function ColaboradoresDashboard() {
 
   const filteredColaboradores = colaboradoresList.filter((colaborador) => {
     const fullName =
-      `${colaborador.Nombres ?? ""} ${colaborador.Apellidos ?? ""}`.toLowerCase();
+      [colaborador.Nombres, colaborador.Apellido1, colaborador.Apellido2].filter(Boolean).join(" ").toLowerCase();
 
     const identification = String(
       colaborador.Identificacion ?? "",
@@ -208,12 +208,12 @@ export default function ColaboradoresDashboard() {
                             <span className="avatar table-avatar">
                               {getInitials(
                                 colaborador.Nombres,
-                                colaborador.Apellidos,
+                                [colaborador.Apellido1, colaborador.Apellido2].filter(Boolean).join(" "),
                               )}
                             </span>
 
                             <strong>
-                              {colaborador.Nombres} {colaborador.Apellidos}
+                              {[colaborador.Nombres, colaborador.Apellido1, colaborador.Apellido2].filter(Boolean).join(" ")}
                             </strong>
                           </div>
                         </td>

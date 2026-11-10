@@ -3,6 +3,7 @@ import { ChevronDown, LogOut, Menu, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ThemeButton from "../ThemeButton.jsx";
 import AlertMessage from "../AlertMessage.jsx";
+import CampanaNotificaciones from "./CampanaNotificaciones.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function Header({
@@ -21,6 +22,12 @@ export default function Header({
   const displayName = user?.NombreUsuario ?? "Usuario";
   const displayRole = formatRole(user?.Rol);
   const initials = getInitials(displayName);
+
+  const puedeVerNotificaciones = [
+    "COLABORADOR",
+    "GERENTE",
+    "RECURSOS_HUMANOS",
+  ].includes(user?.Rol);
 
   useEffect(() => {
     function closeProfile(event) {
@@ -72,6 +79,10 @@ export default function Header({
       </div>
       <div className="header-actions">
         <ThemeButton theme={theme} onToggleTheme={onToggleTheme} />
+        {puedeVerNotificaciones && (
+          <CampanaNotificaciones key={`${user.UsuarioId}:${user.Rol}`} />
+        )}
+        
         <div className="profile-menu" ref={profileRef}>
           <button
             type="button"
@@ -109,9 +120,7 @@ export default function Header({
                 disabled={isLoggingOut}
               >
                 <LogOut size={17} />
-                {isLoggingOut
-                  ? "Cerrando sesión..."
-                  : "Cerrar sesión"}
+                {isLoggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
               </button>
               {logoutError && (
                 <AlertMessage title="No se pudo cerrar sesión">

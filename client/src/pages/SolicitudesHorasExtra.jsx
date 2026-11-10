@@ -244,7 +244,7 @@ export default function SolicitudesHorasExtra() {
   const seleccionada = dialog?.solicitud;
 
   const nombreColaborador = (solicitud) =>
-    [solicitud.Nombres, solicitud.Apellidos].filter(Boolean).join(" ") ||
+    [solicitud.Nombres, solicitud.Apellido1, solicitud.Apellido2].filter(Boolean).join(" ") ||
     `Colaborador #${solicitud.ColaboradorId}`;
 
   const nombreRestaurante = (solicitud) =>

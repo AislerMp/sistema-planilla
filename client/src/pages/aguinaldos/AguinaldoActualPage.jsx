@@ -111,7 +111,7 @@ export default function AguinaldoActualPage() {
   const search = normalizarTexto(busqueda);
   const detallesAguinaldoFiltrados = detalles.filter((detalle) => {
     const nombreCompleto = normalizarTexto(
-      `${detalle.nombres ?? ""} ${detalle.apellidos ?? ""}`,
+      [detalle.nombres, detalle.apellido1, detalle.apellido2].filter(Boolean).join(" "),
     );
 
     return (

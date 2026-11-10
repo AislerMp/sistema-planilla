@@ -87,7 +87,7 @@ export async function getSalariosAcumulados(
         c.ColaboradorId,
         c.RestauranteId,
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         c.Identificacion,
         r.Nombre AS Restaurante,
 
@@ -137,13 +137,13 @@ export async function getSalariosAcumulados(
         c.ColaboradorId,
         c.RestauranteId,
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         c.Identificacion,
         r.Nombre
 
       ORDER BY
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         c.ColaboradorId;
     `);
 
@@ -177,7 +177,7 @@ export async function getMaternidadesPagadas(
         c.ColaboradorId,
         c.RestauranteId,
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         c.Identificacion,
         r.Nombre AS Restaurante
 
@@ -254,7 +254,7 @@ export async function getDetallesAguinaldo(filtros = {}, transaction = null) {
 
         da.ColaboradorId,
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         c.Identificacion,
 
         da.RestauranteId,
@@ -299,7 +299,7 @@ export async function getDetallesAguinaldo(filtros = {}, transaction = null) {
       ORDER BY
         a.Anio DESC,
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         da.ColaboradorId;
     `);
 

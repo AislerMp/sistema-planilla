@@ -23,11 +23,13 @@ import * as permisosRepository from "../../permisosLaborales/permisosLaborales.r
 export async function inicializarSaldoVacaciones(
   colaboradorID,
   usuarioActorID,
+  transactionExistente = null,
 ) {
   const colaboradorId = validateId(colaboradorID, "ColaboradorId");
   const usuarioActorId = validateId(usuarioActorID, "UsuarioId");
 
-  const transaction = await beginTransaction();
+  const transaction = transactionExistente ?? await beginTransaction();
+  const administraTransaccion = transactionExistente === null;
 
   try {
     const colaborador = await colaboradorRepository.getColaboradorById(
@@ -77,16 +79,18 @@ export async function inicializarSaldoVacaciones(
       transaction,
     );
 
-    await transaction.commit();
+    if (administraTransaccion) await transaction.commit();
     return saldoCreado;
   } catch (error) {
-    try {
-      await transaction.rollback();
-    } catch (rollbackError) {
-      console.error(
-        "No se pudo revertir la inicialización del saldo de vacaciones:",
-        rollbackError,
-      );
+    if (administraTransaccion) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackError) {
+        console.error(
+          "No se pudo revertir la inicialización del saldo de vacaciones:",
+          rollbackError,
+        );
+      }
     }
 
     throw error;

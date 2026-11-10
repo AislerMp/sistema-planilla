@@ -67,7 +67,7 @@ export function validateDate(value, field, optional = false) {
   return date;
 }
 
-export async function validateNumber(value, field, optional = false) {
+export function validateNumber(value, field, optional = false) {
   if (optional && (value === undefined || value === null || value === ""))
     return null;
 

@@ -32,7 +32,7 @@ export async function getSolicitudById(solicitudId, transaction = null) {
         d.EntidadReceptora,
 
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         r.Nombre AS Restaurante
 
       FROM dbo.SolicitudesDeducciones AS sd
@@ -148,7 +148,7 @@ export async function getSolicitudesByRestaurante(
         d.EntidadReceptora,
 
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         c.Identificacion,
         r.Nombre AS Restaurante
 
@@ -175,7 +175,7 @@ export async function getSolicitudesByRestaurante(
       ORDER BY
         sd.FechaInicio DESC,
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         s.SolicitudId DESC;
     `);
 

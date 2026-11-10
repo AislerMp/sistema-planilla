@@ -326,7 +326,7 @@ function ContenidoDetalleVacaciones({ id }) {
                   <div>
                     <dt>Colaborador</dt>
                     <dd>
-                      {vacaciones.Nombres} {vacaciones.Apellidos}
+                      {[vacaciones.Nombres, vacaciones.Apellido1, vacaciones.Apellido2].filter(Boolean).join(" ")}
                     </dd>
                   </div>
                   <div>

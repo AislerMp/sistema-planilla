@@ -14,15 +14,15 @@ import "../../src/index.css";
 window.IS_REACT_ACT_ENVIRONMENT = true;
 let filas, peticiones, selecciones, escenarioPagina = null, rechazarGuardado = false, numero = 0;
 const personal = [
-  { ColaboradorId: 2018, Nombres: "Ana", Apellidos: "Prueba", FechaIngreso: "2020-01-01", FechaSalida: null, NombreRestaurante: "Restaurante de prueba" },
-  { ColaboradorId: 22, Nombres: "Luis", Apellidos: "Prueba", FechaIngreso: "2020-01-01", FechaSalida: null, NombreRestaurante: "Restaurante de prueba" },
+  { ColaboradorId: 2018, Nombres: "Ana", Apellido1: "Prueba", Apellido2: null, FechaIngreso: "2020-01-01", FechaSalida: null, NombreRestaurante: "Restaurante de prueba" },
+  { ColaboradorId: 22, Nombres: "Luis", Apellido1: "Prueba", Apellido2: null, FechaIngreso: "2020-01-01", FechaSalida: null, NombreRestaurante: "Restaurante de prueba" },
 ];
 const resultados = [];
 const root = createRoot(document.getElementById("root"));
 const comprobar = (condicion, mensaje) => { if (!condicion) throw new Error(mensaje); };
 const fixture = (tipo, limite, otros = {}) => ({
   AsistenciaId: 1, ColaboradorId: 2018, FechaAsignada: "2026-10-26T00:00:00.000Z",
-  Nombres: "Colaborador", Apellidos: "Prueba", Identificacion: "PRUEBA",
+  Nombres: "Colaborador", Apellido1: "Prueba", Apellido2: null, Identificacion: "PRUEBA",
   TipoJornada: tipo, LimiteOrdinarioMinutos: limite,
   MinutosEfectivos: limite || 480, MinutosExtras: 60,
   EstadoPeriodo: "ABIERTO", FechaLimiteAjustes: "2099-12-31T00:00:00.000Z", ...otros,

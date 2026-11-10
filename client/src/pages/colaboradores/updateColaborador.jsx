@@ -19,7 +19,8 @@ const defaultValues = {
   identificacion: "",
   correo: "",
   nombre: "",
-  apellido: "",
+  apellido1: "",
+  apellido2: "",
   fechaIngreso: "",
   fechaSalida: "",
   restauranteId: "",
@@ -69,7 +70,8 @@ export default function UpdateColaborador() {
       identificacion: colaborador.Identificacion ?? "",
       correo: colaborador.Correo ?? "",
       nombre: colaborador.Nombres ?? "",
-      apellido: colaborador.Apellidos ?? "",
+      apellido1: colaborador.Apellido1 ?? "",
+      apellido2: colaborador.Apellido2 ?? "",
       fechaIngreso: toInputDate(colaborador.FechaIngreso),
       fechaSalida: toInputDate(colaborador.FechaSalida),
       restauranteId: String(colaborador.RestauranteId ?? ""),
@@ -141,8 +143,7 @@ export default function UpdateColaborador() {
           <p className="eyebrow accent">PERSONAS Y EQUIPO</p>
           <h1>Actualizar colaborador</h1>
           <p>
-            Editá la información de {colaborador.Nombres}{" "}
-            {colaborador.Apellidos}.
+            Editá la información de {[colaborador.Nombres, colaborador.Apellido1, colaborador.Apellido2].filter(Boolean).join(" ")}.
           </p>
         </div>
       </div>
@@ -176,14 +177,25 @@ export default function UpdateColaborador() {
           </label>
 
           <label>
-            Apellidos
+            Primer apellido
             <input
-              {...register("apellido", {
-                required: "El apellido es obligatorio.",
+              {...register("apellido1", {
+                required: "El primer apellido es obligatorio.",
+                validate: (value) => Boolean(value.trim()) || "El primer apellido es obligatorio.",
                 maxLength: { value: 100, message: "Máximo 100 caracteres." },
               })}
             />
-            <FieldError error={errors.apellido} />
+            <FieldError error={errors.apellido1} />
+          </label>
+
+          <label>
+            Segundo apellido (opcional)
+            <input
+              {...register("apellido2", {
+                maxLength: { value: 100, message: "Máximo 100 caracteres." },
+              })}
+            />
+            <FieldError error={errors.apellido2} />
           </label>
 
           <label>

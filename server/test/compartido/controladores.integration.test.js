@@ -293,7 +293,8 @@ const colaborador = {
   identificacion: "123456789",
   correo: "ana@example.com",
   nombre: "Ana",
-  apellido: "Mora",
+  apellido1: "Mora",
+  apellido2: null,
   fechaIngreso: "2026-01-10",
   restauranteId: 1,
   puestoId: 2

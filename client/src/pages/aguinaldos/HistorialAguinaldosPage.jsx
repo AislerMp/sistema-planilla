@@ -80,7 +80,7 @@ export default function HistorialAguinaldosPage() {
         String(detalle.RestauranteId) === restaurante;
 
       const nombre = normalizarTexto(
-        `${detalle.Nombres ?? ""} ${detalle.Apellidos ?? ""}`,
+        [detalle.Nombres, detalle.Apellido1, detalle.Apellido2].filter(Boolean).join(" "),
       );
 
       const coincideBusqueda =
@@ -94,7 +94,8 @@ export default function HistorialAguinaldosPage() {
       id: detalle.DetalleAguinaldoId,
       colaboradorId: detalle.ColaboradorId,
       nombres: detalle.Nombres,
-      apellidos: detalle.Apellidos,
+      apellido1: detalle.Apellido1,
+      apellido2: detalle.Apellido2,
       identificacion: detalle.Identificacion,
       restaurante: detalle.Restaurante,
       salarioAcumulado: Number(detalle.SalarioAcumulado),

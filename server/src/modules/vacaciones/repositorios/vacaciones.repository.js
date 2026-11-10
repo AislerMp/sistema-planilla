@@ -45,7 +45,7 @@ export async function getVacacionSolicitudById(solicitudId, transaction) {
         s.RevisadoPorRhId,
         s.Observacion,
         c.Nombres,
-        c.Apellidos,
+        c.Apellido1, c.Apellido2,
         r.Nombre AS Restaurante,
 
         v.FechaInicio,

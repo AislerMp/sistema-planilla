@@ -168,7 +168,7 @@ function UsuarioForm({ data }) {
                   value={row.ColaboradorId}
                   disabled={!row.Activo}
                 >
-                  {row.Nombres} {row.Apellidos} — {row.Identificacion}
+                  {[row.Nombres, row.Apellido1, row.Apellido2].filter(Boolean).join(" ")} — {row.Identificacion}
                   {!row.Activo ? " (inactivo)" : ""}
                 </option>
               ))}

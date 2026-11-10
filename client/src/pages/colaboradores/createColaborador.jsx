@@ -15,9 +15,9 @@ const defaultValues = {
   identificacion: "",
   correo: "",
   nombre: "",
-  apellido: "",
+  apellido1: "",
+  apellido2: "",
   fechaIngreso: "",
-  fechaSalida: "",
   restauranteId: "",
   puestoId: "",
 };
@@ -107,6 +107,7 @@ export default function CreateColaborador() {
               {...register("identificacion", {
                 required: "La identificación es obligatoria.",
                 maxLength: { value: 30, message: "Máximo 30 caracteres." },
+                validate: (value) => /^[0-9]+$/.test(value) || "La identificación debe contener solo números."
               })}
             />
             <FieldError error={errors.identificacion} />
@@ -124,14 +125,25 @@ export default function CreateColaborador() {
           </label>
 
           <label>
-            Apellidos
+            Primer apellido
             <input
-              {...register("apellido", {
-                required: "El apellido es obligatorio.",
+              {...register("apellido1", {
+                required: "El primer apellido es obligatorio.",
+                validate: (value) => Boolean(value.trim()) || "El primer apellido es obligatorio.",
                 maxLength: { value: 100, message: "Máximo 100 caracteres." },
               })}
             />
-            <FieldError error={errors.apellido} />
+            <FieldError error={errors.apellido1} />
+          </label>
+
+          <label>
+            Segundo apellido (opcional)
+            <input
+              {...register("apellido2", {
+                maxLength: { value: 100, message: "Máximo 100 caracteres." },
+              })}
+            />
+            <FieldError error={errors.apellido2} />
           </label>
 
           <label>
@@ -159,21 +171,6 @@ export default function CreateColaborador() {
               })}
             />
             <FieldError error={errors.fechaIngreso} />
-          </label>
-
-          <label>
-            Fecha de salida
-            <input
-              type="date"
-              {...register("fechaSalida", {
-                validate: (value) =>
-                  !value ||
-                  !getValues("fechaIngreso") ||
-                  value >= getValues("fechaIngreso") ||
-                  "La fecha de salida no puede ser anterior al ingreso.",
-              })}
-            />
-            <FieldError error={errors.fechaSalida} />
           </label>
 
           <label>

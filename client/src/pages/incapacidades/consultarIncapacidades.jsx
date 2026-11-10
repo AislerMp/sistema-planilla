@@ -174,7 +174,7 @@ export default function ConsultarIncapacidades() {
                     <tr key={incapacidad.SolicitudId}>
                       {!esColaborador && (
                         <td>
-                          {incapacidad.Nombres} {incapacidad.Apellidos}
+                          {[incapacidad.Nombres, incapacidad.Apellido1, incapacidad.Apellido2].filter(Boolean).join(" ")}
                         </td>
                       )}
                       <td>
